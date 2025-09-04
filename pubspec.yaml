@@ -41,6 +41,7 @@ dependencies:
   flutter_dotenv: ^5.0.2
   app_links: ^3.4.2
   image_picker: ^1.0.7
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

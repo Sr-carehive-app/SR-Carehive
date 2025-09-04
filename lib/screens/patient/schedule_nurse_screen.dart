@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:care12/services/payment_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ScheduleNurseScreen extends StatefulWidget {
   const ScheduleNurseScreen({Key? key}) : super(key: key);
@@ -181,32 +183,26 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   Future<void> _handleAppointment() async {
     if (!_validateForm()) return;
-
     setState(() => isSubmitting = true);
-    
     try {
+      // Initiate payment first – do NOT store appointment as paid yet.
+      final amount = '1.00'; // TODO: derive from selected service / duration.
+      final email = phoneController.text.contains('@') ? phoneController.text : 'srcarehive@gmail.com';
+      final mobile = phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : '8923068966';
+      // Minimal appointment object for server to persist after payment success
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      
-      if (user == null) {
-        _showErrorSnackBar('User not logged in. Please login again.');
-        return;
+      int? patientId;
+      if (user != null) {
+        try {
+          final patient = await supabase.from('patients').select('id').eq('user_id', user.id).maybeSingle();
+          patientId = patient?['id'];
+        } catch (_) {}
       }
-
-      // Fetch patient_id from patients table
-      final patient = await supabase
-          .from('patients')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
-      
-      final patientId = patient['id'];
-
-      // Insert appointment into database
-      await supabase.from('appointments').insert({
+      final apptPayload = {
         'patient_id': patientId,
         'full_name': fullNameController.text.trim(),
-        'age': int.parse(ageController.text.trim()),
+        'age': int.tryParse(ageController.text.trim()) ?? 0,
         'gender': selectedGender,
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
@@ -215,20 +211,26 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'time': selectedTime,
         'problem': problemController.text.trim(),
         'patient_type': selectedPatient,
-        'status': 'pending', // Add status field
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      // Show success message
-      _showSuccessSnackBar('Thank you for your payment! Appointment scheduled successfully for ${DateFormat('MMM dd, yyyy').format(selectedDate)} at $selectedTime');
-
-      // Clear form after successful submission
-      _clearForm();
-      
-    } on Exception catch (e) {
-      _showErrorSnackBar('Database error: ${e.toString()}');
+      };
+      final resp = await PaymentService.initiateSale(
+        amount: amount,
+        email: email,
+        mobile: mobile,
+        appointment: apptPayload,
+        paymentMode: 'upi', // default restrict to UPI; remove if you want all modes.
+      );
+      final redirectUrl = resp['redirectUrl'] as String?;
+      if (redirectUrl == null) {
+        throw Exception('Missing redirect URL');
+      }
+      _showSuccessSnackBar('Redirecting to secure payment...');
+      final uri = Uri.parse(redirectUrl);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        _showErrorSnackBar('Failed to launch payment page');
+      }
+      // TODO: After callback/confirmation, insert appointment with confirmed payment status.
     } catch (e) {
-      _showErrorSnackBar('Failed to schedule appointment: ${e.toString()}');
+      _showErrorSnackBar('Payment init failed: $e');
     } finally {
       setState(() => isSubmitting = false);
     }
