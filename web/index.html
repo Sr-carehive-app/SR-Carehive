@@ -35,4 +35,25 @@
 <body>
   <script src="flutter_bootstrap.js" async></script>
 </body>
-</html>
+    <!-- Razorpay Checkout for Flutter Web -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      // Simple helper for Flutter Web to open Razorpay and bubble events back
+      window.care12OpenRazorpay = function (options) {
+        try {
+          var rzp = new Razorpay(options);
+          rzp.on('payment.success', function (resp) {
+            window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
+          });
+          rzp.on('payment.failed', function (resp) {
+            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: resp }));
+          });
+          rzp.on('payment.error', function (resp) {
+            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: resp }));
+          });
+          rzp.open();
+        } catch (e) {
+          window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'exception', description: String(e) } } }));
+        }
+      }
+    </script>

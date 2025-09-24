@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'mobile_razorpay_helper.dart'
+  if (dart.library.html) 'web_razorpay_helper.dart';
 
 class PaymentService {
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
@@ -36,54 +37,17 @@ class PaymentService {
     }
     final createJson = jsonDecode(createResp.body) as Map<String, dynamic>;
     final orderId = createJson['orderId'] as String;
-    final keyId = createJson['keyId'] as String;
+    final keyId = (createJson['keyId'] ?? createJson['key_id'] ?? createJson['key']) as String;
+    if (keyId.isEmpty) {
+      throw Exception('create-order returned empty keyId');
+    }
     final amountPaise = (createJson['amount'] as num).toInt();
 
-    // 2) Open Razorpay checkout
-    final razorpay = Razorpay();
-    final completer = Completer<Map<String, dynamic>>();
-    void clearHandlers() {
-      try {
-        razorpay.clear();
-      } catch (_) {}
-    }
-
-    razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse resp) async {
-      try {
-        // 3) Verify signature on server
-  final verifyUri = Uri.parse('$_paymentBase/api/pg/razorpay/verify');
-        final verifyResp = await http.post(
-          verifyUri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'razorpay_order_id': resp.orderId,
-            'razorpay_payment_id': resp.paymentId,
-            'razorpay_signature': resp.signature,
-          }),
-        );
-        if (verifyResp.statusCode == 200) {
-          completer.complete(jsonDecode(verifyResp.body) as Map<String, dynamic>);
-        } else {
-          completer.completeError('verify failed: ${verifyResp.statusCode} ${verifyResp.body}');
-        }
-      } catch (e) {
-        completer.completeError(e);
-      } finally {
-        clearHandlers();
-      }
-    });
-
-    razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse resp) {
-      clearHandlers();
-      completer.completeError('payment_error: ${resp.code} ${resp.message}');
-    });
-
-    razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (_) {
-      // optional
-    });
-
     final options = {
+      // Provide all common aliases to be safe for web bridge
       'key': keyId,
+      'key_id': keyId,
+      'keyId': keyId,
       'amount': amountPaise, // in paise
       'currency': 'INR',
       'name': name,
@@ -92,9 +56,18 @@ class PaymentService {
       'prefill': {'contact': mobile, 'email': email, 'name': name},
       'theme': {'color': '#3F51B5'},
     };
-    razorpay.open(options);
 
-    final result = await completer.future;
-    return result;
+    // Use platform-specific implementation (web uses Checkout.js, mobile uses plugin)
+    final resp = await PlatformRazorpay.open(options);
+    final verifyUri = Uri.parse('$_paymentBase/api/pg/razorpay/verify');
+    final verifyResp = await http.post(
+      verifyUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(resp),
+    );
+    if (verifyResp.statusCode == 200) {
+      return jsonDecode(verifyResp.body) as Map<String, dynamic>;
+    }
+    throw Exception('verify failed: ${verifyResp.statusCode} ${verifyResp.body}');
   }
 }

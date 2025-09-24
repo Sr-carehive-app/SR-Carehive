@@ -218,4 +218,28 @@ app.get('/api/pg/razorpay/debug-auth-raw', (req, res) => {
   reqHttps.end();
 });
 
+// Dev-only: validate env key formats and hidden chars (no secret exposure)
+app.get('/api/pg/razorpay/debug-cred-check', (req, res) => {
+  if (process.env.DEBUG_PAYMENTS !== 'true') {
+    return res.status(404).end();
+  }
+  const kid = RAZORPAY_KEY_ID || '';
+  const ks = RAZORPAY_KEY_SECRET || '';
+  const keyIdRegexOk = /^rzp_(test|live)_[A-Za-z0-9]+$/.test(kid);
+  const keyIdLen = kid.length;
+  const keySecretLen = ks.length;
+  const asciiOnly = /^[\x20-\x7E]*$/.test(ks); // printable ASCII only
+  const hasWhitespace = /\s/.test(ks);
+  const hasNonAlnum = /[^A-Za-z0-9]/.test(ks);
+  res.json({
+    keyIdRegexOk,
+    keyIdLen,
+    keySecretLen,
+    asciiOnly,
+    hasWhitespace,
+    hasNonAlnum,
+    mode: kid.startsWith('rzp_live_') ? 'live' : (kid.startsWith('rzp_test_') ? 'test' : 'unknown')
+  });
+});
+
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));
