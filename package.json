@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Minimal Express server for PhiCommerce ICICI payment integration",
+  "description": "Minimal Express server for Razorpay payment integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -12,6 +12,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
   "cors": "^2.8.5",
-  "@supabase/supabase-js": "^2.45.0"
+  "@supabase/supabase-js": "^2.45.0",
+  "razorpay": "^2.9.3"
   }
 }

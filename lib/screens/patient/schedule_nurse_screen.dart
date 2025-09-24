@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
-import 'package:url_launcher/url_launcher.dart';
+// url_launcher no longer needed for payment redirect; Razorpay SDK opens checkout.
 
 class ScheduleNurseScreen extends StatefulWidget {
   const ScheduleNurseScreen({Key? key}) : super(key: key);
@@ -212,25 +212,17 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'problem': problemController.text.trim(),
         'patient_type': selectedPatient,
       };
-      final resp = await PaymentService.initiateSale(
+      final resp = await PaymentService.payWithRazorpay(
         amount: amount,
         email: email,
         mobile: mobile,
+        name: fullNameController.text.trim(),
         appointment: apptPayload,
-        paymentMode: 'upi', // default restrict to UPI; remove if you want all modes.
+        description: 'Nurse Appointment',
       );
-      final redirectUrl = resp['redirectUrl'] as String?;
-      if (redirectUrl == null) {
-        throw Exception('Missing redirect URL');
-      }
-      _showSuccessSnackBar('Redirecting to secure payment...');
-      final uri = Uri.parse(redirectUrl);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        _showErrorSnackBar('Failed to launch payment page');
-      }
-      // TODO: After callback/confirmation, insert appointment with confirmed payment status.
+      _showSuccessSnackBar('Payment successful');
     } catch (e) {
-      _showErrorSnackBar('Payment init failed: $e');
+  _showErrorSnackBar('Payment failed: $e');
     } finally {
       setState(() => isSubmitting = false);
     }

@@ -1,6 +1,6 @@
-# PhiCommerce Return URL Deployment Guide
+# Razorpay Payment Deployment Guide
 
-Goal: Move `PHI_RETURN_URL` from `http://localhost:9090/...` to a public **HTTPS** URL under your domain `srcarehive.com` so PhiCommerce (ICICI) can reach your callback.
+Goal: Run the Node server that creates Razorpay orders and verifies payment signatures. The Flutter app opens Razorpay Checkout using the public key and sends success payloads back for verification.
 
 ## 1. What You Need
 
@@ -19,14 +19,6 @@ Type: A
 Host: api   (gives api.srcarehive.com)   OR use root / @ if you prefer
 Value: <YOUR_SERVER_PUBLIC_IP>
 TTL: 300 (5m)
-```
-
-Decide your final callback URL; examples:
-
-```text
-https://api.srcarehive.com/api/pg/payment-processing/PAYPHI
-OR
-https://srcarehive.com/api/pg/payment-processing/PAYPHI
 ```
 
 Propagate (can take 5–30 min). Test:
@@ -49,13 +41,8 @@ dig +short api.srcarehive.com
 
 ```env
 PORT=9090
-PHI_MERCHANT_ID=T_03342
-PHI_SECRET=abc
-PHI_RETURN_URL=https://api.srcarehive.com/api/pg/payment-processing/PAYPHI
-PHI_DEFAULT_ADDL_PARAM1=14
-PHI_DEFAULT_ADDL_PARAM2=15
-PHI_CURRENCY_CODE=356
-PHI_PAY_TYPE=0
+RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxx
+RAZORPAY_KEY_SECRET=your_live_secret_here
 SUPABASE_URL=...          # optional
 SUPABASE_SERVICE_ROLE=... # safer than anon for inserts
 ALLOWED_ORIGINS=https://srcarehive.com,https://app.srcarehive.com
@@ -135,11 +122,7 @@ Issue certificate:
 certbot --nginx -d api.srcarehive.com --redirect --agree-tos -m admin@srcarehive.com
 ```
 
-After this your `PHI_RETURN_URL` becomes:
-
-```text
-https://api.srcarehive.com/api/pg/payment-processing/PAYPHI
-```
+No callback URL is needed for Razorpay Checkout (we verify via signature). Keep server accessible to mobile clients.
 
 ## 6. Update Flutter Client
 
@@ -151,21 +134,21 @@ API_BASE_URL=https://api.srcarehive.com
 
 Rebuild the app so the new base URL is used.
 
-## 7. Register Return URL With PhiCommerce
+## 7. Razorpay Dashboard
 
-Provide them the exact return URL. They may whitelist domain. Ensure it matches the one in every initiateSale request.
+- Generate live API keys and paste RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET into server `.env`.
+- Set branding and payment methods as needed.
 
 ## 8. Test Flow
 
 1. Hit health (optional create GET /health) to confirm 200.
-2. POST `/api/pg/payment/initiateSale` from local machine to new domain.
-3. Receive JSON; open redirectUrl; complete test payment.
-4. Confirm browser redirects back to your return URL page (simple HTML from server.js) and server logs callback.
-5. Poll `/api/pg/payment/status/<merchantTxnNo>` or build STATUS call to verify success.
+2. POST `/api/pg/razorpay/create-order` with amount and notes.
+3. App opens Razorpay checkout using returned keyId + orderId.
+4. On success, app posts to `/api/pg/razorpay/verify` and you should see `{ verified: true }`.
 
 ## 9. Security Checklist
 
-- PHI_SECRET only on server `.env`.
+- Keep RAZORPAY_KEY_SECRET only on server `.env`.
 - Use service role key (RLS enforced) not anon for inserting payment-confirmed records.
 - Rotate secret if ever exposed.
 - Restrict CORS origins (ALLOWED_ORIGINS env variable).
@@ -177,7 +160,7 @@ Provide them the exact return URL. They may whitelist domain. Ensure it matches 
 | Blank payment page | Missing country code or bad hash | Check canonical string + add 91 prefix to mobile. |
 | Callback never hits | Return URL not public / blocked | Curl from outside, ensure 200; verify DNS & SSL. |
 | Mixed content warnings | HTTP assets | Force HTTPS via `--redirect` certbot. |
-| 502 in initiateSale | Gateway validation failure | Log full response body, verify field casing & values. |
+| 400/500 on create-order | Invalid amount or missing keys | Ensure RAZORPAY_KEY_ID/SECRET are set and amount is numeric. |
 
 ## 11. Optional: Cloudflare Tunnel (No VPS Port Exposure)
 
