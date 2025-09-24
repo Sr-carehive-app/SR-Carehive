@@ -55,6 +55,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   /// Load user data from patients table
   Future<void> _loadUserData() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     try {
       final supabase = Supabase.instance.client;
@@ -77,7 +78,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     } catch (e) {
       print('Error loading user data: $e');
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -183,7 +184,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   Future<void> _handleAppointment() async {
     if (!_validateForm()) return;
-    setState(() => isSubmitting = true);
+    if (mounted) setState(() => isSubmitting = true);
     try {
       // Initiate payment first – do NOT store appointment as paid yet.
       final amount = '1.00'; // TODO: derive from selected service / duration.
@@ -220,11 +221,11 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         appointment: apptPayload,
         description: 'Nurse Appointment',
       );
-      _showSuccessSnackBar('Payment successful');
+      if (mounted) _showSuccessSnackBar('Payment successful');
     } catch (e) {
-  _showErrorSnackBar('Payment failed: $e');
+      if (mounted) _showErrorSnackBar('Payment failed: $e');
     } finally {
-      setState(() => isSubmitting = false);
+      if (mounted) setState(() => isSubmitting = false);
     }
   }
 

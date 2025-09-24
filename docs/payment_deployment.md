@@ -164,7 +164,7 @@ Rebuild the app so the new base URL is used.
 
 ## 11. Optional: Cloudflare Tunnel (No VPS Port Exposure)
 
-Install tunnel, map `api.srcarehive.com` to `http://localhost:9090`, still need cert (Cloudflare provides edge SSL). Set `PHI_RETURN_URL` to HTTPS Cloudflare host.
+Install tunnel, map `api.srcarehive.com` to `http://localhost:9090`, still need cert (Cloudflare provides edge SSL). No special return URL is required for Razorpay Checkout.
 
 ---
 

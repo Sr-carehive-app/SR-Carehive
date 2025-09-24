@@ -6,6 +6,10 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class PaymentService {
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+  // Allows routing payment calls to production while keeping the rest on localhost during dev
+  static String get _paymentBase => (dotenv.env['PAYMENT_API_BASE_URL'] ?? '').trim().isNotEmpty
+      ? (dotenv.env['PAYMENT_API_BASE_URL']!.trim())
+      : _base;
 
   // High-level API: create Razorpay order, open checkout, verify signature.
   static Future<Map<String, dynamic>> payWithRazorpay({
@@ -17,7 +21,7 @@ class PaymentService {
     String? description,
   }) async {
     // 1) Create order on server
-    final createUri = Uri.parse('$_base/api/pg/razorpay/create-order');
+  final createUri = Uri.parse('$_paymentBase/api/pg/razorpay/create-order');
     final createResp = await http.post(
       createUri,
       headers: {'Content-Type': 'application/json'},
@@ -47,7 +51,7 @@ class PaymentService {
     razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse resp) async {
       try {
         // 3) Verify signature on server
-        final verifyUri = Uri.parse('$_base/api/pg/razorpay/verify');
+  final verifyUri = Uri.parse('$_paymentBase/api/pg/razorpay/verify');
         final verifyResp = await http.post(
           verifyUri,
           headers: {'Content-Type': 'application/json'},

@@ -7,14 +7,10 @@ import cors from 'cors';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
 import Razorpay from 'razorpay';
+import https from 'https';
 
-if (fs.existsSync('.env.server')) {
-  dotenv.config({ path: '.env.server' });
-} else {
-  dotenv.config();
-}
+dotenv.config();
 
 const app = express();
 app.use(express.json());
@@ -36,10 +32,19 @@ app.use(cors({
 const PORT = process.env.PORT || 9090;
 
 // Razorpay config
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const RAZORPAY_KEY_ID = (process.env.RAZORPAY_KEY_ID || '').trim();
+const RAZORPAY_KEY_SECRET = (process.env.RAZORPAY_KEY_SECRET || '').trim();
 if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
   console.warn('[WARN] RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET not set. Set them in .env');
+}
+// Heuristic: live/test key secrets are typically ~32+ chars. If it's much shorter, it may be truncated or copied wrong.
+if (RAZORPAY_KEY_SECRET && RAZORPAY_KEY_SECRET.length < 28) {
+  console.warn(`[WARN] Razorpay key secret looks unusually short (len=${RAZORPAY_KEY_SECRET.length}). If you regenerated keys, ensure you saved the new Key Secret (shown once) and updated .env with the matching pair.`);
+}
+// Masked log to confirm keys are loaded (do not leak full keys)
+if (RAZORPAY_KEY_ID) {
+  const kid = RAZORPAY_KEY_ID;
+  console.log(`[INIT] Razorpay key id loaded: ${kid.slice(0,4)}***${kid.slice(-4)}`);
 }
 
 const razorpay = new Razorpay({ key_id: RAZORPAY_KEY_ID || 'rzp_test_xxx', key_secret: RAZORPAY_KEY_SECRET || 'test_secret' });
@@ -78,8 +83,12 @@ app.post('/api/pg/razorpay/create-order', async (req, res) => {
 
     res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: RAZORPAY_KEY_ID });
   } catch (err) {
-    console.error('create-order error', err);
-    res.status(500).json({ error: 'Internal error', message: err.message });
+    // Surface Razorpay error details when available
+    const status = err?.statusCode || 500;
+    const description = err?.error?.description || err?.message || 'Unknown error';
+    const code = err?.error?.code;
+    console.error('create-order error', { statusCode: status, description, code });
+    res.status(status).json({ error: 'Internal error', message: description, code });
   }
 });
 
@@ -139,6 +148,74 @@ app.get('/api/pg/razorpay/status/:orderId', (req, res) => {
   const appt = pendingAppointments.get(req.params.orderId);
   if (!appt) return res.status(404).json({ error: 'Not found' });
   res.json(appt);
+});
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Dev-only: quick auth check to see if Razorpay keys are valid.
+// Enable by setting DEBUG_PAYMENTS=true in .env. Do not enable in production.
+app.get('/api/pg/razorpay/debug-auth', async (req, res) => {
+  if (process.env.DEBUG_PAYMENTS !== 'true') {
+    return res.status(404).end();
+  }
+  try {
+    const list = await razorpay.orders.all({ count: 1 });
+    res.json({ ok: true, sample: Array.isArray(list?.items) ? list.items.length : 0 });
+  } catch (err) {
+    res.status(err?.statusCode || 500).json({ ok: false, code: err?.error?.code, message: err?.error?.description || err?.message });
+  }
+});
+
+// Dev-only: reveal non-sensitive info about loaded keys (useful to verify .env parsing)
+app.get('/api/pg/razorpay/debug-keyinfo', (req, res) => {
+  if (process.env.DEBUG_PAYMENTS !== 'true') {
+    return res.status(404).end();
+  }
+  const kid = RAZORPAY_KEY_ID || '';
+  const masked = kid ? `${kid.slice(0,4)}***${kid.slice(-4)}` : '';
+  const mode = kid.startsWith('rzp_live_') ? 'live' : (kid.startsWith('rzp_test_') ? 'test' : 'unknown');
+  res.json({
+    keyIdMasked: masked,
+    mode,
+    keySecretLength: (RAZORPAY_KEY_SECRET || '').length
+  });
+});
+
+// Dev-only: raw HTTPS check to capture response headers like X-Razorpay-Request-Id
+app.get('/api/pg/razorpay/debug-auth-raw', (req, res) => {
+  if (process.env.DEBUG_PAYMENTS !== 'true') {
+    return res.status(404).end();
+  }
+  const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
+  const options = {
+    hostname: 'api.razorpay.com',
+    path: '/v1/orders?count=1',
+    method: 'GET',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'User-Agent': 'care12-debug/1.0'
+    }
+  };
+  const reqHttps = https.request(options, (r) => {
+    let data = '';
+    r.on('data', (chunk) => (data += chunk));
+    r.on('end', () => {
+      res.status(r.statusCode || 500).json({
+        statusCode: r.statusCode,
+        requestId: r.headers['x-razorpay-request-id'] || r.headers['x-request-id'] || null,
+        headers: {
+          'x-razorpay-request-id': r.headers['x-razorpay-request-id'] || null,
+          'content-type': r.headers['content-type'] || null
+        },
+        body: (() => { try { return JSON.parse(data); } catch { return data; } })()
+      });
+    });
+  });
+  reqHttps.on('error', (e) => res.status(500).json({ error: e.message }));
+  reqHttps.end();
 });
 
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));
