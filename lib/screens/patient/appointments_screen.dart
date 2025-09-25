@@ -54,11 +54,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         return;
       }
 
-      // Fetch appointments for this patient
+    // Fetch appointments for this patient, only after successful payment
       final response = await supabase
           .from('appointments')
           .select('*')
-          .eq('patient_id', patient['id'])
+      .eq('patient_id', patient['id'])
+      .eq('status', 'paid')
           .order('created_at', ascending: false);
 
       setState(() {

@@ -30,6 +30,15 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   String selectedPatient = 'Yourself';
   String selectedGender = 'Female';
+  // Duration -> price (in rupees)
+  final Map<int, int> durationPrice = const {
+    1: 200,
+    2: 400,
+    4: 600,
+    8: 1000,
+    12: 1400,
+  };
+  int selectedDurationHours = 1;
   
   bool isLoading = false;
   bool isSubmitting = false;
@@ -187,7 +196,8 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     if (mounted) setState(() => isSubmitting = true);
     try {
       // Initiate payment first – do NOT store appointment as paid yet.
-      final amount = '1.00'; // TODO: derive from selected service / duration.
+  final rupees = durationPrice[selectedDurationHours] ?? 200;
+  final amount = rupees.toDouble().toStringAsFixed(2);
       final email = phoneController.text.contains('@') ? phoneController.text : 'srcarehive@gmail.com';
       final mobile = phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : '8923068966';
       // Minimal appointment object for server to persist after payment success
@@ -212,6 +222,8 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'time': selectedTime,
         'problem': problemController.text.trim(),
         'patient_type': selectedPatient,
+        'duration_hours': selectedDurationHours,
+        'amount_rupees': rupees,
       };
       final resp = await PaymentService.payWithRazorpay(
         amount: amount,
@@ -311,6 +323,28 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             ),
           ),
 
+          const SizedBox(height: 24),
+
+          // Duration and pricing
+          const Text(
+            'Select duration',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in durationPrice.entries)
+                ChoiceChip(
+                  label: Text('${entry.key} hr — \u20B9${entry.value}'),
+                  selected: selectedDurationHours == entry.key,
+                  onSelected: (sel) {
+                    if (sel) setState(() => selectedDurationHours = entry.key);
+                  },
+                ),
+            ],
+          ),
           const SizedBox(height: 24),
 
           // Choose Time section
@@ -444,12 +478,13 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
                       Text('Processing...', style: TextStyle(fontSize: 16, color: Colors.white)),
                     ],
                   )
-                : const Text('Payment', style: TextStyle(fontSize: 16, color: Colors.white)),
+                : Text('Pay \u20B9${durationPrice[selectedDurationHours] ?? 200}', style: const TextStyle(fontSize: 16, color: Colors.white)),
           ),
         ],
       ),
     );
   }
+
 
   // Toggle button for Yourself / Another Person
   Widget toggleButton(String text) {

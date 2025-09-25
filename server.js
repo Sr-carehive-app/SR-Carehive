@@ -49,10 +49,17 @@ if (RAZORPAY_KEY_ID) {
 
 const razorpay = new Razorpay({ key_id: RAZORPAY_KEY_ID || 'rzp_test_xxx', key_secret: RAZORPAY_KEY_SECRET || 'test_secret' });
 
-// Supabase client (uses anon key for dev; for production use service_role secret and secure server-side RLS policies)
+// Supabase client
+// Prefer service role for server-side inserts (bypasses RLS); fallback to anon for dev read-only/testing.
 let supabase = null;
-if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)) {
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.log('[INIT] Supabase using service role key for server-side operations');
+  } else {
+    console.warn('[WARN] SUPABASE_SERVICE_ROLE_KEY not set. Using anon key; inserts may fail if RLS denies.');
+  }
+  supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
 }
 
 // In-memory pending appointment store: orderId -> appointment payload (for dev only)
@@ -63,7 +70,7 @@ const pendingAppointments = new Map();
 // Output: { orderId, amount, currency, keyId }
 app.post('/api/pg/razorpay/create-order', async (req, res) => {
   try {
-    const { amount, currency = 'INR', receipt, notes, appointment } = req.body || {};
+  const { amount, currency = 'INR', receipt, notes, appointment } = req.body || {};
     if (!amount) return res.status(400).json({ error: 'amount is required (in rupees as string, e.g., "99.00")' });
     if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) return res.status(500).json({ error: 'Server misconfigured: Razorpay keys missing' });
 
@@ -125,6 +132,8 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
             time: appt.time,
             problem: appt.problem,
             patient_type: appt.patient_type,
+            duration_hours: appt.duration_hours ?? null,
+            amount_rupees: appt.amount_rupees ?? null,
             status: 'paid',
             created_at: new Date().toISOString(),
             order_id: razorpay_order_id,
