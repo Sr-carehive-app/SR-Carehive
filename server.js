@@ -116,7 +116,8 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
     // Mark appointment paid and optionally persist via Supabase
     const appt = pendingAppointments.get(razorpay_order_id);
     if (appt) {
-      appt.status = 'paid';
+      // After payment success, mark business status as 'pending' (awaiting processing)
+      appt.status = 'pending';
       appt.payment_id = razorpay_payment_id;
       if (supabase) {
         try {
@@ -134,7 +135,7 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
             patient_type: appt.patient_type,
             duration_hours: appt.duration_hours ?? null,
             amount_rupees: appt.amount_rupees ?? null,
-            status: 'paid',
+            status: 'pending',
             created_at: new Date().toISOString(),
             order_id: razorpay_order_id,
             payment_id: razorpay_payment_id
