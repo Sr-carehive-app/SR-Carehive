@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
-import 'package:care12/services/api_service.dart';
+import 'package:care12/services/nurse_api_service.dart';
+import 'appointments_manage_screen.dart';
 
 class NurseLoginScreen extends StatefulWidget {
   const NurseLoginScreen({Key? key}) : super(key: key);
@@ -33,26 +34,19 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final result = await ApiService.loginUser(
-      email: emailController.text.trim(),
-      password: passwordController.text.trim(),
-    );
-
-    print('🪵 Login result: $result');
-    print('🪵 Nurse name: ${result['name']}');
+    final ok = await NurseApiService.login(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim());
 
     setState(() => _isLoading = false);
 
-    if (result['success']) {
+    if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login successful!')),
       );
       Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => NurseDashboardScreen(userName: result['name']),
-        ),
-      );
+          context,
+          MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login failed! Please check credentials')),
@@ -122,14 +116,6 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {},
-                child: const Text('Forgot Password?', style: TextStyle(color: Color(0xFF2260FF))),
               ),
             ),
             const SizedBox(height: 20),

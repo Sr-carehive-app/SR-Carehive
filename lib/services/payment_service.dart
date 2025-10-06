@@ -58,7 +58,7 @@ class PaymentService {
     };
 
     // Use platform-specific implementation (web uses Checkout.js, mobile uses plugin)
-    final resp = await PlatformRazorpay.open(options);
+  final resp = await PlatformRazorpay.open(options);
     final verifyUri = Uri.parse('$_paymentBase/api/pg/razorpay/verify');
     final verifyResp = await http.post(
       verifyUri,
@@ -68,6 +68,8 @@ class PaymentService {
     if (verifyResp.statusCode == 200) {
       return jsonDecode(verifyResp.body) as Map<String, dynamic>;
     }
-    throw Exception('verify failed: ${verifyResp.statusCode} ${verifyResp.body}');
+    // Surface useful context
+    final body = verifyResp.body;
+    throw Exception('verify failed: ${verifyResp.statusCode} ${body.isNotEmpty ? body : ''}');
   }
 }

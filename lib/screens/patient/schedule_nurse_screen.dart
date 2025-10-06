@@ -32,13 +32,14 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   String selectedGender = 'Female';
   // Duration -> price (in rupees)
   final Map<int, int> durationPrice = const {
+    0: 1,   // 0 min — ₹1 (test/quick option)
     1: 200,
     2: 400,
     4: 600,
     8: 1000,
     12: 1400,
   };
-  int selectedDurationHours = 1;
+  int selectedDurationHours = 0; // default to 0-min ₹1 as requested
   
   bool isLoading = false;
   bool isSubmitting = false;
@@ -203,11 +204,16 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       // Minimal appointment object for server to persist after payment success
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      int? patientId;
+  String? patientId;
       if (user != null) {
         try {
-          final patient = await supabase.from('patients').select('id').eq('user_id', user.id).maybeSingle();
-          patientId = patient?['id'];
+      final patient = await supabase
+        .from('patients')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      final dynamic pid = patient?['id'];
+      if (pid != null) patientId = pid.toString();
         } catch (_) {}
       }
       final apptPayload = {
@@ -224,6 +230,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'patient_type': selectedPatient,
         'duration_hours': selectedDurationHours,
         'amount_rupees': rupees,
+        'patient_email': (Supabase.instance.client.auth.currentUser?.email ?? '').trim(),
       };
       final resp = await PaymentService.payWithRazorpay(
         amount: amount,
@@ -233,9 +240,14 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         appointment: apptPayload,
         description: 'Nurse Appointment',
       );
-      if (mounted) _showSuccessSnackBar('Payment successful');
+      if (mounted) {
+        _showSuccessSnackBar('Payment successful');
+        // Optional: navigate to appointments page so user sees the entry
+        // ignore: use_build_context_synchronously
+        Navigator.of(context).pushNamed('/appointments');
+      }
     } catch (e) {
-      if (mounted) _showErrorSnackBar('Payment failed: $e');
+      if (mounted) _showErrorSnackBar('Payment failed or cancelled: $e');
     } finally {
       if (mounted) setState(() => isSubmitting = false);
     }
@@ -337,7 +349,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             children: [
               for (final entry in durationPrice.entries)
                 ChoiceChip(
-                  label: Text('${entry.key} hr — \u20B9${entry.value}'),
+                  label: Text('${entry.key == 0 ? '0 min' : '${entry.key} hr'} — \u20B9${entry.value}'),
                   selected: selectedDurationHours == entry.key,
                   onSelected: (sel) {
                     if (sel) setState(() => selectedDurationHours = entry.key);

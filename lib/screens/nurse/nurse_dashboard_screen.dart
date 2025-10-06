@@ -5,7 +5,7 @@ import 'package:care12/screens/nurse/notification.dart';
 import 'package:care12/screens/patient/profile/settings_screen.dart';
 import 'package:care12/screens/patient/profile/profile_screen.dart';
 import 'package:care12/screens/nurse/request_screen.dart';
-import 'package:care12/screens/nurse/appointments_screen.dart';
+import 'package:care12/screens/nurse/appointments_manage_screen.dart';
 import 'package:care12/screens/nurse/Schedule.dart';
 import 'package:care12/screens/nurse/activity_detail_screen.dart';
 
@@ -128,7 +128,7 @@ class _NurseDashboardScreenState extends State<NurseDashboardScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => AppointmentsScreen()),
+                        MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
                       );
                     },
                     child: _buildSummaryCard(

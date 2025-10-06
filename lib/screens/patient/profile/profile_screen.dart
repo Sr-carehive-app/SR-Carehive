@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_profile_screen.dart';
 import 'settings_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'terms_conditions_screen.dart';
+import 'refund_request_screen.dart';
 import 'help_center_screen.dart';
 import 'package:care12/screens/splash_screen.dart'; // update import if needed
 import 'dart:io';
@@ -162,7 +164,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 buildProfileOption(context, Icons.person, 'Profile', const EditProfileScreen()),
-                buildProfileOption(context, Icons.payment, 'Payment Method', null),
+                buildProfileOption(context, Icons.assignment_return, 'Ask for Refund', const RefundRequestScreen()),
+                buildProfileOption(context, Icons.article, 'Terms & Conditions', const TermsConditionsScreen()),
                 buildProfileOption(context, Icons.privacy_tip, 'Privacy Policy', const PrivacyPolicyScreen()),
                 buildProfileOption(context, Icons.settings, 'Settings', const SettingsScreen()),
                 buildProfileOption(context, Icons.help, 'Help', const HelpCenterScreen()),

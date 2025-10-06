@@ -5,6 +5,7 @@ import 'screens/splash_screen.dart';
 import 'screens/patient/reset_password_screen.dart';
 import 'screens/patient/patient_dashboard_screen.dart';
 import 'screens/patient/patient_signup_screen.dart';
+import 'screens/patient/appointments_screen.dart' as patient_pages;
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 
@@ -163,6 +164,9 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
+      routes: {
+        '/appointments': (_) => const patient_pages.AppointmentsScreen(),
+      },
       home: _homeWidget,
     );
   }

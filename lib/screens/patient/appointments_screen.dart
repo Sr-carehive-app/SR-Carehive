@@ -77,10 +77,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     switch (status.toLowerCase()) {
       case 'confirmed':
         return Colors.green;
+      case 'approved':
+        return Colors.green;
       case 'pending':
         return Colors.orange;
       case 'completed':
         return Colors.blue;
+      case 'rejected':
+        return Colors.red;
       case 'cancelled':
         return Colors.red;
       default:
@@ -92,10 +96,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     switch (status.toLowerCase()) {
       case 'confirmed':
         return '✓';
+      case 'approved':
+        return '✓';
       case 'pending':
         return '⏳';
       case 'completed':
         return '✓';
+      case 'rejected':
+        return '✗';
       case 'cancelled':
         return '✗';
       default:
@@ -299,6 +307,30 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                       ),
                                     ],
                                   ),
+                                  // Nurse assignment details (shown when approved)
+                                  if ((appointment['status'] ?? '').toString().toLowerCase() == 'approved') ...[
+                                    const Divider(height: 24),
+                                    const Text(
+                                      'Assigned Nurse',
+                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    if (appointment['nurse_name'] != null)
+                                      Text('Name: ${appointment['nurse_name']}'),
+                                    if (appointment['nurse_phone'] != null)
+                                      Text('Phone: ${appointment['nurse_phone']}'),
+                                    if (appointment['nurse_branch'] != null)
+                                      Text('Branch: ${appointment['nurse_branch']}'),
+                                    if (appointment['nurse_comments'] != null)
+                                      Text('Comments: ${appointment['nurse_comments']}'),
+                                  ],
+                                  // Rejection details if any
+                                  if ((appointment['status'] ?? '').toString().toLowerCase() == 'rejected') ...[
+                                    const Divider(height: 24),
+                                    const Text('Request Rejected', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    if (appointment['rejection_reason'] != null)
+                                      Text('Reason: ${appointment['rejection_reason']}'),
+                                  ],
                                 ],
                               ),
                             ),

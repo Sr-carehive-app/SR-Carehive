@@ -30,7 +30,7 @@ class PlatformRazorpay {
   }
 
   static void _ensureBridge() {
-  if (js_util.hasProperty(html.window, 'care12OpenRazorpay')) return;
+  // Always (re)define the bridge to ensure correct handlers, even if index.html defined one.
     final fn = html.ScriptElement()
       ..type = 'text/javascript'
       ..text = '''
@@ -40,6 +40,19 @@ class PlatformRazorpay {
           if (!options.key && options.keyId) { options.key = options.keyId; }
           if (!options.key && options.key_id) { options.key = options.key_id; }
           window.care12LastOptions = options;
+          // Ensure success callback is wired; Razorpay primarily uses options.handler
+          options.handler = function (resp) {
+            try {
+              window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
+            } catch (e) {
+              window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'handler_exception', description: String(e) } } }));
+            }
+          };
+          // Ensure modal close signals a failure/cancel so callers can stop spinners
+          options.modal = options.modal || {};
+          options.modal.ondismiss = function () {
+            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'cancelled', description: 'Checkout dismissed by user' } } }));
+          };
           var rzp = new Razorpay(options);
           rzp.on('payment.success', function (resp) {
             window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
