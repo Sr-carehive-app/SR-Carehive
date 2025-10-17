@@ -16,10 +16,10 @@ class RegisterScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.medical_services, size: 100, color: Color(0xFF2260FF)),
+                Image.asset('assets/images/logo.png', width: 100, height: 100),
                 const SizedBox(height: 20),
                 const Text(
-                  'Care hive',
+                  'SERECHI',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 30,
@@ -28,7 +28,7 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Welcome To Care Hive',
+                  'Welcome To SERECHI',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 16,
@@ -53,13 +53,13 @@ class RegisterScreen extends StatelessWidget {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFF2260FF),
-                    padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
                   child: const Text(
-                    'Patient',
+                    'Do You Need Healthcare?',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -76,13 +76,13 @@ class RegisterScreen extends StatelessWidget {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFFCAD6FF),
-                    padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
                   child: const Text(
-                    'Nurse',
+                    'Do You Work For Us?',
                     style: TextStyle(
                       color: Color(0xFF2260FF),
                       fontWeight: FontWeight.bold,

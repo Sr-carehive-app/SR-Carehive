@@ -1,11 +1,10 @@
-# SR CareHive Pvt. Ltd.
-<a href="https://www.srcarehive.com" alt="">👉🏻 SR CareHive </a>
+# care12
 
 A new Flutter project.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+This is a Flutter application for the SERECHI healthcare platform.
 
 A few resources to get you started if this is your first Flutter project:
 

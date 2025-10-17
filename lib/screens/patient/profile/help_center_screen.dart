@@ -191,8 +191,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   'General App Usage',
                   [
                     FAQItem(
-                      question: 'What is Care Hive?',
-                      answer: 'Care Hive is a healthcare platform that connects patients with professional nurses for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
+                      question: 'What is SERECHI?',
+                      answer: 'SERECHI is a healthcare platform by SR CareHive Pvt. Ltd. that connects patients with professional nurses and healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
                     ),
                     FAQItem(
                       question: 'How do I contact support?',

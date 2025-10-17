@@ -6,6 +6,7 @@ import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
 import 'refund_request_screen.dart';
 import 'help_center_screen.dart';
+import 'about_screen.dart';
 import 'package:care12/screens/splash_screen.dart'; // update import if needed
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -45,9 +46,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .select()
             .eq('user_id', user.id)
             .single();
+        
+        // Build full name from parts if available, otherwise use legacy name field
+        String displayName = patient['name'] ?? widget.userName;
+        if (patient['first_name'] != null) {
+          displayName = patient['first_name'];
+          if (patient['middle_name'] != null && patient['middle_name'].toString().isNotEmpty) {
+            displayName += ' ${patient['middle_name']}';
+          }
+          if (patient['last_name'] != null) {
+            displayName += ' ${patient['last_name']}';
+          }
+        }
+        
         setState(() {
           profileImageUrl = patient['profile_image_url'];
-          userName = patient['name'] ?? widget.userName;
+          userName = displayName;
           isLoading = false;
         });
       } else {
@@ -164,6 +178,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 buildProfileOption(context, Icons.person, 'Profile', const EditProfileScreen()),
+                buildProfileOption(context, Icons.info_outline, 'About SERECHI', const AboutScreen()),
                 buildProfileOption(context, Icons.assignment_return, 'Ask for Refund', const RefundRequestScreen()),
                 buildProfileOption(context, Icons.article, 'Terms & Conditions', const TermsConditionsScreen()),
                 buildProfileOption(context, Icons.privacy_tip, 'Privacy Policy', const PrivacyPolicyScreen()),

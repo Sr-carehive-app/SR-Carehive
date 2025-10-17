@@ -35,22 +35,25 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.medical_services, size: 100, color: Colors.white),
-            SizedBox(height: 20),
-            Text(
-              'Care hive',
+          children: [
+            Image.asset('assets/images/logo.png', width: 100, height: 100),
+            const SizedBox(height: 20),
+            const Text(
+              'SERECHI',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 30,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 10),
-            Text(
-              'Health Care At Your Fingertips',
-              style: TextStyle(color: Color(0xFFFFFFFF), fontSize: 16,fontWeight: FontWeight.bold,),
-
+            const SizedBox(height: 10),
+            const Text(
+              'Compassionate Care, Connected Community',
+              style: TextStyle(
+                color: Color(0xFFFFFFFF),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),

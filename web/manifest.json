@@ -1,11 +1,11 @@
 {
-    "name": "care12",
-    "short_name": "care12",
+    "name": "SERECHI - Healthcare by SR CareHive",
+    "short_name": "SERECHI",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#2260FF",
+    "theme_color": "#2260FF",
+    "description": "SERECHI - Your Trusted Healthcare Companion. Connect with professional healthcare providers for home nursing, elderly care, physiotherapy, and more.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

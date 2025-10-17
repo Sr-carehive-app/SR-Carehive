@@ -40,7 +40,7 @@ class TermsConditionsScreen extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         const Text('srcarehive.com', style: TextStyle(fontWeight: FontWeight.w600)),
-                        const Text(' and our services (including those offered via SR CareHive), you agree to these Terms & Conditions, as well as our Privacy Policy. If you do not agree, please do not use our services.'),
+                        const Text(' and our services (including those offered via SERECHI app by SR CareHive Pvt. Ltd.), you agree to these Terms & Conditions, as well as our Privacy Policy. If you do not agree, please do not use our services.'),
                       ],
                     ),
                     const SizedBox(height: 20),

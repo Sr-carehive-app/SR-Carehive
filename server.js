@@ -39,10 +39,7 @@ const RAZORPAY_KEY_SECRET = (process.env.RAZORPAY_KEY_SECRET || '').trim();
 if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
   console.warn('[WARN] RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET not set. Set them in .env');
 }
-// Heuristic: live/test key secrets are typically ~32+ chars. If it's much shorter, it may be truncated or copied wrong.
-if (RAZORPAY_KEY_SECRET && RAZORPAY_KEY_SECRET.length < 28) {
-  console.warn(`[WARN] Razorpay key secret looks unusually short (len=${RAZORPAY_KEY_SECRET.length}). If you regenerated keys, ensure you saved the new Key Secret (shown once) and updated .env with the matching pair.`);
-}
+
 // Masked log to confirm keys are loaded (do not leak full keys)
 if (RAZORPAY_KEY_ID) {
   const kid = RAZORPAY_KEY_ID;
@@ -87,9 +84,25 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
       host: SMTP_HOST,
       port: SMTP_PORT,
       secure: SMTP_SECURE,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
+      auth: { 
+        user: SMTP_USER, 
+        pass: SMTP_PASS 
+      },
+      tls: {
+        rejectUnauthorized: false // For Gmail with app password
+      },
+      debug: true, // Enable debug logs
+      logger: true // Enable logging
     });
-    console.log('[INIT] Email transport configured');
+    
+    // Verify connection
+    mailer.verify((error, success) => {
+      if (error) {
+        console.error('[ERROR] Email transport verification failed:', error.message);
+      } else {
+        console.log('[INIT] Email transport configured and verified successfully');
+      }
+    });
   } catch (e) {
     console.warn('[WARN] Failed to configure email transport:', e.message);
   }
@@ -112,7 +125,7 @@ function generateReceiptPdfBuffer({
       doc.on('data', (d) => chunks.push(d));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      doc.fontSize(20).text('Care Hive', { align: 'center' });
+      doc.fontSize(20).text('SR CareHive', { align: 'center' });
       doc.moveDown(0.3);
       doc.fontSize(14).text(title, { align: 'center' });
       doc.moveDown();
@@ -225,7 +238,7 @@ async function sendApprovalEmail(appointment) {
           <li><b>Available:</b> ${appointment.nurse_available ? 'Yes' : 'No'}</li>
         </ul>
         <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} • ${appointment.duration_hours ?? '-'} hr</p>
-        <p>— Care Hive</p>
+        <p>— SR CareHive</p>
       </div>`;
     await sendEmail({ to, subject: 'Your nurse appointment is approved', html, attachments });
   } catch (e) {
@@ -846,6 +859,61 @@ app.post('/api/support/payment-query', async (req, res) => {
     res.json({ success: true, item: data });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// OTP Email endpoint
+app.post('/api/send-otp-email', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required' });
+    }
+
+    if (!mailer) {
+      console.error('[ERROR] Email mailer not configured');
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #2260FF; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">SERECHI</h1>
+          <p style="color: white; margin: 5px 0;">by SR CareHive Pvt. Ltd.</p>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <h2 style="color: #333;">Your Verification Code</h2>
+          <p style="color: #666; font-size: 16px;">Please use the following OTP to complete your registration:</p>
+          <div style="background: white; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+            <h1 style="color: #2260FF; font-size: 36px; letter-spacing: 8px; margin: 0;">${otp}</h1>
+          </div>
+          <p style="color: #666;">This code is valid for <strong>2 minutes</strong>.</p>
+          <p style="color: #666;">If you didn't request this code, please ignore this email.</p>
+        </div>
+        <div style="background: #333; padding: 15px; text-align: center; color: #999; font-size: 12px;">
+          <p style="margin: 0;">© 2025 SR CareHive Pvt. Ltd. All rights reserved.</p>
+          <p style="margin: 5px 0;">Compassionate Care, Connected Community</p>
+        </div>
+      </div>
+    `;
+
+    console.log(`[INFO] Sending OTP email to: ${email}`);
+    
+    await sendEmail({
+      to: email,
+      subject: 'SERECHI - Your Verification Code',
+      html
+    });
+
+    console.log(`[SUCCESS] OTP email sent to: ${email}`);
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] send-otp-email:', e);
+    res.status(500).json({ 
+      error: 'Failed to send OTP email',
+      details: e.message 
+    });
   }
 });
 

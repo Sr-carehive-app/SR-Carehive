@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Provider;
 import 'patient_signup_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:care12/widgets/google_logo_widget.dart';
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({Key? key}) : super(key: key);
@@ -225,11 +226,14 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             children: [
               TextField(
                 controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                enableSuggestions: false,
+                enableInteractiveSelection: true,
                 decoration: const InputDecoration(
                   hintText: 'Enter your email',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 8),
               const Text(
@@ -375,7 +379,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Welcome',
+              'Welcome to SERECHI By SR CareHive',
               style: TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2260FF),
@@ -387,6 +391,10 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableInteractiveSelection: true,
               decoration: InputDecoration(
                 hintText: 'example@example.com',
                 filled: true,
@@ -403,6 +411,9 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             TextField(
               controller: passwordController,
               obscureText: _obscureText,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableInteractiveSelection: true,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFEDEFFF),
@@ -438,16 +449,23 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 20),
             // Google Sign-In Button
-            ElevatedButton.icon(
+            OutlinedButton.icon(
               onPressed: _handleGoogleSignIn,
-              icon: Image.asset('assets/images/google.png', height: 24),
-              label: const Text('Sign in with Google'),
-              style: ElevatedButton.styleFrom(
+              icon: const GoogleLogoWidget(size: 18),
+              label: const Text(
+                'Login with Google',
+                style: TextStyle(
+                  color: Color(0xFF3C4043),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                side: const BorderSide(color: Color(0xFF2260FF)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                side: const BorderSide(color: Color(0xFFDADADA), width: 1),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                elevation: 0,
               ),
             ),
             const SizedBox(height: 20),

@@ -121,7 +121,14 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                     ],
                   ),
                 ),
-                Icon(Icons.notifications, color: primaryColor),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = 1; // Navigate to Appointments tab
+                    });
+                  },
+                  child: Icon(Icons.notifications, color: primaryColor),
+                ),
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: () {
@@ -136,18 +143,62 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
             ),
           ),
 
-          // Services title
+          // Services title with branding
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-            color: const Color(0xF6F6F6FF), // Light background color
-            child: const Text(
-              'Our services',
-              style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF2260FF).withOpacity(0.05),
+                  Colors.white,
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'SERECHI',
+                      style: TextStyle(
+                        color: const Color(0xFF2260FF),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2260FF).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'by SR CareHive',
+                        style: TextStyle(
+                          color: const Color(0xFF2260FF),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Our services',
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
           ),
 

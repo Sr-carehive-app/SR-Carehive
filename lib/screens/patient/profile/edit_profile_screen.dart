@@ -17,15 +17,30 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final primaryColor = const Color(0xFF2260FF);
   
-  // Controllers for form fields
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  // Controllers for split name fields
+  final TextEditingController firstNameController = TextEditingController();
+  final TextEditingController middleNameController = TextEditingController();
+  final TextEditingController lastNameController = TextEditingController();
+  
+  // Controllers for phone numbers with country code
+  final TextEditingController aadharLinkedPhoneController = TextEditingController();
+  final TextEditingController alternativePhoneController = TextEditingController();
+  
+  // Controllers for detailed address (6 fields)
+  final TextEditingController houseNumberController = TextEditingController();
+  final TextEditingController streetController = TextEditingController();
+  final TextEditingController townController = TextEditingController();
+  final TextEditingController cityController = TextEditingController();
+  final TextEditingController stateController = TextEditingController();
+  final TextEditingController pincodeController = TextEditingController();
+  
+  // Other controllers
   final TextEditingController emailController = TextEditingController();
   final TextEditingController dobController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
   
   String? selectedGender;
+  String selectedCountryCode = '+91';
   bool isLoading = true;
   bool isUpdating = false;
   bool isUploadingImage = false;
@@ -37,6 +52,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? selectedImageFile;
   Uint8List? selectedImageBytes;
   final ImagePicker _picker = ImagePicker();
+  
+  // Country codes with phone number lengths
+  final List<Map<String, dynamic>> countryCodes = [
+    {'code': '+91', 'country': 'India', 'length': 10},
+    {'code': '+1', 'country': 'USA', 'length': 10},
+    {'code': '+44', 'country': 'UK', 'length': 10},
+    {'code': '+971', 'country': 'UAE', 'length': 9},
+    {'code': '+61', 'country': 'Australia', 'length': 9},
+    {'code': '+65', 'country': 'Singapore', 'length': 8},
+  ];
+  
+  // Helper methods for dynamic phone validation
+  int getPhoneNumberLength() {
+    final country = countryCodes.firstWhere(
+      (c) => c['code'] == selectedCountryCode,
+      orElse: () => {'code': '+91', 'country': 'India', 'length': 10},
+    );
+    return country['length'] as int;
+  }
+
+  String getPhonePlaceholder() {
+    final length = getPhoneNumberLength();
+    return '9' * length;
+  }
 
   @override
   void initState() {
@@ -108,12 +147,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
+    firstNameController.dispose();
+    middleNameController.dispose();
+    lastNameController.dispose();
+    aadharLinkedPhoneController.dispose();
+    alternativePhoneController.dispose();
+    houseNumberController.dispose();
+    streetController.dispose();
+    townController.dispose();
+    cityController.dispose();
+    stateController.dispose();
+    pincodeController.dispose();
     emailController.dispose();
     dobController.dispose();
     aadharController.dispose();
-    addressController.dispose();
     super.dispose();
   }
 
@@ -130,12 +177,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             .single();
         
         setState(() {
-          nameController.text = patient['name'] ?? '';
-          phoneController.text = patient['phone'] ?? '';
+          // Load split name fields (with fallback to legacy name field)
+          if (patient['first_name'] != null) {
+            firstNameController.text = patient['first_name'] ?? '';
+            middleNameController.text = patient['middle_name'] ?? '';
+            lastNameController.text = patient['last_name'] ?? '';
+          } else if (patient['name'] != null) {
+            // Fallback: split legacy name field
+            final nameParts = (patient['name'] as String).split(' ');
+            firstNameController.text = nameParts.isNotEmpty ? nameParts[0] : '';
+            lastNameController.text = nameParts.length > 1 ? nameParts.last : '';
+            if (nameParts.length > 2) {
+              middleNameController.text = nameParts.sublist(1, nameParts.length - 1).join(' ');
+            }
+          }
+          
+          // Load phone fields
+          selectedCountryCode = patient['country_code'] ?? '+91';
+          aadharLinkedPhoneController.text = patient['aadhar_linked_phone'] ?? patient['phone'] ?? '';
+          alternativePhoneController.text = patient['alternative_phone'] ?? '';
+          
+          // Load address fields
+          houseNumberController.text = patient['house_number'] ?? '';
+          streetController.text = patient['street'] ?? '';
+          townController.text = patient['town'] ?? '';
+          cityController.text = patient['city'] ?? '';
+          stateController.text = patient['state'] ?? '';
+          pincodeController.text = patient['pincode'] ?? '';
+          
+          // Load other fields
           emailController.text = patient['email'] ?? '';
           dobController.text = patient['dob'] != null ? patient['dob'] : '';
           aadharController.text = patient['aadhar_number'] ?? '';
-          addressController.text = patient['permanent_address'] ?? '';
           selectedGender = patient['gender'];
           profileImageUrl = patient['profile_image_url'];
           isLoading = false;
@@ -251,11 +324,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _updateProfile() async {
-    if (nameController.text.isEmpty || phoneController.text.isEmpty) {
+    // Validate required fields
+    if (firstNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all required fields')),
+        const SnackBar(content: Text('Please enter your first name')),
       );
       return;
+    }
+    
+    if (lastNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your last name')),
+      );
+      return;
+    }
+    
+    if (aadharLinkedPhoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your phone number')),
+      );
+      return;
+    }
+    
+    // Validate phone number length
+    final requiredLength = getPhoneNumberLength();
+    if (aadharLinkedPhoneController.text.trim().length != requiredLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Phone number must be $requiredLength digits for $selectedCountryCode')),
+      );
+      return;
+    }
+    
+    // Validate alternative phone if provided
+    if (alternativePhoneController.text.trim().isNotEmpty) {
+      if (alternativePhoneController.text.trim().length != requiredLength) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Alternative phone must be $requiredLength digits for $selectedCountryCode')),
+        );
+        return;
+      }
     }
     
     // Validate Aadhar number if provided
@@ -278,14 +385,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = supabase.auth.currentUser;
       
       if (user != null) {
+        // Build full name from parts
+        String fullName = firstNameController.text.trim();
+        if (middleNameController.text.trim().isNotEmpty) {
+          fullName += ' ${middleNameController.text.trim()}';
+        }
+        fullName += ' ${lastNameController.text.trim()}';
+        
         await supabase
             .from('patients')
             .update({
-              'name': nameController.text.trim(),
-              'phone': phoneController.text.trim(),
+              // Split name fields
+              'first_name': firstNameController.text.trim(),
+              'middle_name': middleNameController.text.trim(),
+              'last_name': lastNameController.text.trim(),
+              'name': fullName, // Keep legacy field
+              
+              // Phone fields
+              'country_code': selectedCountryCode,
+              'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+              'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                  ? alternativePhoneController.text.trim() 
+                  : null,
+              'phone': aadharLinkedPhoneController.text.trim(), // Legacy field
+              
+              // Address fields
+              'house_number': houseNumberController.text.trim(),
+              'street': streetController.text.trim(),
+              'town': townController.text.trim(),
+              'city': cityController.text.trim(),
+              'state': stateController.text.trim(),
+              'pincode': pincodeController.text.trim(),
+              
+              // Other fields
               'dob': dobController.text.isNotEmpty ? dobController.text.trim() : null,
               'aadhar_number': aadharController.text.trim(),
-              'permanent_address': addressController.text.trim(),
               'gender': selectedGender,
             })
             .eq('user_id', user.id);
@@ -372,10 +506,136 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          buildTextField('Full Name', 'Enter your full name', nameController, isRequired: true),
-          buildTextField('Phone Number', 'Enter your phone number', phoneController, isRequired: true),
+          
+          // Name Section - Split into 3 fields
+          const Text('Name *', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          buildTextField('First Name', 'Enter first name', firstNameController, isRequired: true),
+          buildTextField('Middle Name (Optional)', 'Enter middle name', middleNameController),
+          buildTextField('Last Name', 'Enter last name', lastNameController, isRequired: true),
+          
+          const Divider(thickness: 1),
+          const SizedBox(height: 16),
+          
+          // Email (Read-only)
           buildTextField('Email', 'Enter your email', emailController, isReadOnly: true),
+          
+          // Aadhar Linked Phone Number with Country Code
+          const Text('Aadhar Linked Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Country Code Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDEFFF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButton<String>(
+                  value: selectedCountryCode,
+                  underline: const SizedBox(),
+                  items: countryCodes.map((code) {
+                    return DropdownMenuItem<String>(
+                      value: code['code'] as String,
+                      child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => selectedCountryCode = value!);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Phone Number Field
+              Expanded(
+                child: TextField(
+                  key: ValueKey(selectedCountryCode),
+                  controller: aadharLinkedPhoneController,
+                  keyboardType: TextInputType.phone,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableInteractiveSelection: true,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(getPhoneNumberLength()),
+                  ],
+                  decoration: InputDecoration(
+                    hintText: getPhonePlaceholder(),
+                    filled: true,
+                    fillColor: const Color(0xFFEDEFFF),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Alternative Phone Number
+          const Text('Alternative Phone Number (Optional)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Country Code Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDEFFF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButton<String>(
+                  value: selectedCountryCode,
+                  underline: const SizedBox(),
+                  items: countryCodes.map((code) {
+                    return DropdownMenuItem<String>(
+                      value: code['code'] as String,
+                      child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => selectedCountryCode = value!);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Alternative Phone Field
+              Expanded(
+                child: TextField(
+                  key: ValueKey('alt_$selectedCountryCode'),
+                  controller: alternativePhoneController,
+                  keyboardType: TextInputType.phone,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableInteractiveSelection: true,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(getPhoneNumberLength()),
+                  ],
+                  decoration: InputDecoration(
+                    hintText: getPhonePlaceholder(),
+                    filled: true,
+                    fillColor: const Color(0xFFEDEFFF),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Date of Birth
           buildDateField('Date Of Birth', 'Select your date of birth', dobController),
+          
+          // Aadhar Number with Validation
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -388,6 +648,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               TextField(
                 controller: aadharController,
                 keyboardType: TextInputType.number,
+                autocorrect: false,
+                enableSuggestions: false,
+                enableInteractiveSelection: true,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(12),
@@ -411,6 +674,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
               ),
               if (_aadharTouched && !_aadharValid && aadharController.text.isNotEmpty)
@@ -427,7 +691,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 16),
             ],
           ),
-          buildTextField('Permanent Address', 'Enter your permanent address', addressController),
+          
+          // Address Section - 6 detailed fields
+          const Text('Address Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          buildTextField('House/Flat Number', 'Enter house/flat number', houseNumberController),
+          buildTextField('Street/Road', 'Enter street/road name', streetController),
+          buildTextField('Town/Village', 'Enter town/village', townController),
+          buildTextField('City', 'Enter city', cityController),
+          buildTextField('State', 'Enter state', stateController),
+          buildTextField('Pincode', 'Enter pincode', pincodeController, keyboardType: TextInputType.number),
+          
+          const SizedBox(height: 8),
           buildGenderField(),
           const SizedBox(height: 20),
           ElevatedButton(
@@ -452,7 +727,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget buildTextField(String label, String hint, TextEditingController controller, {bool isRequired = false, bool isReadOnly = false}) {
+  Widget buildTextField(String label, String hint, TextEditingController controller, {bool isRequired = false, bool isReadOnly = false, TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -466,11 +741,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextField(
           controller: controller,
           readOnly: isReadOnly,
+          keyboardType: keyboardType,
+          autocorrect: false,
+          enableSuggestions: false,
+          enableInteractiveSelection: true,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
             fillColor: isReadOnly ? Colors.grey[200] : const Color(0xFFEDEFFF),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           ),
         ),
         const SizedBox(height: 16),

@@ -8,6 +8,9 @@ import 'patient_dashboard_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:care12/services/otp_service.dart';
+import 'package:care12/widgets/google_logo_widget.dart';
+import 'dart:async';
 
 class PatientSignUpScreen extends StatefulWidget {
   final Map<String, String>? prefillData;
@@ -19,14 +22,31 @@ class PatientSignUpScreen extends StatefulWidget {
 }
 
 class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
-  final TextEditingController nameController = TextEditingController();
+  // Name fields
+  final TextEditingController firstNameController = TextEditingController();
+  final TextEditingController middleNameController = TextEditingController();
+  final TextEditingController lastNameController = TextEditingController();
+  
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  
+  // Phone fields
+  String selectedCountryCode = '+91';
+  final TextEditingController aadharLinkedPhoneController = TextEditingController();
+  final TextEditingController alternativePhoneController = TextEditingController();
+  
   DateTime? selectedDate;
   final TextEditingController dobController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
+  
+  // Address fields
+  final TextEditingController houseNumberController = TextEditingController();
+  final TextEditingController streetController = TextEditingController();
+  final TextEditingController townController = TextEditingController();
+  final TextEditingController cityController = TextEditingController();
+  final TextEditingController stateController = TextEditingController();
+  final TextEditingController pincodeController = TextEditingController();
+  
   String? selectedGender;
 
   bool _obscureText = true;
@@ -34,6 +54,17 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   bool _isGoogleUser = false;
   bool _aadharValid = false;
   bool _aadharTouched = false;
+  bool _phoneVerified = false;
+
+  // Country codes list with phone number lengths
+  final List<Map<String, dynamic>> countryCodes = [
+    {'code': '+91', 'country': 'India', 'length': 10},
+    {'code': '+1', 'country': 'USA', 'length': 10},
+    {'code': '+44', 'country': 'UK', 'length': 10},
+    {'code': '+971', 'country': 'UAE', 'length': 9},
+    {'code': '+61', 'country': 'Australia', 'length': 9},
+    {'code': '+65', 'country': 'Singapore', 'length': 8},
+  ];
 
   @override
   void initState() {
@@ -44,7 +75,19 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
 
   void _prefillData() {
     if (widget.prefillData != null) {
-      nameController.text = widget.prefillData!['name'] ?? '';
+      // Split name if provided
+      final fullName = widget.prefillData!['name'] ?? '';
+      final nameParts = fullName.split(' ');
+      if (nameParts.isNotEmpty) {
+        firstNameController.text = nameParts[0];
+        if (nameParts.length > 2) {
+          middleNameController.text = nameParts.sublist(1, nameParts.length - 1).join(' ');
+          lastNameController.text = nameParts.last;
+        } else if (nameParts.length == 2) {
+          lastNameController.text = nameParts[1];
+        }
+      }
+      
       emailController.text = widget.prefillData!['email'] ?? '';
       
       // Pre-fill DOB if available
@@ -137,27 +180,332 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     return '${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8)}';
   }
 
+  // OTP Verification Dialog
+  Future<bool> _showOTPVerificationDialog() async {
+    final otpController = TextEditingController();
+    bool isVerifying = false;
+    int remainingSeconds = 120; // 2 minutes
+    bool canResend = false;
+    Timer? countdownTimer;
+
+    // Send OTP
+    final phoneWithCode = selectedCountryCode + aadharLinkedPhoneController.text.trim();
+    final result = await OTPService.sendOTP(phoneWithCode, emailController.text.trim());
+
+    if (!result['sms']! && !result['email']!) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to send OTP. Please check your phone number and email.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            // Start timer only once
+            if (countdownTimer == null || !countdownTimer!.isActive) {
+              countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+                if (remainingSeconds > 0) {
+                  setState(() {
+                    remainingSeconds--;
+                    if (remainingSeconds == 0) {
+                      canResend = true;
+                      timer.cancel();
+                    }
+                  });
+                } else {
+                  timer.cancel();
+                }
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Verify OTP'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enter the 6-digit OTP sent to:',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '📧 ${emailController.text}',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  if (result['sms']!)
+                    Text(
+                      '📱 $phoneWithCode',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: otpController,
+                    keyboardType: TextInputType.number,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    enableInteractiveSelection: true,
+                    maxLength: 6,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                    decoration: const InputDecoration(
+                      hintText: '000000',
+                      counterText: '',
+                      border: OutlineInputBorder(),
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (remainingSeconds > 0)
+                    Text(
+                      'OTP expires in ${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  if (canResend)
+                    TextButton(
+                      onPressed: () async {
+                        setState(() {
+                          remainingSeconds = 120;
+                          canResend = false;
+                        });
+                        
+                        // Restart timer
+                        countdownTimer?.cancel();
+                        countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+                          if (remainingSeconds > 0) {
+                            setState(() {
+                              remainingSeconds--;
+                              if (remainingSeconds == 0) {
+                                canResend = true;
+                                timer.cancel();
+                              }
+                            });
+                          } else {
+                            timer.cancel();
+                          }
+                        });
+                        
+                        final resendResult = await OTPService.sendOTP(
+                          phoneWithCode,
+                          emailController.text.trim(),
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                resendResult['sms']! || resendResult['email']!
+                                    ? 'OTP resent successfully'
+                                    : 'Failed to resend OTP',
+                              ),
+                              backgroundColor:
+                                  resendResult['sms']! || resendResult['email']!
+                                      ? Colors.green
+                                      : Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Resend OTP'),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    countdownTimer?.cancel();
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isVerifying
+                      ? null
+                      : () {
+                          if (otpController.text.length != 6) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a 6-digit OTP'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setState(() => isVerifying = true);
+
+                          final isValid = OTPService.verifyOTP(otpController.text);
+
+                          setState(() => isVerifying = false);
+
+                          if (isValid) {
+                            countdownTimer?.cancel();
+                            Navigator.of(dialogContext).pop(true);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Invalid or expired OTP'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                  child: isVerifying
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Verify'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      countdownTimer?.cancel();
+    }) ?? false;
+  }
+
   @override
   void dispose() {
-    nameController.dispose();
+    firstNameController.dispose();
+    middleNameController.dispose();
+    lastNameController.dispose();
     passwordController.dispose();
     emailController.dispose();
-    phoneController.dispose();
+    aadharLinkedPhoneController.dispose();
+    alternativePhoneController.dispose();
     dobController.dispose();
     aadharController.dispose();
-    addressController.dispose();
+    houseNumberController.dispose();
+    streetController.dispose();
+    townController.dispose();
+    cityController.dispose();
+    stateController.dispose();
+    pincodeController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSignUp() async {
-    if (nameController.text.isEmpty ||
-        phoneController.text.isEmpty ||
-        dobController.text.isEmpty ||
-        aadharController.text.isEmpty ||
-        addressController.text.isEmpty ||
-        selectedGender == null) {
+    // Validate all required fields with specific error messages
+    if (firstNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
+        const SnackBar(content: Text('Please enter your first name')),
+      );
+      return;
+    }
+    
+    if (lastNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your last name')),
+      );
+      return;
+    }
+    
+    if (emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email')),
+      );
+      return;
+    }
+    
+    if (aadharLinkedPhoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your Aadhar linked phone number')),
+      );
+      return;
+    }
+    
+    // Validate phone number length based on country code
+    final requiredLength = getPhoneNumberLength();
+    if (aadharLinkedPhoneController.text.trim().length != requiredLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Phone number must be $requiredLength digits for $selectedCountryCode')),
+      );
+      return;
+    }
+    
+    // Validate alternative phone number if provided
+    if (alternativePhoneController.text.trim().isNotEmpty) {
+      if (alternativePhoneController.text.trim().length != requiredLength) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Alternative phone number must be $requiredLength digits for $selectedCountryCode')),
+        );
+        return;
+      }
+    }
+    
+    if (dobController.text.trim().isEmpty || selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your date of birth')),
+      );
+      return;
+    }
+    
+    if (aadharController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your Aadhar number')),
+      );
+      return;
+    }
+    
+    if (houseNumberController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your house/flat number')),
+      );
+      return;
+    }
+    
+    if (streetController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your street')),
+      );
+      return;
+    }
+    
+    if (townController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your town/locality')),
+      );
+      return;
+    }
+    
+    if (cityController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your city')),
+      );
+      return;
+    }
+    
+    if (stateController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your state')),
+      );
+      return;
+    }
+    
+    if (pincodeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your PIN code')),
+      );
+      return;
+    }
+    
+    if (selectedGender == null || selectedGender!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your gender')),
       );
       return;
     }
@@ -190,24 +538,82 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       );
       return;
     }
+
+    // For non-OAuth users, verify phone via OTP
+    if (!_isGoogleUser && !_phoneVerified) {
+      // Show loading state
+      setState(() => _isLoading = true);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text('Sending OTP...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      
+      final otpVerified = await _showOTPVerificationDialog();
+      
+      // Hide loading state
+      setState(() => _isLoading = false);
+      
+      if (!otpVerified) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone verification is required to continue'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      setState(() => _phoneVerified = true);
+    }
     
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
     
     try {
+      final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
+      final phoneWithCode = selectedCountryCode + aadharLinkedPhoneController.text.trim();
+      
       if (_isGoogleUser) {
         // Google user - already authenticated, just create patient record
         final user = supabase.auth.currentUser;
         if (user != null) {
           await supabase.from('patients').insert({
             'user_id': user.id,
-            'name': nameController.text.trim(),
+            'name': fullName,
+            'first_name': firstNameController.text.trim(),
+            'middle_name': middleNameController.text.trim(),
+            'last_name': lastNameController.text.trim(),
             'email': emailController.text.trim(),
-            'phone': phoneController.text.trim(),
+            'country_code': selectedCountryCode,
+            'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+            'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                ? alternativePhoneController.text.trim() 
+                : null,
             'dob': dobController.text.trim(),
             'aadhar_number': aadharController.text.trim(),
-            'permanent_address': addressController.text.trim(),
+            'house_number': houseNumberController.text.trim(),
+            'street': streetController.text.trim(),
+            'town': townController.text.trim(),
+            'city': cityController.text.trim(),
+            'state': stateController.text.trim(),
+            'pincode': pincodeController.text.trim(),
             'gender': selectedGender,
+            'phone_verified': true, // OAuth users are pre-verified
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -217,7 +623,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (_) => PatientDashboardScreen(userName: nameController.text.trim()),
+              builder: (_) => PatientDashboardScreen(userName: fullName),
             ),
             (route) => false,
           );
@@ -232,24 +638,28 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
         if (user != null) {
           await supabase.from('patients').insert({
             'user_id': user.id,
-            'name': nameController.text.trim(),
+            'name': fullName,
+            'first_name': firstNameController.text.trim(),
+            'middle_name': middleNameController.text.trim(),
+            'last_name': lastNameController.text.trim(),
             'email': emailController.text.trim(),
-            'phone': phoneController.text.trim(),
+            'country_code': selectedCountryCode,
+            'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+            'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                ? alternativePhoneController.text.trim() 
+                : null,
             'dob': dobController.text.trim(),
             'aadhar_number': aadharController.text.trim(),
-            'permanent_address': addressController.text.trim(),
+            'house_number': houseNumberController.text.trim(),
+            'street': streetController.text.trim(),
+            'town': townController.text.trim(),
+            'city': cityController.text.trim(),
+            'state': stateController.text.trim(),
+            'pincode': pincodeController.text.trim(),
             'gender': selectedGender,
+            'phone_verified': true,
+            'otp_verified_at': DateTime.now().toIso8601String(),
           });
-          
-          // Save details to shared_preferences for pre-filling on first login
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('signup_name', nameController.text.trim());
-          await prefs.setString('signup_email', emailController.text.trim());
-          await prefs.setString('signup_phone', phoneController.text.trim());
-          await prefs.setString('signup_dob', dobController.text.trim());
-          await prefs.setString('signup_aadhar', aadharController.text.trim());
-          await prefs.setString('signup_address', addressController.text.trim());
-          await prefs.setString('signup_gender', selectedGender ?? '');
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Registration successful! Please verify your email.')),
@@ -296,6 +706,21 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     }
   }
 
+  // Get phone number length for selected country
+  int getPhoneNumberLength() {
+    final country = countryCodes.firstWhere(
+      (c) => c['code'] == selectedCountryCode,
+      orElse: () => {'code': '+91', 'country': 'India', 'length': 10},
+    );
+    return country['length'] as int;
+  }
+
+  // Get placeholder for selected country
+  String getPhonePlaceholder() {
+    final length = getPhoneNumberLength();
+    return '9' * length; // e.g., "9999999999" for 10 digits
+  }
+
   Widget buildTextField({
     required String label,
     required String hint,
@@ -317,6 +742,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           enabled: enabled,
+          enableInteractiveSelection: true,
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
@@ -424,10 +852,27 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               ),
             ],
             const SizedBox(height: 20),
+            // First Name
             buildTextField(
-              label: 'Full name',
-              hint: 'Example',
-              controller: nameController,
+              label: 'First Name *',
+              hint: 'John',
+              controller: firstNameController,
+              keyboardType: TextInputType.name,
+            ),
+            const SizedBox(height: 20),
+            // Middle Name (Optional)
+            buildTextField(
+              label: 'Middle Name (Optional)',
+              hint: 'Kumar',
+              controller: middleNameController,
+              keyboardType: TextInputType.name,
+            ),
+            const SizedBox(height: 20),
+            // Last Name
+            buildTextField(
+              label: 'Last Name *',
+              hint: 'Sharma',
+              controller: lastNameController,
               keyboardType: TextInputType.name,
             ),
             const SizedBox(height: 20),
@@ -452,11 +897,128 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               enabled: !_isGoogleUser,
             ),
             const SizedBox(height: 20),
-            buildTextField(
-              label: 'Mobile Number',
-              hint: '9999XXXXX',
-              controller: phoneController,
-              keyboardType: TextInputType.number,
+            // Aadhar Linked Phone Number with Country Code
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Aadhar Linked Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    // Country Code Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDEFFF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedCountryCode,
+                        underline: const SizedBox(),
+                        items: countryCodes.map((code) {
+                          return DropdownMenuItem<String>(
+                            value: code['code'] as String,
+                            child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => selectedCountryCode = value!);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Phone Number Field
+                    Expanded(
+                      child: TextField(
+                        key: ValueKey(selectedCountryCode), // Rebuild when country changes
+                        controller: aadharLinkedPhoneController,
+                        keyboardType: TextInputType.phone,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        enableInteractiveSelection: true,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(getPhoneNumberLength()),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: getPhonePlaceholder(),
+                          filled: true,
+                          fillColor: const Color(0xFFEDEFFF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'This number must be linked to your Aadhar card. OTP will be sent here.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Alternative Phone Number (Optional)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Alternative Phone Number (Optional)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    // Country Code Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEDEFFF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedCountryCode,
+                        underline: const SizedBox(),
+                        items: countryCodes.map((code) {
+                          return DropdownMenuItem<String>(
+                            value: code['code'] as String,
+                            child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => selectedCountryCode = value!);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Alternative Phone Number Field
+                    Expanded(
+                      child: TextField(
+                        key: ValueKey('alt_$selectedCountryCode'), // Rebuild when country changes
+                        controller: alternativePhoneController,
+                        keyboardType: TextInputType.phone,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        enableInteractiveSelection: true,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(getPhoneNumberLength()),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: getPhonePlaceholder(),
+                          filled: true,
+                          fillColor: const Color(0xFFEDEFFF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             buildDateField(),
@@ -464,11 +1026,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Aadhar Number', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const Text('Aadhar Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: aadharController,
                   keyboardType: TextInputType.number,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableInteractiveSelection: true,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(12),
@@ -508,11 +1073,44 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               ],
             ),
             const SizedBox(height: 20),
+            // Permanent Address Section
+            const Text('Permanent Address', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
             buildTextField(
-              label: 'Permanent Address',
-              hint: 'Enter your address',
-              controller: addressController,
-              keyboardType: TextInputType.multiline,
+              label: 'House/Flat Number *',
+              hint: '123 or A-45',
+              controller: houseNumberController,
+            ),
+            const SizedBox(height: 20),
+            buildTextField(
+              label: 'Street *',
+              hint: 'MG Road',
+              controller: streetController,
+            ),
+            const SizedBox(height: 20),
+            buildTextField(
+              label: 'Town/Locality *',
+              hint: 'Rajpur',
+              controller: townController,
+            ),
+            const SizedBox(height: 20),
+            buildTextField(
+              label: 'City *',
+              hint: 'Dehradun',
+              controller: cityController,
+            ),
+            const SizedBox(height: 20),
+            buildTextField(
+              label: 'State *',
+              hint: 'Uttarakhand',
+              controller: stateController,
+            ),
+            const SizedBox(height: 20),
+            buildTextField(
+              label: 'PIN Code *',
+              hint: '248001',
+              controller: pincodeController,
+              keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 20),
             const Text('Gender', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
@@ -554,16 +1152,23 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                   ),
             const SizedBox(height: 20),
             if (!_isGoogleUser) ...[
-              ElevatedButton.icon(
+              OutlinedButton.icon(
                 onPressed: _handleGoogleSignIn,
-                icon: Image.asset('assets/images/google.png', height: 24),
-                label: const Text('Sign up with Google'),
-                style: ElevatedButton.styleFrom(
+                icon: const GoogleLogoWidget(size: 18),
+                label: const Text(
+                  'Sign up with Google',
+                  style: TextStyle(
+                    color: Color(0xFF3C4043),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  side: const BorderSide(color: Color(0xFF2260FF)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  side: const BorderSide(color: Color(0xFFDADADA), width: 1),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  elevation: 0,
                 ),
               ),
               const SizedBox(height: 20),
