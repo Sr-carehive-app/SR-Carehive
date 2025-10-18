@@ -81,6 +81,9 @@ const SENDER_NAME = (process.env.SENDER_NAME || 'Care Hive').trim();
 // Admin/Nurse emails that receive all notifications
 const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
 
+// Frontend URL for email links (used when users don't have app installed)
+const FRONTEND_URL = (process.env.FRONTEND_URL || '${FRONTEND_URL}').trim();
+
 // Twilio SMS Configuration (SECURE - Never expose to frontend!)
 const TWILIO_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
 const TWILIO_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
@@ -403,7 +406,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>` : ''}
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://localhost:5173/nurse-admin" 
+            <a href="${FRONTEND_URL}/nurse-admin" 
                style="display: inline-block; background: #ff6b6b; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
               📋 Manage Appointments
             </a>
@@ -1292,7 +1295,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://localhost:5173/patient/appointments" 
+            <a href="${FRONTEND_URL}/patient/appointments" 
                style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View My Appointments
             </a>
@@ -1324,7 +1327,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
             <strong>⏭️ Next Action:</strong> Please contact the patient and set the total service amount in the nurse dashboard.
           </p>
         </div>
-        <a href="http://localhost:5173/nurse/manage-appointments" 
+        <a href="${FRONTEND_URL}/nurse/manage-appointments" 
            style="display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
           Manage Appointments
         </a>
@@ -1449,7 +1452,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://localhost:5173/patient/appointments" 
+            <a href="${FRONTEND_URL}/patient/appointments" 
                style="display: inline-block; background: #9c27b0; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
               Pay Now (₹${preAmount})
             </a>
@@ -1579,7 +1582,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://localhost:5173/patient/appointments" 
+            <a href="${FRONTEND_URL}/patient/appointments" 
                style="display: inline-block; background: #3f51b5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Appointment Details
             </a>
@@ -1764,7 +1767,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="http://localhost:5173/patient/appointments" 
+            <a href="${FRONTEND_URL}/patient/appointments" 
                style="display: inline-block; background: #009688; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Appointment History
             </a>

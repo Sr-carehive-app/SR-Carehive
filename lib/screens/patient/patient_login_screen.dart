@@ -197,7 +197,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
         OAuthProvider.google,
         redirectTo: kIsWeb
             ? 'http://localhost:5173/auth/v1/callback'
-            : 'https://abqqwgzijmvqjabfvqbc.supabase.co/auth/v1/callback',
+            : null,  // ✅ Let Supabase auto-detect (uses deep link from Supabase dashboard)
       );
       // The OAuth callback will be handled in main.dart
     } on AuthException catch (e) {

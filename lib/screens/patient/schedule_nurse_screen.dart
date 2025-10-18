@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ScheduleNurseScreen extends StatefulWidget {
   const ScheduleNurseScreen({Key? key}) : super(key: key);
@@ -309,7 +310,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       // Notify admin about new appointment
       if (response != null && response['id'] != null) {
         try {
-          const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:9090');
+          final apiBaseUrl = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
           await http.post(
             Uri.parse('$apiBaseUrl/api/notify-new-appointment'),
             headers: {'Content-Type': 'application/json'},
