@@ -6,9 +6,9 @@ import 'package:care12/screens/patient/profile/profile_screen.dart';
 import 'package:care12/screens/patient/profile/settings_screen.dart';
 
 class PatientDashboardScreen extends StatefulWidget {
-  final String userName;
+  final String? userName;
 
-  const PatientDashboardScreen({Key? key, required this.userName}) : super(key: key);
+  const PatientDashboardScreen({Key? key, this.userName}) : super(key: key);
 
   @override
   State<PatientDashboardScreen> createState() => _PatientDashboardScreenState();
@@ -114,7 +114,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                       const Text('Hi, Welcome Back',
                           style: TextStyle(color: Colors.grey, fontSize: 12)),
                       Text(
-                        userName ?? widget.userName,
+                        userName ?? widget.userName ?? 'User',
                         style: const TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                       ),

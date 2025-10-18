@@ -988,4 +988,580 @@ app.post('/api/send-otp-sms', async (req, res) => {
   }
 });
 
+// ============================================
+// PAYMENT NOTIFICATION ENDPOINTS (3-Tier System)
+// ============================================
+
+// 1. Registration Payment Notification (₹100)
+app.post('/api/notify-registration-payment', async (req, res) => {
+  try {
+    const { 
+      appointmentId, 
+      patientEmail, 
+      patientName, 
+      patientPhone,
+      nurseEmail,
+      nurseName,
+      paymentId, 
+      receiptId, 
+      amount,
+      date,
+      time
+    } = req.body;
+
+    if (!appointmentId || !patientEmail || !paymentId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[INFO] Sending registration payment notification for appointment #${appointmentId}`);
+
+    // Email to Patient
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4acc 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Registration Successful!</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            Your registration payment of <strong style="color: #2260FF; font-size: 18px;">₹${amount || 100}</strong> has been received successfully! 🎉
+          </p>
+
+          <div style="background: #e8f4ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2260FF;">
+            <h3 style="margin-top: 0; color: #2260FF;">📋 Appointment Details</h3>
+            <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
+            <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
+            <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
+            <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentId}</p>
+            ${receiptId ? `<p style="margin: 5px 0;"><strong>Receipt ID:</strong> ${receiptId}</p>` : ''}
+          </div>
+
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0;">
+            <h4 style="margin-top: 0; color: #856404;">🔔 What Happens Next?</h4>
+            <ol style="color: #856404; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+              <li>Our care provider will contact you shortly to confirm appointment details</li>
+              <li>They will assess your needs and set the total service amount</li>
+              <li>You'll be notified when the total amount is ready</li>
+              <li>Payment will be split: 50% before visit, 50% after successful completion</li>
+            </ol>
+          </div>
+
+          <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745; margin: 20px 0;">
+            <p style="margin: 0; color: #155724;">
+              <strong>✅ Your booking is now confirmed!</strong> We'll keep you updated via email and SMS.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://localhost:5173/patient/appointments" 
+               style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View My Appointments
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            This is an automated email from SR CareHive. Please do not reply to this email.
+            <br>Need help? Contact us at srcarehive@gmail.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Email to Nurse/Admin
+    const nurseHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #2260FF;">💰 New Registration Payment Received</h2>
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Appointment ID:</strong> #${appointmentId}</p>
+          <p><strong>Patient:</strong> ${patientName || 'N/A'} (${patientPhone || 'N/A'})</p>
+          <p><strong>Email:</strong> ${patientEmail}</p>
+          <p><strong>Amount Paid:</strong> ₹${amount || 100}</p>
+          <p><strong>Payment ID:</strong> ${paymentId}</p>
+          <p><strong>Date:</strong> ${date || 'N/A'}</p>
+          <p><strong>Time:</strong> ${time || 'N/A'}</p>
+        </div>
+        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0; color: #856404;">
+            <strong>⏭️ Next Action:</strong> Please contact the patient and set the total service amount in the nurse dashboard.
+          </p>
+        </div>
+        <a href="http://localhost:5173/nurse/manage-appointments" 
+           style="display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
+          Manage Appointments
+        </a>
+      </div>
+    `;
+
+    // Send emails
+    const emailPromises = [
+      sendEmail({ 
+        to: patientEmail, 
+        subject: `✅ Registration Payment Successful - Appointment #${appointmentId}`, 
+        html: patientHtml 
+      })
+    ];
+
+    if (nurseEmail) {
+      emailPromises.push(
+        sendEmail({ 
+          to: nurseEmail, 
+          subject: `💰 Registration Payment Received - Appointment #${appointmentId}`, 
+          html: nurseHtml 
+        })
+      );
+    }
+
+    // Send SMS to patient
+    if (twilioClient && patientPhone) {
+      try {
+        let phone = patientPhone.trim();
+        if (!phone.startsWith('+')) phone = `+91${phone}`;
+        
+        await twilioClient.messages.create({
+          body: `CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our care provider will contact you soon. Check email for details.`,
+          from: TWILIO_PHONE_NUMBER,
+          to: phone
+        });
+        console.log(`[SUCCESS] Registration SMS sent to ${phone.slice(0,6)}***`);
+      } catch (smsErr) {
+        console.error('[ERROR] SMS failed:', smsErr.message);
+      }
+    }
+
+    await Promise.all(emailPromises);
+    console.log(`[SUCCESS] Registration payment notifications sent for appointment #${appointmentId}`);
+
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-registration-payment:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// 2. Amount Set Notification (Nurse sets total amount)
+app.post('/api/notify-amount-set', async (req, res) => {
+  try {
+    const { 
+      appointmentId, 
+      patientEmail, 
+      patientName,
+      patientPhone,
+      totalAmount,
+      nurseRemarks,
+      nurseName,
+      date,
+      time
+    } = req.body;
+
+    if (!appointmentId || !patientEmail || !totalAmount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const preAmount = (totalAmount / 2).toFixed(2);
+    const finalAmount = (totalAmount / 2).toFixed(2);
+
+    console.log(`[INFO] Sending amount-set notification for appointment #${appointmentId}, total: ₹${totalAmount}`);
+
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">💰 Service Amount Set</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            Our care provider has assessed your requirements and set the total service amount for your appointment.
+          </p>
+
+          <div style="background: #f3e5f5; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #9c27b0; text-align: center;">
+            <h3 style="margin: 0 0 10px 0; color: #9c27b0;">Total Service Amount</h3>
+            <p style="font-size: 36px; font-weight: bold; color: #7b1fa2; margin: 0;">₹${totalAmount}</p>
+            <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;">(Registration ₹100 already paid)</p>
+          </div>
+
+          ${nurseRemarks ? `
+          <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
+            <h4 style="margin-top: 0; color: #2e7d32;">📝 Service Breakdown</h4>
+            <p style="color: #2e7d32; margin: 0; white-space: pre-wrap;">${nurseRemarks}</p>
+          </div>
+          ` : ''}
+
+          <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <h4 style="margin-top: 0; color: #856404;">💳 Payment Schedule</h4>
+            <div style="display: flex; justify-content: space-between; margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
+              <div style="text-align: center; flex: 1;">
+                <p style="color: #666; margin: 0; font-size: 12px;">BEFORE VISIT (50%)</p>
+                <p style="font-size: 24px; font-weight: bold; color: #9c27b0; margin: 5px 0;">₹${preAmount}</p>
+              </div>
+              <div style="border-left: 2px dashed #ddd; margin: 0 10px;"></div>
+              <div style="text-align: center; flex: 1;">
+                <p style="color: #666; margin: 0; font-size: 12px;">AFTER VISIT (50%)</p>
+                <p style="font-size: 24px; font-weight: bold; color: #4caf50; margin: 5px 0;">₹${finalAmount}</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
+            <p style="margin: 0; color: #1565c0;">
+              <strong>ℹ️ Next Step:</strong> Please pay ₹${preAmount} before your scheduled appointment to confirm your booking.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://localhost:5173/patient/appointments" 
+               style="display: inline-block; background: #9c27b0; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+              Pay Now (₹${preAmount})
+            </a>
+          </div>
+
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="margin-top: 0;">📋 Appointment Details</h4>
+            <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
+            <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
+            <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
+            ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            Need clarification on the service charges? Please contact your care provider.
+            <br>SR CareHive | srcarehive@gmail.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({ 
+      to: patientEmail, 
+      subject: `💰 Service Amount Set - ₹${totalAmount} | Appointment #${appointmentId}`, 
+      html: patientHtml 
+    });
+
+    // Send SMS
+    if (twilioClient && patientPhone) {
+      try {
+        let phone = patientPhone.trim();
+        if (!phone.startsWith('+')) phone = `+91${phone}`;
+        
+        await twilioClient.messages.create({
+          body: `CareHive: Service amount set ₹${totalAmount} for appointment #${appointmentId}. Pay ₹${preAmount} (50%) before visit. Login to pay now.`,
+          from: TWILIO_PHONE_NUMBER,
+          to: phone
+        });
+        console.log(`[SUCCESS] Amount-set SMS sent to ${phone.slice(0,6)}***`);
+      } catch (smsErr) {
+        console.error('[ERROR] SMS failed:', smsErr.message);
+      }
+    }
+
+    console.log(`[SUCCESS] Amount-set notifications sent for appointment #${appointmentId}`);
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-amount-set:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// 3. Pre-Visit Payment Notification
+app.post('/api/notify-pre-payment', async (req, res) => {
+  try {
+    const { 
+      appointmentId, 
+      patientEmail, 
+      patientName,
+      patientPhone,
+      nurseEmail,
+      nurseName,
+      amount,
+      paymentId,
+      receiptId,
+      totalAmount,
+      date,
+      time
+    } = req.body;
+
+    if (!appointmentId || !patientEmail || !amount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const finalAmount = (totalAmount / 2).toFixed(2);
+
+    console.log(`[INFO] Sending pre-payment notification for appointment #${appointmentId}`);
+
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #3f51b5 0%, #303f9f 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Pre-Visit Payment Successful!</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            Your pre-visit payment of <strong style="color: #3f51b5; font-size: 18px;">₹${amount}</strong> has been received successfully! 🎉
+          </p>
+
+          <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3f51b5;">
+            <h3 style="margin-top: 0; color: #3f51b5;">💳 Payment Details</h3>
+            <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentId}</p>
+            ${receiptId ? `<p style="margin: 5px 0;"><strong>Receipt ID:</strong> ${receiptId}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Amount Paid:</strong> ₹${amount}</p>
+            <p style="margin: 5px 0;"><strong>Remaining:</strong> ₹${finalAmount} (payable after visit)</p>
+          </div>
+
+          <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+            <h4 style="margin-top: 0; color: #155724;">🎯 You're All Set!</h4>
+            <p style="color: #155724; margin: 10px 0;">Your appointment is confirmed. Our care provider will visit you as scheduled.</p>
+            <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
+              <p style="margin: 5px 0;"><strong>📅 Date:</strong> ${date || 'To be confirmed'}</p>
+              <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${time || 'To be confirmed'}</p>
+              ${nurseName ? `<p style="margin: 5px 0;"><strong>👨‍⚕️ Care Provider:</strong> ${nurseName}</p>` : ''}
+            </div>
+          </div>
+
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+            <p style="margin: 0; color: #856404;">
+              <strong>💡 Remember:</strong> The remaining ₹${finalAmount} is payable after successful completion of your service.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://localhost:5173/patient/appointments" 
+               style="display: inline-block; background: #3f51b5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Appointment Details
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            SR CareHive | srcarehive@gmail.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    const nurseHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #3f51b5;">✅ Pre-Visit Payment Received</h2>
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Appointment ID:</strong> #${appointmentId}</p>
+          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Pre-Payment:</strong> ₹${amount} (50%)</p>
+          <p><strong>Remaining:</strong> ₹${finalAmount} (payable after visit)</p>
+          <p><strong>Payment ID:</strong> ${paymentId}</p>
+        </div>
+        <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
+          <p style="margin: 0; color: #155724;">
+            <strong>✅ Patient is ready for appointment.</strong> Please proceed with the scheduled visit.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const emailPromises = [
+      sendEmail({ 
+        to: patientEmail, 
+        subject: `✅ Pre-Visit Payment Successful - Appointment #${appointmentId}`, 
+        html: patientHtml 
+      })
+    ];
+
+    if (nurseEmail) {
+      emailPromises.push(
+        sendEmail({ 
+          to: nurseEmail, 
+          subject: `✅ Pre-Payment Received - Appointment #${appointmentId}`, 
+          html: nurseHtml 
+        })
+      );
+    }
+
+    // Send SMS
+    if (twilioClient && patientPhone) {
+      try {
+        let phone = patientPhone.trim();
+        if (!phone.startsWith('+')) phone = `+91${phone}`;
+        
+        await twilioClient.messages.create({
+          body: `CareHive: Pre-visit payment ₹${amount} received! Appointment #${appointmentId} confirmed for ${date || 'scheduled date'}. Remaining ₹${finalAmount} after visit.`,
+          from: TWILIO_PHONE_NUMBER,
+          to: phone
+        });
+        console.log(`[SUCCESS] Pre-payment SMS sent to ${phone.slice(0,6)}***`);
+      } catch (smsErr) {
+        console.error('[ERROR] SMS failed:', smsErr.message);
+      }
+    }
+
+    await Promise.all(emailPromises);
+    console.log(`[SUCCESS] Pre-payment notifications sent for appointment #${appointmentId}`);
+
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-pre-payment:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// 4. Final Payment Notification (Completion)
+app.post('/api/notify-final-payment', async (req, res) => {
+  try {
+    const { 
+      appointmentId, 
+      patientEmail, 
+      patientName,
+      patientPhone,
+      nurseEmail,
+      nurseName,
+      amount,
+      paymentId,
+      receiptId,
+      totalPaid,
+      date,
+      time
+    } = req.body;
+
+    if (!appointmentId || !patientEmail || !amount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[INFO] Sending final payment notification for appointment #${appointmentId}`);
+
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #009688 0%, #00796b 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 32px;">🎉 Payment Complete!</h1>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 16px;">Thank you for choosing SR CareHive</p>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            Your final payment of <strong style="color: #009688; font-size: 18px;">₹${amount}</strong> has been received successfully! All payments are now complete. 🎊
+          </p>
+
+          <div style="background: #e0f2f1; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #009688; text-align: center;">
+            <h3 style="margin: 0 0 15px 0; color: #009688;">💰 Payment Summary</h3>
+            <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
+              <div style="text-align: center; margin: 10px;">
+                <p style="color: #666; margin: 0; font-size: 12px;">REGISTRATION</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹100</p>
+              </div>
+              <div style="text-align: center; margin: 10px;">
+                <p style="color: #666; margin: 0; font-size: 12px;">PRE-VISIT (50%)</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${((totalPaid - 100 - amount) || 0).toFixed(0)}</p>
+              </div>
+              <div style="text-align: center; margin: 10px;">
+                <p style="color: #666; margin: 0; font-size: 12px;">FINAL (50%)</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${amount}</p>
+              </div>
+            </div>
+            <div style="border-top: 2px solid #00796b; margin: 15px 0; padding-top: 15px;">
+              <p style="color: #666; margin: 0; font-size: 14px;">TOTAL PAID</p>
+              <p style="font-size: 32px; font-weight: bold; color: #00796b; margin: 5px 0;">₹${totalPaid || (100 + amount * 2)}</p>
+            </div>
+          </div>
+
+          <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3f51b5;">
+            <h4 style="margin-top: 0; color: #3f51b5;">📄 Final Payment Receipt</h4>
+            <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentId}</p>
+            ${receiptId ? `<p style="margin: 5px 0;"><strong>Receipt ID:</strong> ${receiptId}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Amount:</strong> ₹${amount}</p>
+            <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
+          </div>
+
+          <div style="background: #fff9c4; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <h3 style="margin: 0 0 10px 0; color: #f57f17;">⭐ Rate Your Experience</h3>
+            <p style="color: #666; margin: 0;">We'd love to hear your feedback about our service!</p>
+          </div>
+
+          <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+            <p style="margin: 0; color: #155724; text-align: center; font-size: 16px;">
+              <strong>✅ Service Completed Successfully!</strong>
+              <br><br>
+              Thank you for trusting SR CareHive for your care needs. We hope to serve you again!
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://localhost:5173/patient/appointments" 
+               style="display: inline-block; background: #009688; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Appointment History
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            Need assistance? Contact us at srcarehive@gmail.com
+            <br>SR CareHive - Quality Home Care Services
+          </p>
+        </div>
+      </div>
+    `;
+
+    const nurseHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #009688;">🎉 Final Payment Received - Service Complete</h2>
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Appointment ID:</strong> #${appointmentId}</p>
+          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Final Payment:</strong> ₹${amount}</p>
+          <p><strong>Total Paid:</strong> ₹${totalPaid || (100 + amount * 2)}</p>
+          <p><strong>Payment ID:</strong> ${paymentId}</p>
+        </div>
+        <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
+          <p style="margin: 0; color: #155724;">
+            <strong>✅ Service completed!</strong> All payments received. Great job!
+          </p>
+        </div>
+      </div>
+    `;
+
+    const emailPromises = [
+      sendEmail({ 
+        to: patientEmail, 
+        subject: `🎉 Payment Complete! Thank You - Appointment #${appointmentId}`, 
+        html: patientHtml 
+      })
+    ];
+
+    if (nurseEmail) {
+      emailPromises.push(
+        sendEmail({ 
+          to: nurseEmail, 
+          subject: `✅ Final Payment Received - Appointment #${appointmentId}`, 
+          html: nurseHtml 
+        })
+      );
+    }
+
+    // Send SMS
+    if (twilioClient && patientPhone) {
+      try {
+        let phone = patientPhone.trim();
+        if (!phone.startsWith('+')) phone = `+91${phone}`;
+        
+        await twilioClient.messages.create({
+          body: `CareHive: Final payment ₹${amount} received! Total paid ₹${totalPaid || (100 + amount * 2)}. Service complete. Thank you for choosing SR CareHive! 🎉`,
+          from: TWILIO_PHONE_NUMBER,
+          to: phone
+        });
+        console.log(`[SUCCESS] Final payment SMS sent to ${phone.slice(0,6)}***`);
+      } catch (smsErr) {
+        console.error('[ERROR] SMS failed:', smsErr.message);
+      }
+    }
+
+    await Promise.all(emailPromises);
+    console.log(`[SUCCESS] Final payment notifications sent for appointment #${appointmentId}`);
+
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-final-payment:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));

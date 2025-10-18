@@ -38,22 +38,82 @@
     <!-- Razorpay Checkout for Flutter Web -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script>
-      // Simple helper for Flutter Web to open Razorpay and bubble events back
+      // Enhanced Razorpay bridge for Flutter Web with proper success handling
       window.care12OpenRazorpay = function (options) {
         try {
+          console.log('[Razorpay Bridge] Initializing with options:', options);
+          
+          // CRITICAL: Add handler callback - this is called when user completes payment successfully
+          // This is the PRIMARY way Razorpay communicates success
+          options.handler = function(response) {
+            console.log('[Razorpay Bridge] ✅ Payment SUCCESS - handler called with response:', response);
+            
+            // Dispatch success event immediately when payment completes
+            var successEvent = new CustomEvent('rzp_success', { 
+              detail: {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              }
+            });
+            window.dispatchEvent(successEvent);
+            console.log('[Razorpay Bridge] ✅ Success event dispatched to Flutter');
+          };
+          
+          // Add modal ondismiss to handle user closing the payment screen
+          if (!options.modal) {
+            options.modal = {};
+          }
+          options.modal.ondismiss = function() {
+            console.log('[Razorpay Bridge] ⚠️ Payment modal closed by user');
+            // Only send failure if payment wasn't already successful
+            setTimeout(function() {
+              window.dispatchEvent(new CustomEvent('rzp_failed', { 
+                detail: { 
+                  error: { 
+                    code: 'payment_cancelled', 
+                    description: 'Payment cancelled by user' 
+                  } 
+                } 
+              }));
+            }, 100);
+          };
+          
+          // Create Razorpay instance
           var rzp = new Razorpay(options);
+          
+          // Additional event listeners as backup
           rzp.on('payment.success', function (resp) {
+            console.log('[Razorpay Bridge] 🎉 payment.success event:', resp);
             window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
           });
+          
           rzp.on('payment.failed', function (resp) {
+            console.log('[Razorpay Bridge] ❌ payment.failed event:', resp);
             window.dispatchEvent(new CustomEvent('rzp_failed', { detail: resp }));
           });
+          
           rzp.on('payment.error', function (resp) {
+            console.log('[Razorpay Bridge] ❌ payment.error event:', resp);
             window.dispatchEvent(new CustomEvent('rzp_failed', { detail: resp }));
           });
+          
+          // Open Razorpay checkout
+          console.log('[Razorpay Bridge] Opening Razorpay checkout modal...');
           rzp.open();
+          
         } catch (e) {
-          window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'exception', description: String(e) } } }));
+          console.error('[Razorpay Bridge] ❌ Exception:', e);
+          window.dispatchEvent(new CustomEvent('rzp_failed', { 
+            detail: { 
+              error: { 
+                code: 'exception', 
+                description: String(e) 
+              } 
+            } 
+          }));
         }
-      }
+      };
+      
+      console.log('[Razorpay Bridge] Bridge function registered successfully');
     </script>

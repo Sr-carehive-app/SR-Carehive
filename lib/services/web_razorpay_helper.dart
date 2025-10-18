@@ -30,41 +30,106 @@ class PlatformRazorpay {
   }
 
   static void _ensureBridge() {
-  // Always (re)define the bridge to ensure correct handlers, even if index.html defined one.
+  // Use the bridge from index.html - it has proper handler setup
+  // This method now just checks if bridge exists
+    if (js_util.hasProperty(html.window, 'care12OpenRazorpay')) {
+      print('[Flutter] ✅ Razorpay bridge already loaded from index.html');
+      return;
+    }
+    
+    // Fallback: define bridge if somehow missing (shouldn't happen with index.html)
     final fn = html.ScriptElement()
       ..type = 'text/javascript'
       ..text = '''
       window.care12OpenRazorpay = function (options) {
         try {
-          try { console.log('[care12] checkout options', options); } catch (_) {}
+          console.log('[care12] Starting Razorpay checkout with options:', options);
+          
           if (!options.key && options.keyId) { options.key = options.keyId; }
           if (!options.key && options.key_id) { options.key = options.key_id; }
+          
           window.care12LastOptions = options;
-          // Ensure success callback is wired; Razorpay primarily uses options.handler
-          options.handler = function (resp) {
+          
+          // Primary success handler - this is called when payment succeeds
+          options.handler = function (response) {
+            console.log('[care12] ✅ Payment success handler called:', response);
             try {
-              window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
+              // Dispatch success event immediately
+              var successEvent = new CustomEvent('rzp_success', { 
+                detail: {
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                  payment_id: response.razorpay_payment_id,
+                  order_id: response.razorpay_order_id,
+                  signature: response.razorpay_signature
+                }
+              });
+              window.dispatchEvent(successEvent);
+              console.log('[care12] ✅ Success event dispatched');
             } catch (e) {
-              window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'handler_exception', description: String(e) } } }));
+              console.error('[care12] ❌ Error in success handler:', e);
+              window.dispatchEvent(new CustomEvent('rzp_failed', { 
+                detail: { error: { code: 'handler_exception', description: String(e) } } 
+              }));
             }
           };
-          // Ensure modal close signals a failure/cancel so callers can stop spinners
+          
+          // Modal dismiss handler - user closes payment screen
           options.modal = options.modal || {};
+          var originalOnDismiss = options.modal.ondismiss;
           options.modal.ondismiss = function () {
-            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'cancelled', description: 'Checkout dismissed by user' } } }));
+            console.log('[care12] ⚠️ Payment modal dismissed by user');
+            if (originalOnDismiss) originalOnDismiss();
+            window.dispatchEvent(new CustomEvent('rzp_failed', { 
+              detail: { error: { code: 'cancelled', description: 'Checkout dismissed by user' } } 
+            }));
           };
+          
+          // Create Razorpay instance
           var rzp = new Razorpay(options);
-          rzp.on('payment.success', function (resp) {
-            window.dispatchEvent(new CustomEvent('rzp_success', { detail: resp }));
+          
+          // Additional event listeners for payment lifecycle
+          rzp.on('payment.success', function (response) {
+            console.log('[care12] 🎉 payment.success event:', response);
+            // Dispatch success event
+            window.dispatchEvent(new CustomEvent('rzp_success', { 
+              detail: {
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                payment_id: response.razorpay_payment_id,
+                order_id: response.razorpay_order_id,
+                signature: response.razorpay_signature
+              }
+            }));
           });
-          rzp.on('payment.failed', function (resp) {
-            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: resp }));
+          
+          rzp.on('payment.failed', function (response) {
+            console.log('[care12] ❌ payment.failed event:', response);
+            window.dispatchEvent(new CustomEvent('rzp_failed', { detail: response }));
           });
+          
+          rzp.on('payment.cancelled', function () {
+            console.log('[care12] ⚠️ payment.cancelled event');
+            window.dispatchEvent(new CustomEvent('rzp_failed', { 
+              detail: { error: { code: 'cancelled', description: 'Payment cancelled by user' } } 
+            }));
+          });
+          
+          // Open Razorpay checkout
+          console.log('[care12] Opening Razorpay checkout...');
           rzp.open();
+          
         } catch (e) {
-          window.dispatchEvent(new CustomEvent('rzp_failed', { detail: { error: { code: 'exception', description: String(e) } } }));
+          console.error('[care12] ❌ Exception in care12OpenRazorpay:', e);
+          window.dispatchEvent(new CustomEvent('rzp_failed', { 
+            detail: { error: { code: 'exception', description: String(e) } } 
+          }));
         }
       };
+      
+      console.log('[care12] Bridge function registered successfully');
       ''';
     html.document.head?.append(fn);
   }
@@ -74,40 +139,83 @@ class PlatformRazorpay {
 
     late html.EventListener successListener;
     late html.EventListener failedListener;
+    
+    bool isCompleted = false;
 
     void cleanup() {
+      print('[Flutter] Cleaning up event listeners');
       html.window.removeEventListener('rzp_success', successListener);
       html.window.removeEventListener('rzp_failed', failedListener);
     }
 
     successListener = (event) {
+      if (isCompleted) {
+        print('[Flutter] ⚠️ Success event received but already completed');
+        return;
+      }
+      
       try {
+        print('[Flutter] ✅ Success event received in Flutter');
         final custom = event as html.CustomEvent;
         final detail = custom.detail as dynamic;
+        
+        isCompleted = true;
         cleanup();
+        
         final map = jsonDecode(jsonEncode(detail)) as Map<String, dynamic>;
+        print('[Flutter] Success payload: $map');
+        
         // Normalize keys to server verify payload
         final normalized = <String, dynamic>{
-          'razorpay_order_id': map['order_id'] ?? map['razorpay_order_id'],
-          'razorpay_payment_id': map['payment_id'] ?? map['razorpay_payment_id'],
-          'razorpay_signature': map['signature'] ?? map['razorpay_signature'],
+          'razorpay_order_id': map['razorpay_order_id'] ?? map['order_id'],
+          'razorpay_payment_id': map['razorpay_payment_id'] ?? map['payment_id'],
+          'razorpay_signature': map['razorpay_signature'] ?? map['signature'],
         };
-        completer.complete(normalized);
+        
+        print('[Flutter] Normalized payload: $normalized');
+        
+        if (!completer.isCompleted) {
+          completer.complete(normalized);
+          print('[Flutter] ✅ Payment success completed');
+        }
       } catch (e) {
+        print('[Flutter] ❌ Error in success listener: $e');
+        isCompleted = true;
         cleanup();
-        completer.completeError(e);
+        if (!completer.isCompleted) {
+          completer.completeError(e);
+        }
       }
     };
 
     failedListener = (event) {
+      if (isCompleted) {
+        print('[Flutter] ⚠️ Failed event received but already completed');
+        return;
+      }
+      
       try {
+        print('[Flutter] ❌ Failed event received in Flutter');
         final custom = event as html.CustomEvent;
         final detail = custom.detail as dynamic;
+        
+        isCompleted = true;
         cleanup();
-        completer.completeError(jsonDecode(jsonEncode(detail)));
+        
+        final errorData = jsonDecode(jsonEncode(detail));
+        print('[Flutter] Error payload: $errorData');
+        
+        if (!completer.isCompleted) {
+          completer.completeError(errorData);
+          print('[Flutter] ❌ Payment failed completed');
+        }
       } catch (e) {
+        print('[Flutter] ❌ Error in failed listener: $e');
+        isCompleted = true;
         cleanup();
-        completer.completeError(e);
+        if (!completer.isCompleted) {
+          completer.completeError(e);
+        }
       }
     };
 

@@ -14,8 +14,8 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfileScreen extends StatefulWidget {
-  final String userName;
-  const ProfileScreen({Key? key, required this.userName}) : super(key: key);
+  final String? userName;
+  const ProfileScreen({Key? key, this.userName}) : super(key: key);
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -172,7 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 12),
                 Center(
                   child: Text(
-                    userName ?? widget.userName,
+                    userName ?? widget.userName ?? 'User',
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),

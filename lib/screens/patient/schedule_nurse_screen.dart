@@ -330,6 +330,66 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     selectedPatient = 'Yourself';
   }
 
+  /// Show custom calendar picker for selecting any future date
+  Future<void> _showCustomCalendar() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime.now(), // Can't select past dates
+      lastDate: DateTime.now().add(const Duration(days: 365)), // Up to 1 year ahead
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: primaryColor, // Header background color
+              onPrimary: Colors.white, // Header text color
+              onSurface: Colors.black, // Body text color
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: primaryColor, // Button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null && mounted) {
+      setState(() {
+        selectedDate = pickedDate;
+        updateTimeSlotsForDate(pickedDate);
+        
+        // Update week dates to show the week containing the selected date
+        int weekday = pickedDate.weekday;
+        DateTime monday = pickedDate.subtract(Duration(days: weekday - 1));
+        weekDates = List.generate(7, (index) => monday.add(Duration(days: index)));
+      });
+
+      // Show confirmation snackbar with selected date
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.calendar_today, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Date selected: ${DateFormat('EEEE, MMM dd, yyyy').format(pickedDate)}',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: primaryColor,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -352,6 +412,56 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Date Selection Header with Calendar Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Select Date',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _showCustomCalendar,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.calendar_month, color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Custom Date',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
           // Dynamic week selector
           SizedBox(
             height: 70,

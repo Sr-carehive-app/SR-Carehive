@@ -1,0 +1,41 @@
+# Flutter files (not needed for backend)
+android/
+ios/
+lib/
+test/
+web/
+windows/
+linux/
+macos/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.yaml
+pubspec.lock
+analysis_options.yaml
+*.iml
+
+.env*
+# Local environment
+.env.local
+.env.development
+
+# Database files
+*.sql
+
+# Documentation
+README.md
+LICENSE
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+temp_input.txt
+CONSOLE_ERRORS_EXPLAINED.md

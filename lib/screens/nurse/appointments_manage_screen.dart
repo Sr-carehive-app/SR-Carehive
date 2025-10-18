@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:care12/services/nurse_api_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NurseAppointmentsManageScreen extends StatefulWidget {
   const NurseAppointmentsManageScreen({Key? key}) : super(key: key);
@@ -117,6 +122,255 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     }
   }
 
+  Future<void> _setAmountDialog(Map<String, dynamic> appt) async {
+    final amountCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+    
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2260FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.attach_money, color: Color(0xFF2260FF)),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Set Total Service Amount',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Info card
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Patient paid ₹100 registration fee. Set the total service amount based on requirements.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Amount field
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'Total Amount (₹)',
+                  hintText: 'e.g., 1000',
+                  prefixIcon: const Icon(Icons.currency_rupee, color: Color(0xFF2260FF)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F7FF),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Remarks field
+              TextField(
+                controller: remarksCtrl,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Remarks/Breakdown',
+                  hintText: 'Explain the amount breakdown...\ne.g., Nursing: ₹400, Medicines: ₹300, Transport: ₹300',
+                  prefixIcon: const Icon(Icons.notes, color: Color(0xFF2260FF)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F7FF),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Payment split info
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Payment Split:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    const Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('50% before visit', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('50% after successful visit', style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2260FF),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    
+    if (ok == true) {
+      final amount = double.tryParse(amountCtrl.text.trim());
+      
+      // Validation
+      if (amount == null || amount <= 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid amount greater than 0'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      final remarks = remarksCtrl.text.trim();
+      if (remarks.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please provide remarks explaining the amount'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      try {
+        // Show loading
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Updating amount...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        
+        // Update in Supabase
+        final supabase = Supabase.instance.client;
+        await supabase.from('appointments').update({
+          'total_amount': amount,
+          'nurse_remarks': remarks,
+          'status': 'amount_set',
+        }).eq('id', appt['id']);
+        
+        // Send email/SMS notification to patient
+        try {
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final notifyUri = Uri.parse('$apiBase/api/notify-amount-set');
+          
+          await http.post(
+            notifyUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'appointmentId': appt['id'],
+              'patientEmail': appt['patient_email'],
+              'patientName': appt['full_name'],
+              'patientPhone': appt['phone'],
+              'totalAmount': amount,
+              'nurseRemarks': remarks,
+              'nurseName': appt['nurse_name'],
+              'date': appt['date'],
+              'time': appt['time'],
+            }),
+          );
+          print('[INFO] Amount-set notification sent');
+        } catch (notifyErr) {
+          print('[ERROR] Failed to send notification: $notifyErr');
+          // Don't fail the whole operation if notification fails
+        }
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Total amount ₹${amount.toStringAsFixed(0)} set successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        _load(); // Reload appointments
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to set amount: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _viewDetails(Map<String, dynamic> a) async {
     String fmtDate() { final d = DateTime.tryParse(a['date'] ?? ''); return d != null ? DateFormat('MMM dd, yyyy').format(d) : 'N/A'; }
     String fmtVal(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '-' : v.toString();
@@ -128,35 +382,110 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Basic Appointment Info
+              const Text('📅 Appointment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
               _kv('Date', fmtDate()),
               _kv('Time', fmtVal(a['time'])),
-              _kv('Duration', a['duration_hours'] != null ? '${a['duration_hours']} hr' : '-'),
-              _kv('Amount', a['amount_rupees'] != null ? '₹${a['amount_rupees']}' : '-'),
+              
+              // Patient Information
+              const Divider(height: 24),
+              const Text('👤 Patient Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              _kv('Full Name', fmtVal(a['full_name'])),
+              _kv('Age', fmtVal(a['age'])),
+              _kv('Gender', fmtVal(a['gender'])),
+              _kv('Patient Type', fmtVal(a['patient_type'])),
+              
+              // Contact Details
+              const Divider(height: 24),
+              const Text('📞 Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               _kv('Phone', fmtVal(a['phone'])),
               _kv('Address', fmtVal(a['address'])),
               _kv('Emergency Contact', fmtVal(a['emergency_contact'])),
-              _kv('Patient Type', fmtVal(a['patient_type'])),
-              _kv('Gender', fmtVal(a['gender'])),
+              
+              // Medical Information
+              const Divider(height: 24),
+              const Text('🏥 Medical Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
-              if (a['problem'] != null && (a['problem'] as String).isNotEmpty) _kv('Problem', a['problem']),
-              const Divider(),
-              _kv('Order ID', fmtVal(a['order_id'])),
-              _kv('Payment ID', fmtVal(a['payment_id'])),
-              if (a['status']?.toString().toLowerCase() == 'approved') ...[
-                const Divider(), const Text('Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold)),
-                _kv('Name', fmtVal(a['nurse_name'])), _kv('Phone', fmtVal(a['nurse_phone'])), _kv('Branch', fmtVal(a['nurse_branch'])), _kv('Comments', fmtVal(a['nurse_comments'])), _kv('Available', a['nurse_available'] == true ? 'Yes' : (a['nurse_available'] == false ? 'No' : '-')),
+              if (a['problem'] != null && (a['problem'] as String).isNotEmpty) 
+                _kv('Problem', a['problem']),
+              if (a['aadhar_number'] != null && (a['aadhar_number'] as String).isNotEmpty)
+                _kv('Aadhar Number', fmtVal(a['aadhar_number'])),
+              
+              // Primary Doctor Details
+              if (a['primary_doctor_name'] != null || a['primary_doctor_phone'] != null || a['primary_doctor_location'] != null) ...[
+                const Divider(height: 24),
+                const Text('👨‍⚕️ Primary Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                if (a['primary_doctor_name'] != null && (a['primary_doctor_name'] as String).isNotEmpty)
+                  _kv('Doctor Name', fmtVal(a['primary_doctor_name'])),
+                if (a['primary_doctor_phone'] != null && (a['primary_doctor_phone'] as String).isNotEmpty)
+                  _kv('Doctor Phone', fmtVal(a['primary_doctor_phone'])),
+                if (a['primary_doctor_location'] != null && (a['primary_doctor_location'] as String).isNotEmpty)
+                  _kv('Doctor Location', fmtVal(a['primary_doctor_location'])),
               ],
-              if (a['status']?.toString().toLowerCase() == 'rejected') ...[ const Divider(), _kv('Rejection reason', fmtVal(a['rejection_reason'])), ],
+              
+              // Payment Status (if applicable)
+              if (a['total_amount'] != null || a['registration_paid'] == true) ...[
+                const Divider(height: 24),
+                const Text('💳 Payment Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                if (a['registration_paid'] == true)
+                  _kv('Registration', '✅ Paid (₹1)'),
+                if (a['total_amount'] != null)
+                  _kv('Total Amount', '₹${a['total_amount']}'),
+                if (a['pre_paid'] == true)
+                  _kv('Pre-Payment', '✅ Paid (50%)'),
+                if (a['final_paid'] == true)
+                  _kv('Final Payment', '✅ Paid (50%)'),
+              ],
+              
+              // Assigned Nurse Info
+              if (a['status']?.toString().toLowerCase() == 'approved') ...[
+                const Divider(height: 24),
+                const Text('👩‍⚕️ Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                _kv('Name', fmtVal(a['nurse_name'])),
+                _kv('Phone', fmtVal(a['nurse_phone'])),
+                _kv('Branch', fmtVal(a['nurse_branch'])),
+                _kv('Comments', fmtVal(a['nurse_comments'])),
+                _kv('Available', a['nurse_available'] == true ? 'Yes' : (a['nurse_available'] == false ? 'No' : '-')),
+              ],
+              
+              // Rejection Info
+              if (a['status']?.toString().toLowerCase() == 'rejected') ...[
+                const Divider(height: 24),
+                const Text('❌ Rejection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                const SizedBox(height: 8),
+                _kv('Reason', fmtVal(a['rejection_reason'])),
+              ],
             ],
           ),
         ),
-        actions: [ TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')) ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
 
-  Color _statusColor(String s) { switch (s.toLowerCase()) { case 'approved': return Colors.green; case 'pending': return Colors.orange; case 'rejected': return Colors.red; default: return Colors.grey; } }
+  Color _statusColor(String status) {
+    switch(status.toLowerCase()) {
+      case 'approved': return Colors.green;
+      case 'pending': return Colors.orange;
+      case 'rejected': return Colors.red;
+      case 'booked': return const Color(0xFF2260FF); // Blue - registration paid
+      case 'amount_set': return Colors.purple; // Purple - amount set, waiting for pre-payment
+      case 'pre_paid': return Colors.indigo; // Indigo - pre-payment done
+      case 'completed': return Colors.teal; // Teal - all payments complete
+      default: return Colors.grey;
+    }
+  }
 
   DateTime? _parseIst(Map a) {
     final dateStr = (a['date'] ?? '').toString(); if (dateStr.isEmpty) return null; DateTime? base = DateTime.tryParse(dateStr); if (base == null) return null; base = base.toUtc(); final timeStr = (a['time'] ?? '').toString().trim(); int hour=0,minute=0; if (timeStr.isNotEmpty) { try { final t = DateFormat('h:mm a').parseStrict(timeStr); hour = t.hour; minute = t.minute; } catch(_){} } return DateTime(base.year, base.month, base.day, hour, minute).add(const Duration(hours:5, minutes:30)); }
@@ -226,15 +555,98 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                       const SizedBox(height:4),
                       Text('Phone: ${a['phone'] ?? '-'}'),
                       if(a['problem']!=null && (a['problem'] as String).isNotEmpty)...[ const SizedBox(height:8), Text('Problem: ${a['problem']}', style: const TextStyle(color: Colors.black54)) ],
-                      if(a['nurse_name']!=null)...[ const Divider(), Text('Assigned Nurse: ${a['nurse_name']}'), if(a['nurse_phone']!=null) Text('Phone: ${a['nurse_phone']}'), if(a['nurse_branch']!=null) Text('Branch: ${a['nurse_branch']}'), if(a['nurse_comments']!=null) Text('Comments: ${a['nurse_comments']}') ],
+                      
+                      // Show registration payment status if booked
+                      if(status.toLowerCase()=='booked')...[
+                        const Divider(),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Registration Fee Paid (₹100)',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if(a['registration_payment_id']!=null)...[
+                          const SizedBox(height:4),
+                          Text(
+                            'Payment ID: ${_truncatePaymentId(a['registration_payment_id'])}', 
+                            style: const TextStyle(fontSize:11, color: Colors.grey)
+                          ),
+                        ],
+                      ],
+                      
+                      // Show total amount if set
+                      if(a['total_amount']!=null)...[
+                        const Divider(),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.attach_money, color: Colors.purple, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Total Amount: ₹${(a['total_amount'] as num).toStringAsFixed(0)}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              if(a['nurse_remarks']!=null)...[
+                                const SizedBox(height:6),
+                                Text('Remarks: ${a['nurse_remarks']}', style: const TextStyle(fontSize:12, color: Colors.black87)),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                      
+                      if(a['nurse_name']!=null)...[ const Divider(), Text('Assigned Care Provider: ${a['nurse_name']}'), if(a['nurse_phone']!=null) Text('Phone: ${a['nurse_phone']}'), if(a['nurse_branch']!=null) Text('Branch: ${a['nurse_branch']}'), if(a['nurse_comments']!=null) Text('Comments: ${a['nurse_comments']}') ],
                       const SizedBox(height:12),
-                      Row(children:[
-                        Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.close, color: Colors.red), label: const Text('Reject', style: TextStyle(color:Colors.red)), onPressed: status.toLowerCase()=='rejected'? null : () => _rejectDialog(a))),
-                        const SizedBox(width:8),
-                        Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.check_circle, color: Colors.white), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), label: const Text('Approve', style: TextStyle(color:Colors.white)), onPressed: status.toLowerCase()=='approved'? null : () => _approveDialog(a))),
-                        const SizedBox(width:8),
-                        IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
-                      ])
+                      
+                      // Action buttons - conditional based on status
+                      if(status.toLowerCase()=='booked')...[
+                        // Show "Set Amount" button for booked appointments
+                        Row(children:[
+                          Expanded(child: ElevatedButton.icon(
+                            icon: const Icon(Icons.attach_money, color: Colors.white),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2260FF),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            label: const Text('Set Total Amount', style: TextStyle(color:Colors.white, fontWeight: FontWeight.bold)),
+                            onPressed: () => _setAmountDialog(a),
+                          )),
+                          const SizedBox(width:8),
+                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                        ]),
+                      ] else ...[
+                        // Original approve/reject buttons for pending
+                        Row(children:[
+                          Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.close, color: Colors.red), label: const Text('Reject', style: TextStyle(color:Colors.red)), onPressed: status.toLowerCase()=='rejected'? null : () => _rejectDialog(a))),
+                          const SizedBox(width:8),
+                          Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.check_circle, color: Colors.white), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), label: const Text('Approve', style: TextStyle(color:Colors.white)), onPressed: status.toLowerCase()=='approved'? null : () => _approveDialog(a))),
+                          const SizedBox(width:8),
+                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                        ]),
+                      ]
                     ])));
                     if(header!=null) return Column(crossAxisAlignment: CrossAxisAlignment.start, children:[header!, card]);
                     return card;
@@ -283,5 +695,13 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
   Widget _kv(String k, String v){
     return Padding(padding: const EdgeInsets.only(bottom:6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children:[ SizedBox(width:140, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))), Expanded(child: Text(v)) ]));
+  }
+
+  // Helper function to safely truncate payment ID
+  String _truncatePaymentId(dynamic paymentId) {
+    if (paymentId == null) return 'N/A';
+    final id = paymentId.toString();
+    if (id.length <= 20) return id;
+    return '${id.substring(0, 20)}...';
   }
 }

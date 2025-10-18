@@ -6,6 +6,8 @@ import 'screens/patient/reset_password_screen.dart';
 import 'screens/patient/patient_dashboard_screen.dart';
 import 'screens/patient/patient_signup_screen.dart';
 import 'screens/patient/appointments_screen.dart' as patient_pages;
+import 'screens/patient/schedule_nurse_screen.dart';
+import 'screens/patient/profile/profile_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 
@@ -165,7 +167,10 @@ class _MyAppState extends State<MyApp> {
         primarySwatch: Colors.blue,
       ),
       routes: {
+        '/home': (_) => const PatientDashboardScreen(),
         '/appointments': (_) => const patient_pages.AppointmentsScreen(),
+        '/schedule': (_) => const ScheduleNurseScreen(),
+        '/profile': (_) => const ProfileScreen(),
       },
       home: _homeWidget,
     );

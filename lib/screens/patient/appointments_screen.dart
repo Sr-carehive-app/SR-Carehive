@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:care12/widgets/registration_payment_dialog.dart';
+import 'package:care12/models/payment_models.dart';
+import 'package:care12/services/payment_service.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({Key? key}) : super(key: key);
@@ -79,10 +82,16 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         return Colors.green;
       case 'approved':
         return Colors.green;
+      case 'booked':
+        return Colors.blue;
+      case 'amount_set':
+        return Colors.purple;
+      case 'pre_paid':
+        return Colors.indigo;
       case 'pending':
         return Colors.orange;
       case 'completed':
-        return Colors.blue;
+        return Colors.teal;
       case 'rejected':
         return Colors.red;
       case 'cancelled':
@@ -307,11 +316,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                       ),
                                     ],
                                   ),
+                                  // Payment Section
+                                  if (_shouldShowPaymentSection(appointment)) ...[
+                                    const Divider(height: 24),
+                                    _buildPaymentSection(appointment),
+                                  ],
+                                  
                                   // Nurse assignment details (shown when approved)
                                   if ((appointment['status'] ?? '').toString().toLowerCase() == 'approved') ...[
                                     const Divider(height: 24),
                                     const Text(
-                                      'Assigned Nurse',
+                                      'Assigned Care Provider',
                                       style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 6),
@@ -339,5 +354,545 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       ),
                     ),
     );
+  }
+
+  bool _shouldShowPaymentSection(Map<String, dynamic> appointment) {
+    final status = (appointment['status'] ?? '').toString().toLowerCase();
+    return status == 'approved' || 
+           status == 'booked' || 
+           status == 'amount_set' || 
+           status == 'pre_paid';
+  }
+
+  Widget _buildPaymentSection(Map<String, dynamic> appointment) {
+    final status = (appointment['status'] ?? '').toString().toLowerCase();
+    final registrationPaid = appointment['registration_paid'] ?? false;
+    final totalAmount = appointment['total_amount'];
+    final prePaid = appointment['pre_paid'] ?? false;
+    final finalPaid = appointment['final_paid'] ?? false;
+    final nurseRemarks = appointment['nurse_remarks'];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2260FF).withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.payment, color: primaryColor, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                'Payment Information',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Registration Payment Status
+          _buildPaymentStatusRow(
+            'Registration Fee',
+            '₹1',  // TODO: Change to ₹100 for production
+            registrationPaid,
+            appointment['registration_payment_id'],
+          ),
+
+          // Show "Pay ₹1" button if approved and not paid (TODO: Change to ₹100 for production)
+          if (status == 'approved' && !registrationPaid) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showRegistrationPaymentDialog(appointment),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.payment, color: Colors.white),
+                label: const Text(
+                  'Pay ₹1 to Register Booking',  // TODO: Change to ₹100 for production
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '💡 Our care provider will contact you after payment',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+
+          // Show waiting message if booked but amount not set
+          if (status == 'booked' && totalAmount == null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.hourglass_empty, color: Colors.blue[700], size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Waiting for care provider to set the total service amount',
+                      style: TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Show total amount and split payments
+          if (totalAmount != null) ...[
+            const Divider(height: 24),
+            Text(
+              'Total Service Amount: ₹${totalAmount.toStringAsFixed(0)}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            if (nurseRemarks != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Remarks: $nurseRemarks',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+            const SizedBox(height: 12),
+
+            // Pre-payment status
+            _buildPaymentStatusRow(
+              'Pre-Visit Charges (50%)',
+              '₹${(totalAmount / 2).toStringAsFixed(0)}',
+              prePaid,
+              appointment['pre_payment_id'],
+            ),
+
+            // Pre-payment button
+            if (!prePaid && status == 'amount_set') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _payPreVisit(appointment),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.payment, color: Colors.white),
+                  label: Text(
+                    'Pay ₹${(totalAmount / 2).toStringAsFixed(0)} (Pre-Visit)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 8),
+
+            // Final payment status
+            _buildPaymentStatusRow(
+              'Final Charges (50%)',
+              '₹${(totalAmount / 2).toStringAsFixed(0)}',
+              finalPaid,
+              appointment['final_payment_id'],
+            ),
+
+            // Final payment button
+            if (prePaid && !finalPaid) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _payFinalAmount(appointment),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.payment, color: Colors.white),
+                  label: Text(
+                    'Pay ₹${(totalAmount / 2).toStringAsFixed(0)} (Final)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+
+            // Completion message
+            if (finalPaid) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green[700], size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        '✅ Payment Completed! Total: ₹',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${(100 + totalAmount).toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentStatusRow(
+    String label,
+    String amount,
+    bool isPaid,
+    String? paymentId,
+  ) {
+    return Row(
+      children: [
+        Icon(
+          isPaid ? Icons.check_circle : Icons.radio_button_unchecked,
+          color: isPaid ? Colors.green : Colors.grey,
+          size: 20,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              if (isPaid && paymentId != null)
+                Text(
+                  'ID: ${paymentId.length > 20 ? paymentId.substring(0, 20) + '...' : paymentId}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+            ],
+          ),
+        ),
+        Text(
+          amount,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: isPaid ? Colors.green : Colors.grey,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isPaid ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            isPaid ? 'PAID' : 'PENDING',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isPaid ? Colors.green : Colors.grey,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showRegistrationPaymentDialog(Map<String, dynamic> appointment) {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    
+    // Get appointment ID as String (UUID format)
+    final String appointmentId = appointment['id'].toString();
+    
+    print('🔍 DEBUG: appointment ID = $appointmentId');
+    
+    showDialog(
+      context: context,
+      builder: (context) => RegistrationPaymentDialog(
+        appointmentId: appointmentId,
+        patientName: appointment['full_name'] ?? '',
+        patientEmail: user?.email ?? appointment['patient_email'] ?? '',
+        patientPhone: appointment['phone'] ?? '',
+        onSuccess: () {
+          _loadAppointments(); // Reload appointments
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Registration payment successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _payPreVisit(Map<String, dynamic> appointment) async {
+    final totalAmount = appointment['total_amount'];
+    if (totalAmount == null) return;
+
+    // Get appointment ID as String (UUID format)
+    final String appointmentId = appointment['id'].toString();
+
+    // CRITICAL FIX: Store navigator and scaffold messenger before any navigation
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Processing Payment...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      final result = await PaymentService.payPreVisitAmount(
+        appointmentId: appointmentId,
+        totalAmount: (totalAmount as num).toDouble(),
+        email: user?.email ?? appointment['patient_email'] ?? '',
+        mobile: appointment['phone'] ?? '',
+        name: appointment['full_name'] ?? '',
+      );
+
+      // Close loading dialog immediately
+      navigator.pop();
+      
+      // Extract payment ID
+      final paymentId = result['razorpay_payment_id']?.toString() ?? 
+                       result['payment_id']?.toString() ?? 
+                       result['paymentId']?.toString() ?? 
+                       'Completed';
+      
+      // Small delay to ensure context stability
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Reload appointments to reflect updated status
+      if (mounted) {
+        await _loadAppointments();
+      }
+      
+      // Show success message
+      scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '✅ Pre-visit payment of ₹${(totalAmount / 2).toStringAsFixed(0)} successful!',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Payment ID: $paymentId',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (e) {
+      // Close loading dialog
+      navigator.pop();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ Payment failed: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  Future<void> _payFinalAmount(Map<String, dynamic> appointment) async {
+    final totalAmount = appointment['total_amount'];
+    if (totalAmount == null) return;
+
+    // Get appointment ID as String (UUID format)
+    final String appointmentId = appointment['id'].toString();
+
+    // CRITICAL FIX: Store navigator and scaffold messenger before any navigation
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Processing Payment...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      final result = await PaymentService.payFinalAmount(
+        appointmentId: appointmentId,
+        totalAmount: (totalAmount as num).toDouble(),
+        email: user?.email ?? appointment['patient_email'] ?? '',
+        mobile: appointment['phone'] ?? '',
+        name: appointment['full_name'] ?? '',
+      );
+
+      // Close loading dialog immediately
+      navigator.pop();
+      
+      // Extract payment ID
+      final paymentId = result['razorpay_payment_id']?.toString() ?? 
+                       result['payment_id']?.toString() ?? 
+                       result['paymentId']?.toString() ?? 
+                       'Completed';
+      
+      // Small delay to ensure context stability
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Reload appointments to reflect updated status
+      if (mounted) {
+        await _loadAppointments();
+      }
+      
+      // Show success message
+      scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '✅ Final payment of ₹${(totalAmount / 2).toStringAsFixed(0)} successful!',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Payment ID: $paymentId',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        '🎉 Appointment completed! Thank you.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (e) {
+      // Close loading dialog
+      navigator.pop();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ Payment failed: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 } 
