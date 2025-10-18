@@ -78,6 +78,9 @@ const SMTP_SECURE = (process.env.SMTP_SECURE || '').toLowerCase() === 'true';
 const SENDER_EMAIL = (process.env.SENDER_EMAIL || 'srcarehive@gmail.com').trim();
 const SENDER_NAME = (process.env.SENDER_NAME || 'Care Hive').trim();
 
+// Admin/Nurse emails that receive all notifications
+const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
+
 // Twilio SMS Configuration (SECURE - Never expose to frontend!)
 const TWILIO_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
 const TWILIO_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
@@ -219,8 +222,17 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
       </div>`;
 
     if (patientEmail) await sendEmail({ to: patientEmail, subject, html, attachments: attach });
-    // Send to admin/sender as well
-    await sendEmail({ to: SENDER_EMAIL, subject: `[Admin Copy] ${subject}`, html, attachments: attach });
+    
+    // Send comprehensive admin notification to both admin emails
+    await sendAdminNotification({
+      appointment,
+      type: 'REGISTRATION_PAYMENT',
+      paymentDetails: {
+        amount: amountRupees || 100,
+        paymentId: paymentId,
+        orderId: orderId
+      }
+    });
   } catch (e) {
     console.error('[EMAIL] payment emails failed', e.message);
   }
@@ -293,6 +305,137 @@ async function sendRejectionEmail(appointment) {
     await sendEmail({ to, subject: 'Your nurse appointment was rejected', html, attachments });
   } catch (e) {
     console.error('[EMAIL] reject email failed', e.message);
+  }
+}
+
+// Comprehensive admin notification with ALL patient details
+async function sendAdminNotification({ appointment, type, paymentDetails = null }) {
+  try {
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+        <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">
+            ${type === 'NEW_APPOINTMENT' ? '📋 New Appointment Request' : 
+              type === 'REGISTRATION_PAYMENT' ? '💳 Registration Payment Received (₹100)' :
+              type === 'PRE_VISIT_PAYMENT' ? '💰 Pre-Visit Payment Received (50%)' :
+              type === 'FINAL_PAYMENT' ? '✅ Final Payment Received (50%)' : '📬 Admin Notification'}
+          </h1>
+        </div>
+        
+        <div style="background: white; padding: 25px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+            <p style="margin: 0; color: #856404; font-size: 16px; font-weight: bold;">
+              ${type === 'NEW_APPOINTMENT' ? '⚡ Action Required: Review and assign nurse' :
+                type === 'REGISTRATION_PAYMENT' ? '✅ Patient paid registration fee - Review appointment' :
+                type === 'PRE_VISIT_PAYMENT' ? '✅ Patient ready for appointment - Proceed with visit' :
+                type === 'FINAL_PAYMENT' ? '🎉 Service completed - All payments received!' : ''}
+            </p>
+          </div>
+
+          ${paymentDetails ? `
+          <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+            <h3 style="margin-top: 0; color: #2e7d32;">💳 Payment Information</h3>
+            <p style="margin: 5px 0;"><strong>Amount:</strong> ₹${paymentDetails.amount}</p>
+            <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentDetails.paymentId || 'N/A'}</p>
+            <p style="margin: 5px 0;"><strong>Order ID:</strong> ${paymentDetails.orderId || 'N/A'}</p>
+            ${paymentDetails.totalPaid ? `<p style="margin: 5px 0;"><strong>Total Paid:</strong> ₹${paymentDetails.totalPaid}</p>` : ''}
+          </div>` : ''}
+
+          <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1976d2;">👤 Patient Information</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Full Name:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.full_name || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Age:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.age || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Gender:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.gender || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Patient Type:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.patient_type || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Aadhar Number:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.aadhar_number || 'N/A'}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background: #fce4ec; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #c2185b;">📞 Contact Details</h3>
+            <p style="margin: 8px 0;"><strong>Phone:</strong> <a href="tel:${appointment?.phone}">${appointment?.phone || 'N/A'}</a></p>
+            <p style="margin: 8px 0;"><strong>Email:</strong> <a href="mailto:${appointment?.patient_email}">${appointment?.patient_email || 'N/A'}</a></p>
+            <p style="margin: 8px 0;"><strong>Address:</strong> ${appointment?.address || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Emergency Contact:</strong> ${appointment?.emergency_contact || 'N/A'}</p>
+          </div>
+
+          <div style="background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #7b1fa2;">🏥 Medical Information</h3>
+            <p style="margin: 8px 0;"><strong>Problem/Symptoms:</strong></p>
+            <p style="background: white; padding: 12px; border-radius: 6px; margin: 8px 0;">${appointment?.problem || 'N/A'}</p>
+            ${appointment?.primary_doctor_name ? `
+            <p style="margin: 8px 0;"><strong>Primary Doctor:</strong> ${appointment.primary_doctor_name}</p>
+            ${appointment?.primary_doctor_phone ? `<p style="margin: 8px 0;"><strong>Doctor Phone:</strong> ${appointment.primary_doctor_phone}</p>` : ''}
+            ${appointment?.primary_doctor_location ? `<p style="margin: 8px 0;"><strong>Doctor Location:</strong> ${appointment.primary_doctor_location}</p>` : ''}
+            ` : '<p style="margin: 8px 0; color: #999;">No primary doctor information provided</p>'}
+          </div>
+
+          <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #3f51b5;">📅 Appointment Schedule</h3>
+            <p style="margin: 8px 0;"><strong>Date:</strong> ${appointment?.date || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Time:</strong> ${appointment?.time || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Appointment ID:</strong> #${appointment?.id || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Status:</strong> <span style="background: #ffeb3b; padding: 4px 10px; border-radius: 4px; font-weight: bold;">${appointment?.status || 'Pending'}</span></p>
+          </div>
+
+          ${appointment?.nurse_name ? `
+          <div style="background: #e0f2f1; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #00796b;">👩‍⚕️ Assigned Nurse</h3>
+            <p style="margin: 8px 0;"><strong>Name:</strong> ${appointment.nurse_name}</p>
+            <p style="margin: 8px 0;"><strong>Phone:</strong> ${appointment.nurse_phone || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Branch:</strong> ${appointment.nurse_branch || 'N/A'}</p>
+          </div>` : ''}
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="http://localhost:5173/nurse-admin" 
+               style="display: inline-block; background: #ff6b6b; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+              📋 Manage Appointments
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            This is an automated admin notification from SR CareHive
+            <br>srcarehive@gmail.com | ns.srcarehive@gmail.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Send to all admin emails
+    let subjectPrefix = '📬 NOTIFICATION';
+    if (type === 'NEW_APPOINTMENT') subjectPrefix = '📋 NEW';
+    else if (type === 'REGISTRATION_PAYMENT') subjectPrefix = '💳 REGISTRATION';
+    else if (type === 'PRE_VISIT_PAYMENT') subjectPrefix = '💰 PRE-VISIT';
+    else if (type === 'FINAL_PAYMENT') subjectPrefix = '✅ FINAL';
+    
+    const emailPromises = ADMIN_EMAILS.map(adminEmail => 
+      sendEmail({ 
+        to: adminEmail, 
+        subject: `${subjectPrefix} - Appointment #${appointment?.id || 'N/A'} - ${appointment?.full_name || 'Patient'}`, 
+        html: adminHtml 
+      })
+    );
+
+    await Promise.all(emailPromises);
+    console.log(`[SUCCESS] Admin notifications sent to ${ADMIN_EMAILS.join(', ')} for ${type}`);
+  } catch (e) {
+    console.error('[EMAIL] Admin notification failed', e.message);
   }
 }
 
@@ -623,6 +766,50 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// New appointment notification endpoint (called after Flutter creates appointment)
+app.post('/api/notify-new-appointment', async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'Missing appointmentId' });
+    }
+
+    console.log(`[INFO] Sending new appointment notification for appointment #${appointmentId}`);
+
+    // Fetch full appointment details
+    let appointment = null;
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      appointment = data;
+    } catch (err) {
+      console.error('[ERROR] Could not fetch appointment:', err.message);
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    // Send comprehensive admin notification to both admin emails
+    await sendAdminNotification({
+      appointment,
+      type: 'NEW_APPOINTMENT',
+      paymentDetails: null
+    });
+
+    console.log(`[SUCCESS] New appointment notifications sent for appointment #${appointmentId}`);
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-new-appointment:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
 // Archive past appointments into appointments_history table (manual trigger). Protected.
 app.post('/api/nurse/appointments/archive-past', async (req, res) => {
   try {
@@ -660,6 +847,7 @@ app.post('/api/nurse/appointments/archive-past', async (req, res) => {
     }
     if (!toArchive.length) return res.json({ archived: 0 });
     // Insert into history table then delete original (soft archival)
+    // ✅ COMPLETE FIELD MAPPING - ALL NEW FIELDS INCLUDED
     const rows = toArchive.map(a => ({
       original_appointment_id: a.id,
       full_name: a.full_name,
@@ -675,11 +863,55 @@ app.post('/api/nurse/appointments/archive-past', async (req, res) => {
       status: a.status,
       order_id: a.order_id,
       payment_id: a.payment_id,
+      
+      // ✅ NEW PATIENT FIELDS
+      aadhar_number: a.aadhar_number,
+      address: a.address,
+      emergency_contact: a.emergency_contact,
+      problem: a.problem,
+      
+      // ✅ PRIMARY DOCTOR FIELDS
+      primary_doctor_name: a.primary_doctor_name,
+      primary_doctor_phone: a.primary_doctor_phone,
+      primary_doctor_location: a.primary_doctor_location,
+      
+      // ✅ 3-TIER PAYMENT SYSTEM
+      // Registration Payment
+      registration_payment_id: a.registration_payment_id,
+      registration_receipt_id: a.registration_receipt_id,
+      registration_paid: a.registration_paid,
+      registration_paid_at: a.registration_paid_at,
+      
+      // Pre-visit Payment (50%)
+      total_amount: a.total_amount,
+      nurse_remarks: a.nurse_remarks,
+      pre_payment_id: a.pre_payment_id,
+      pre_receipt_id: a.pre_receipt_id,
+      pre_paid: a.pre_paid,
+      pre_paid_at: a.pre_paid_at,
+      
+      // Final Payment (50%)
+      final_payment_id: a.final_payment_id,
+      final_receipt_id: a.final_receipt_id,
+      final_paid: a.final_paid,
+      final_paid_at: a.final_paid_at,
+      
+      // ✅ NURSE ASSIGNMENT
       nurse_name: a.nurse_name,
       nurse_phone: a.nurse_phone,
       nurse_branch: a.nurse_branch,
       nurse_comments: a.nurse_comments,
       nurse_available: a.nurse_available,
+      
+      // ✅ CONSULTATION/DOCTOR RECOMMENDATION FIELDS
+      consulted_doctor_name: a.consulted_doctor_name,
+      consulted_doctor_phone: a.consulted_doctor_phone,
+      consulted_doctor_specialization: a.consulted_doctor_specialization,
+      consulted_doctor_clinic_address: a.consulted_doctor_clinic_address,
+      post_visit_remarks: a.post_visit_remarks,
+      visit_completed_at: a.visit_completed_at,
+      
+      // ✅ STATUS TRACKING
       rejection_reason: a.rejection_reason,
       created_at: a.created_at,
       approved_at: a.approved_at,
@@ -1291,6 +1523,19 @@ app.post('/api/notify-pre-payment', async (req, res) => {
 
     console.log(`[INFO] Sending pre-payment notification for appointment #${appointmentId}`);
 
+    // Fetch full appointment details for admin notification
+    let fullAppointment = null;
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      fullAppointment = data;
+    } catch (err) {
+      console.warn('[WARN] Could not fetch full appointment for admin notification:', err.message);
+    }
+
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #3f51b5 0%, #303f9f 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
@@ -1396,6 +1641,20 @@ app.post('/api/notify-pre-payment', async (req, res) => {
     }
 
     await Promise.all(emailPromises);
+    
+    // Send comprehensive admin notification
+    if (fullAppointment) {
+      await sendAdminNotification({
+        appointment: fullAppointment,
+        type: 'PRE_VISIT_PAYMENT',
+        paymentDetails: {
+          amount: amount,
+          paymentId: paymentId,
+          orderId: receiptId || 'N/A'
+        }
+      });
+    }
+    
     console.log(`[SUCCESS] Pre-payment notifications sent for appointment #${appointmentId}`);
 
     res.json({ success: true, message: 'Notifications sent successfully' });
@@ -1428,6 +1687,19 @@ app.post('/api/notify-final-payment', async (req, res) => {
     }
 
     console.log(`[INFO] Sending final payment notification for appointment #${appointmentId}`);
+
+    // Fetch full appointment details for admin notification
+    let fullAppointment = null;
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      fullAppointment = data;
+    } catch (err) {
+      console.warn('[WARN] Could not fetch full appointment for admin notification:', err.message);
+    }
 
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -1555,6 +1827,21 @@ app.post('/api/notify-final-payment', async (req, res) => {
     }
 
     await Promise.all(emailPromises);
+    
+    // Send comprehensive admin notification
+    if (fullAppointment) {
+      await sendAdminNotification({
+        appointment: fullAppointment,
+        type: 'FINAL_PAYMENT',
+        paymentDetails: {
+          amount: amount,
+          paymentId: paymentId,
+          orderId: receiptId || 'N/A',
+          totalPaid: totalPaid
+        }
+      });
+    }
+    
     console.log(`[SUCCESS] Final payment notifications sent for appointment #${appointmentId}`);
 
     res.json({ success: true, message: 'Notifications sent successfully' });

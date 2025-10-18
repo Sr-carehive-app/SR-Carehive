@@ -461,6 +461,42 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                 const SizedBox(height: 8),
                 _kv('Reason', fmtVal(a['rejection_reason'])),
               ],
+              
+              // Post-Visit Consultation Details (NEW)
+              if (a['post_visit_remarks'] != null || a['consulted_doctor_name'] != null) ...[
+                const Divider(height: 24),
+                const Text('📋 Post-Visit Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
+                const SizedBox(height: 8),
+                if (a['post_visit_remarks'] != null && (a['post_visit_remarks'] as String).isNotEmpty)
+                  _kv('Nurse Remarks', fmtVal(a['post_visit_remarks'])),
+                if (a['visit_completed_at'] != null) ...[
+                  (() {
+                    try {
+                      final dt = DateTime.parse(a['visit_completed_at'].toString());
+                      final formatted = DateFormat('MMM dd, yyyy hh:mm a').format(dt);
+                      return _kv('Visit Completed', formatted);
+                    } catch (_) {
+                      return _kv('Visit Completed', fmtVal(a['visit_completed_at']));
+                    }
+                  })(),
+                ],
+              ],
+              
+              // Recommended Doctor Details (NEW)
+              if (a['consulted_doctor_name'] != null || a['consulted_doctor_phone'] != null || 
+                  a['consulted_doctor_specialization'] != null || a['consulted_doctor_clinic_address'] != null) ...[
+                const Divider(height: 24),
+                const Text('🩺 Recommended Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)),
+                const SizedBox(height: 8),
+                if (a['consulted_doctor_name'] != null && (a['consulted_doctor_name'] as String).isNotEmpty)
+                  _kv('Doctor Name', fmtVal(a['consulted_doctor_name'])),
+                if (a['consulted_doctor_phone'] != null && (a['consulted_doctor_phone'] as String).isNotEmpty)
+                  _kv('Phone', fmtVal(a['consulted_doctor_phone'])),
+                if (a['consulted_doctor_specialization'] != null && (a['consulted_doctor_specialization'] as String).isNotEmpty)
+                  _kv('Specialization', fmtVal(a['consulted_doctor_specialization'])),
+                if (a['consulted_doctor_clinic_address'] != null && (a['consulted_doctor_clinic_address'] as String).isNotEmpty)
+                  _kv('Clinic Address', fmtVal(a['consulted_doctor_clinic_address'])),
+              ],
             ],
           ),
         ),

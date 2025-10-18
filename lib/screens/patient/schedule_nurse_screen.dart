@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
-// url_launcher no longer needed for payment redirect; Razorpay SDK opens checkout.
+import 'package:http/http.dart' as http;
 
 class ScheduleNurseScreen extends StatefulWidget {
   const ScheduleNurseScreen({Key? key}) : super(key: key);
@@ -303,7 +304,21 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'created_at': DateTime.now().toIso8601String(),
       };
       
-      await supabase.from('appointments').insert(appointmentData);
+      final response = await supabase.from('appointments').insert(appointmentData).select().maybeSingle();
+      
+      // Notify admin about new appointment
+      if (response != null && response['id'] != null) {
+        try {
+          const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:9090');
+          await http.post(
+            Uri.parse('$apiBaseUrl/api/notify-new-appointment'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'appointmentId': response['id']}),
+          );
+        } catch (notifyError) {
+          print('[WARN] Could not send admin notification: $notifyError');
+        }
+      }
       
       if (mounted) {
         _showSuccessSnackBar('Appointment request submitted successfully! Admin will review shortly.');
