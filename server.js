@@ -761,9 +761,14 @@ app.get('/api/pg/razorpay/status/:orderId', (req, res) => {
   res.json(appt);
 });
 
+// Root endpoint - Welcome message
+app.get('/', (_req, res) => {
+  res.send('SR CareHive Payment Server is running! Use /health for health check.');
+});
+
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', message: 'SR CareHive Backend is healthy!' });
 });
 
 // New appointment notification endpoint (called after Flutter creates appointment)
