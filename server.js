@@ -11,6 +11,7 @@ import Razorpay from 'razorpay';
 import https from 'https';
 import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
+import twilio from 'twilio';
 
 dotenv.config();
 
@@ -76,6 +77,24 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_SECURE = (process.env.SMTP_SECURE || '').toLowerCase() === 'true';
 const SENDER_EMAIL = (process.env.SENDER_EMAIL || 'srcarehive@gmail.com').trim();
 const SENDER_NAME = (process.env.SENDER_NAME || 'Care Hive').trim();
+
+// Twilio SMS Configuration (SECURE - Never expose to frontend!)
+const TWILIO_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+const TWILIO_AUTH_TOKEN = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+const TWILIO_PHONE_NUMBER = (process.env.TWILIO_PHONE_NUMBER || '').trim();
+
+let twilioClient = null;
+if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
+  try {
+    twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    // Masked log - never log full credentials!
+    console.log(`[INIT] Twilio SMS enabled. Number: ${TWILIO_PHONE_NUMBER.slice(0,4)}***${TWILIO_PHONE_NUMBER.slice(-4)}`);
+  } catch (err) {
+    console.error('[ERROR] Twilio initialization failed:', err.message);
+  }
+} else {
+  console.warn('[WARN] Twilio credentials not set. SMS OTP disabled.');
+}
 
 let mailer = null;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -912,6 +931,58 @@ app.post('/api/send-otp-email', async (req, res) => {
     console.error('[ERROR] send-otp-email:', e);
     res.status(500).json({ 
       error: 'Failed to send OTP email',
+      details: e.message 
+    });
+  }
+});
+
+// SMS OTP endpoint (SECURE - Backend only!)
+app.post('/api/send-otp-sms', async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    
+    if (!phone || !otp) {
+      return res.status(400).json({ error: 'Phone number and OTP are required' });
+    }
+
+    if (!twilioClient) {
+      console.error('[ERROR] Twilio SMS not configured');
+      return res.status(500).json({ error: 'SMS service not configured' });
+    }
+
+    // Format phone number (ensure +country code)
+    let formattedPhone = phone.trim();
+    if (!formattedPhone.startsWith('+')) {
+      // Default to India if no country code
+      formattedPhone = `+91${formattedPhone}`;
+    }
+
+    // Security: Validate phone number format
+    const phoneRegex = /^\+[1-9]\d{1,14}$/;
+    if (!phoneRegex.test(formattedPhone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+
+    const message = `SERECHI Verification: Your OTP is ${otp}. Valid for 2 minutes. DO NOT share this code with anyone.`;
+
+    console.log(`[INFO] Sending SMS OTP to: ${formattedPhone.slice(0,6)}***${formattedPhone.slice(-4)}`);
+    
+    const result = await twilioClient.messages.create({
+      body: message,
+      from: TWILIO_PHONE_NUMBER,
+      to: formattedPhone
+    });
+
+    console.log(`[SUCCESS] SMS sent. SID: ${result.sid}`);
+    res.json({ 
+      success: true, 
+      message: 'SMS sent successfully',
+      messageSid: result.sid 
+    });
+  } catch (e) {
+    console.error('[ERROR] send-otp-sms:', e);
+    res.status(500).json({ 
+      error: 'Failed to send SMS',
       details: e.message 
     });
   }

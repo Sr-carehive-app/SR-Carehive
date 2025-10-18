@@ -21,6 +21,10 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   final TextEditingController addressController = TextEditingController();
   final TextEditingController emergencyContactController = TextEditingController();
   final TextEditingController problemController = TextEditingController();
+  final TextEditingController aadharController = TextEditingController();
+  final TextEditingController primaryDoctorNameController = TextEditingController();
+  final TextEditingController primaryDoctorPhoneController = TextEditingController();
+  final TextEditingController primaryDoctorLocationController = TextEditingController();
 
   late List<DateTime> weekDates;
   DateTime selectedDate = DateTime.now();
@@ -30,16 +34,6 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   String selectedPatient = 'Yourself';
   String selectedGender = 'Female';
-  // Duration -> price (in rupees)
-  final Map<int, int> durationPrice = const {
-    0: 1,   // 0 min — ₹1 (test/quick option)
-    1: 200,
-    2: 400,
-    4: 600,
-    8: 1000,
-    12: 1400,
-  };
-  int selectedDurationHours = 0; // default to 0-min ₹1 as requested
   
   bool isLoading = false;
   bool isSubmitting = false;
@@ -60,6 +54,10 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     addressController.dispose();
     emergencyContactController.dispose();
     problemController.dispose();
+    aadharController.dispose();
+    primaryDoctorNameController.dispose();
+    primaryDoctorPhoneController.dispose();
+    primaryDoctorLocationController.dispose();
     super.dispose();
   }
 
@@ -73,7 +71,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       if (user != null) {
         final patient = await supabase
             .from('patients')
-            .select('name, phone, permanent_address')
+            .select('name, phone, permanent_address, aadhar_number')
             .eq('user_id', user.id)
             .maybeSingle();
         
@@ -82,6 +80,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             fullNameController.text = patient['name'] ?? '';
             phoneController.text = patient['phone'] ?? '';
             addressController.text = patient['permanent_address'] ?? '';
+            aadharController.text = patient['aadhar_number'] ?? '';
           });
         }
       }
@@ -153,6 +152,37 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       _showErrorSnackBar('Please enter emergency contact');
       return false;
     }
+    // Aadhar validation
+    if (aadharController.text.trim().isNotEmpty) {
+      final aadhar = aadharController.text.replaceAll(RegExp(r'\s+'), '');
+      if (aadhar.length != 12 || int.tryParse(aadhar) == null) {
+        _showErrorSnackBar('Aadhar number must be exactly 12 digits');
+        return false;
+      }
+      // Check if all digits are same
+      if (RegExp(r'^(\d)\1{11}$').hasMatch(aadhar)) {
+        _showErrorSnackBar('Invalid Aadhar number (all digits same)');
+        return false;
+      }
+      // Check if starts with 0 or 1
+      if (aadhar.startsWith('0') || aadhar.startsWith('1')) {
+        _showErrorSnackBar('Aadhar number cannot start with 0 or 1');
+        return false;
+      }
+      // Verhoeff algorithm validation
+      if (!_validateAadharChecksum(aadhar)) {
+        _showErrorSnackBar('Invalid Aadhar number (checksum failed)');
+        return false;
+      }
+    }
+    // Primary doctor phone validation (optional but if provided must be valid)
+    if (primaryDoctorPhoneController.text.trim().isNotEmpty) {
+      final phone = primaryDoctorPhoneController.text.trim();
+      if (phone.length != 10 || int.tryParse(phone) == null) {
+        _showErrorSnackBar('Primary doctor phone must be 10 digits');
+        return false;
+      }
+    }
     if (selectedTime.isEmpty) {
       _showErrorSnackBar('Please select a time slot');
       return false;
@@ -162,6 +192,38 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       return false;
     }
     return true;
+  }
+
+  /// Verhoeff algorithm for Aadhar validation
+  bool _validateAadharChecksum(String aadhar) {
+    final d = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+      [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+      [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+      [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+      [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+      [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+      [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+      [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+      [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    ];
+    final p = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+      [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+      [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+      [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+      [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+      [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+      [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    ];
+    int c = 0;
+    final invertedArray = aadhar.split('').reversed.toList();
+    for (int i = 0; i < invertedArray.length; i++) {
+      c = d[c][p[(i % 8)][int.parse(invertedArray[i])]];
+    }
+    return c == 0;
   }
 
   void _showErrorSnackBar(String message) {
@@ -196,27 +258,25 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     if (!_validateForm()) return;
     if (mounted) setState(() => isSubmitting = true);
     try {
-      // Initiate payment first – do NOT store appointment as paid yet.
-  final rupees = durationPrice[selectedDurationHours] ?? 200;
-  final amount = rupees.toDouble().toStringAsFixed(2);
-      final email = phoneController.text.contains('@') ? phoneController.text : 'srcarehive@gmail.com';
-      final mobile = phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : '8923068966';
-      // Minimal appointment object for server to persist after payment success
+      // No payment required - directly create appointment
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-  String? patientId;
+      String? patientId;
+      
       if (user != null) {
         try {
-      final patient = await supabase
-        .from('patients')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      final dynamic pid = patient?['id'];
-      if (pid != null) patientId = pid.toString();
+          final patient = await supabase
+              .from('patients')
+              .select('id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+          final dynamic pid = patient?['id'];
+          if (pid != null) patientId = pid.toString();
         } catch (_) {}
       }
-      final apptPayload = {
+      
+      // Create appointment directly in database
+      final appointmentData = {
         'patient_id': patientId,
         'full_name': fullNameController.text.trim(),
         'age': int.tryParse(ageController.text.trim()) ?? 0,
@@ -224,40 +284,48 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
         'emergency_contact': emergencyContactController.text.trim(),
+        'aadhar_number': aadharController.text.replaceAll(RegExp(r'\s+'), '').trim(),
+        'primary_doctor_name': primaryDoctorNameController.text.trim().isNotEmpty 
+            ? primaryDoctorNameController.text.trim() 
+            : null,
+        'primary_doctor_phone': primaryDoctorPhoneController.text.trim().isNotEmpty 
+            ? primaryDoctorPhoneController.text.trim() 
+            : null,
+        'primary_doctor_location': primaryDoctorLocationController.text.trim().isNotEmpty 
+            ? primaryDoctorLocationController.text.trim() 
+            : null,
         'date': DateFormat('yyyy-MM-dd').format(selectedDate),
         'time': selectedTime,
         'problem': problemController.text.trim(),
         'patient_type': selectedPatient,
-        'duration_hours': selectedDurationHours,
-        'amount_rupees': rupees,
-        'patient_email': (Supabase.instance.client.auth.currentUser?.email ?? '').trim(),
+        'patient_email': (user?.email ?? '').trim(),
+        'status': 'pending', // Admin will approve/reject
+        'created_at': DateTime.now().toIso8601String(),
       };
-      final resp = await PaymentService.payWithRazorpay(
-        amount: amount,
-        email: email,
-        mobile: mobile,
-        name: fullNameController.text.trim(),
-        appointment: apptPayload,
-        description: 'Nurse Appointment',
-      );
+      
+      await supabase.from('appointments').insert(appointmentData);
+      
       if (mounted) {
-        _showSuccessSnackBar('Payment successful');
-        // Optional: navigate to appointments page so user sees the entry
-        // ignore: use_build_context_synchronously
-        Navigator.of(context).pushNamed('/appointments');
+        _showSuccessSnackBar('Appointment request submitted successfully! Admin will review shortly.');
+        _clearForm();
+        // Navigate to appointments page
+        Navigator.of(context).pushReplacementNamed('/appointments');
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar('Payment failed or cancelled: $e');
+      if (mounted) _showErrorSnackBar('Failed to submit appointment: $e');
     } finally {
       if (mounted) setState(() => isSubmitting = false);
     }
   }
 
   void _clearForm() {
-    // Don't clear name, phone, address as they're user data
+    // Don't clear name, phone, address, aadhar as they're user data
     ageController.clear();
     emergencyContactController.clear();
     problemController.clear();
+    primaryDoctorNameController.clear();
+    primaryDoctorPhoneController.clear();
+    primaryDoctorLocationController.clear();
     selectedGender = 'Female';
     selectedPatient = 'Yourself';
   }
@@ -337,28 +405,6 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
           const SizedBox(height: 24),
 
-          // Duration and pricing
-          const Text(
-            'Select duration',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in durationPrice.entries)
-                ChoiceChip(
-                  label: Text('${entry.key == 0 ? '0 min' : '${entry.key} hr'} — \u20B9${entry.value}'),
-                  selected: selectedDurationHours == entry.key,
-                  onSelected: (sel) {
-                    if (sel) setState(() => selectedDurationHours = entry.key);
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
           // Choose Time section
           const Text(
             'Choose Time',
@@ -406,12 +452,12 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
           const SizedBox(height: 24),
 
-          // Patient Details section
+          // Care Seeker section
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Patient Details',
+                'Care Seeker Details',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               Row(
@@ -437,6 +483,10 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           buildTextField('Emergency Contact', controller: emergencyContactController, keyboardType: TextInputType.phone),
           const SizedBox(height: 16),
 
+          // Aadhar Number with formatting
+          buildAadharField(),
+          const SizedBox(height: 16),
+
           // Gender selection
           const Text('Gender', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
@@ -448,6 +498,19 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             ],
           ),
 
+          const SizedBox(height: 24),
+
+          // Primary Doctor Details (Optional)
+          const Text(
+            'Primary Doctor Details (Optional)',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          buildTextField('Doctor Name', controller: primaryDoctorNameController),
+          const SizedBox(height: 16),
+          buildTextField('Doctor Phone Number', controller: primaryDoctorPhoneController, keyboardType: TextInputType.phone),
+          const SizedBox(height: 16),
+          buildTextField('Clinic Location (Area, City)', controller: primaryDoctorLocationController),
           const SizedBox(height: 24),
 
           // Problem description
@@ -469,7 +532,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
           const SizedBox(height: 30),
 
-          // Payment button
+          // Submit Appointment button
           ElevatedButton(
             onPressed: isSubmitting ? null : _handleAppointment,
             style: ElevatedButton.styleFrom(
@@ -487,10 +550,10 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       ),
                       SizedBox(width: 12),
-                      Text('Processing...', style: TextStyle(fontSize: 16, color: Colors.white)),
+                      Text('Submitting...', style: TextStyle(fontSize: 16, color: Colors.white)),
                     ],
                   )
-                : Text('Pay \u20B9${durationPrice[selectedDurationHours] ?? 200}', style: const TextStyle(fontSize: 16, color: Colors.white)),
+                : const Text('Submit Appointment Request', style: TextStyle(fontSize: 16, color: Colors.white)),
           ),
         ],
       ),
@@ -534,6 +597,82 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         ),
       ),
     );
+  }
+
+  // Aadhar field with formatting and validation
+  Widget buildAadharField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Aadhar Number', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            const SizedBox(width: 8),
+            if (aadharController.text.isNotEmpty)
+              Icon(
+                _isAadharValid() ? Icons.check_circle : Icons.error,
+                color: _isAadharValid() ? Colors.green : Colors.red,
+                size: 20,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: aadharController,
+          keyboardType: TextInputType.number,
+          maxLength: 14, // 12 digits + 2 spaces
+          onChanged: (value) {
+            // Auto-format as user types: XXXX XXXX XXXX
+            String digitsOnly = value.replaceAll(RegExp(r'\s+'), '');
+            if (digitsOnly.length > 12) {
+              digitsOnly = digitsOnly.substring(0, 12);
+            }
+            
+            String formatted = '';
+            for (int i = 0; i < digitsOnly.length; i++) {
+              if (i > 0 && i % 4 == 0) {
+                formatted += ' ';
+              }
+              formatted += digitsOnly[i];
+            }
+            
+            if (formatted != value) {
+              aadharController.value = TextEditingValue(
+                text: formatted,
+                selection: TextSelection.collapsed(offset: formatted.length),
+              );
+            }
+            setState(() {}); // Rebuild to show validation icon
+          },
+          decoration: InputDecoration(
+            hintText: 'XXXX XXXX XXXX',
+            filled: true,
+            fillColor: const Color(0xFFEDEFFF),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            counterText: '', // Hide character counter
+            suffixIcon: aadharController.text.isNotEmpty
+                ? Icon(
+                    _isAadharValid() ? Icons.check_circle : Icons.cancel,
+                    color: _isAadharValid() ? Colors.green : Colors.red,
+                  )
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _isAadharValid() {
+    final aadhar = aadharController.text.replaceAll(RegExp(r'\s+'), '');
+    if (aadhar.isEmpty) return false;
+    if (aadhar.length != 12) return false;
+    if (int.tryParse(aadhar) == null) return false;
+    if (RegExp(r'^(\d)\1{11}$').hasMatch(aadhar)) return false;
+    if (aadhar.startsWith('0') || aadhar.startsWith('1')) return false;
+    return _validateAadharChecksum(aadhar);
   }
 
   // Reusable text field
