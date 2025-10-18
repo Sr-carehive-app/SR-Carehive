@@ -56,6 +56,7 @@ class _MyAppState extends State<MyApp> {
   Widget _homeWidget = const SplashScreen();
   StreamSubscription? _sub;
   final AppLinks _appLinks = AppLinks();
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -106,11 +107,24 @@ class _MyAppState extends State<MyApp> {
   Future<void> _handleIncomingLink(Uri uri) async {
     final supabase = Supabase.instance.client;
     
-    // Handle OAuth callback
-    if (uri.queryParameters.containsKey('code') || uri.queryParameters.containsKey('access_token')) {
+    print('🔗 Deep link received: $uri');
+    
+    // Handle OAuth callback - Manually process the OAuth code
+    if (uri.host == 'login-callback' && uri.queryParameters.containsKey('code')) {
       try {
-        // Handle the OAuth session
+        print('📲 OAuth callback detected with code');
+        
+        // Manually handle the OAuth callback with the full URL
+        await supabase.auth.getSessionFromUrl(uri);
+        
+        print('✅ Session established from URL');
+        
+        final session = supabase.auth.currentSession;
         final user = supabase.auth.currentUser;
+        
+        print('👤 Current user: ${user?.email}');
+        print('🔐 Session exists: ${session != null}');
+        
         if (user != null) {
           // Check if patient record exists
           final patient = await supabase
@@ -119,27 +133,43 @@ class _MyAppState extends State<MyApp> {
               .eq('user_id', user.id)
               .maybeSingle();
           
+          print('📋 Patient record: ${patient != null ? "Found" : "Not found"}');
+          
           if (patient != null) {
             // Existing user - go to dashboard
-            setState(() {
-              _homeWidget = PatientDashboardScreen(userName: patient['name'] ?? '');
-            });
+            print('🚀 Navigating to dashboard');
+            if (mounted) {
+              navigatorKey.currentState?.pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => PatientDashboardScreen(userName: patient['name'] ?? ''),
+                ),
+                (route) => false,
+              );
+            }
           } else {
             // New Google sign-up user - redirect to signup page with pre-filled data
-            setState(() {
-              _homeWidget = PatientSignUpScreen(
-                prefillData: {
-                  'name': user.userMetadata?['full_name'] ?? '',
-                  'email': user.email ?? '',
-                  'dob': user.userMetadata?['birthdate'] ?? '',
-                  'gender': user.userMetadata?['gender'] ?? '',
-                },
+            print('📝 Navigating to signup');
+            if (mounted) {
+              navigatorKey.currentState?.pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => PatientSignUpScreen(
+                    prefillData: {
+                      'name': user.userMetadata?['full_name'] ?? '',
+                      'email': user.email ?? '',
+                      'dob': user.userMetadata?['birthdate'] ?? '',
+                      'gender': user.userMetadata?['gender'] ?? '',
+                    },
+                  ),
+                ),
+                (route) => false,
               );
-            });
+            }
           }
+        } else {
+          print('❌ No user found after OAuth - session establishment failed');
         }
       } catch (e) {
-        print('Error handling OAuth callback: $e');
+        print('❌ Error handling OAuth callback: $e');
       }
     }
     
@@ -161,6 +191,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Care Hive',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
