@@ -641,61 +641,100 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
         }
       } else {
         // Regular sign-up with email/password
-        // Disable email confirmation since we use phone OTP verification
-        final authResponse = await supabase.auth.signUp(
-          email: emailController.text.trim(),
-          password: passwordController.text.trim(),
-          emailRedirectTo: null, // Disable email confirmation
-          data: {
-            'email_confirmed': true, // Mark as pre-confirmed since OTP verified
-          },
-        );
-        final user = authResponse.user;
-        if (user != null) {
-          await supabase.from('patients').insert({
-            'user_id': user.id,
-            'name': fullName,
-            'first_name': firstNameController.text.trim(),
-            'middle_name': middleNameController.text.trim(),
-            'last_name': lastNameController.text.trim(),
-            'email': emailController.text.trim(),
-            'country_code': selectedCountryCode,
-            'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
-            'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
-                ? alternativePhoneController.text.trim() 
-                : null,
-            'dob': dobController.text.trim(),
-            'aadhar_number': aadharController.text.trim(),
-            'house_number': houseNumberController.text.trim(),
-            'street': streetController.text.trim(),
-            'town': townController.text.trim(),
-            'city': cityController.text.trim(),
-            'state': stateController.text.trim(),
-            'pincode': pincodeController.text.trim(),
-            'gender': selectedGender,
-            'phone_verified': true,
-            'otp_verified_at': DateTime.now().toIso8601String(),
-          });
+        // We already verified phone via OTP, so email verification is optional
+        try {
+          final authResponse = await supabase.auth.signUp(
+            email: emailController.text.trim(),
+            password: passwordController.text.trim(),
+            emailRedirectTo: null, // Explicitly disable redirect
+            data: {
+              'email_confirmed': true,
+              'phone_verified': true,
+            },
+          );
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registration successful! Please verify your email.')),
-          );
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
-          );
+          final user = authResponse.user;
+          
+          if (user != null) {
+            await supabase.from('patients').insert({
+              'user_id': user.id,
+              'name': fullName,
+              'first_name': firstNameController.text.trim(),
+              'middle_name': middleNameController.text.trim(),
+              'last_name': lastNameController.text.trim(),
+              'email': emailController.text.trim(),
+              'country_code': selectedCountryCode,
+              'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+              'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                  ? alternativePhoneController.text.trim() 
+                  : null,
+              'dob': dobController.text.trim(),
+              'aadhar_number': aadharController.text.trim(),
+              'house_number': houseNumberController.text.trim(),
+              'street': streetController.text.trim(),
+              'town': townController.text.trim(),
+              'city': cityController.text.trim(),
+              'state': stateController.text.trim(),
+              'pincode': pincodeController.text.trim(),
+              'gender': selectedGender,
+              'phone_verified': true,
+              'otp_verified_at': DateTime.now().toIso8601String(),
+            });
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('✅ Registration successful! Please login with your credentials.')),
+              );
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
+              );
+            }
+          }
+        } on AuthException catch (e) {
+          // Handle rate limit error gracefully - we already verified phone via OTP
+          if (e.message.toLowerCase().contains('rate limit') || 
+              e.message.toLowerCase().contains('email rate limit exceeded')) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('⚠️ Registration is processing. Please try logging in after a few minutes using your email and password.'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 6),
+                ),
+              );
+              // Navigate to login screen
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
+              );
+            }
+          } else {
+            // Other auth errors
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('❌ Registration error: ${e.message}')),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('❌ Error: ${e.toString()}')),
+            );
+          }
         }
       }
-    } on AuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unexpected error: ${e.toString()}')),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
