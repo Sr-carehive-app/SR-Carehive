@@ -449,23 +449,30 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 20),
             // Google Sign-In Button
-            OutlinedButton.icon(
+            OutlinedButton(
               onPressed: _handleGoogleSignIn,
-              icon: const GoogleLogoWidget(size: 18),
-              label: const Text(
-                'Login with Google',
-                style: TextStyle(
-                  color: Color(0xFF3C4043),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: Color(0xFFDADADA), width: 1),
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 0,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const GoogleLogoWidget(size: 24),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Login with Google',
+                    style: TextStyle(
+                      color: Color(0xFF3C4043),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 20),

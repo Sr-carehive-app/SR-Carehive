@@ -579,20 +579,16 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 24),
 
           // Care Seeker section
+          const Text(
+            'Care Seeker Details',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Care Seeker Details',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              Row(
-                children: [
-                  toggleButton('Yourself'),
-                  const SizedBox(width: 8),
-                  toggleButton('Another Person'),
-                ],
-              ),
+              Expanded(child: toggleButton('Yourself')),
+              const SizedBox(width: 10),
+              Expanded(child: toggleButton('Another Person')),
             ],
           ),
           const SizedBox(height: 16),
@@ -693,14 +689,20 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     return GestureDetector(
       onTap: () => setState(() => selectedPatient = text),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? primaryColor : const Color(0xFFEDEFFF),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          text,
-          style: TextStyle(color: isSelected ? Colors.white : Colors.black),
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? Colors.white : primaryColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );

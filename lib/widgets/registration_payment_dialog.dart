@@ -24,221 +24,239 @@ class RegistrationPaymentDialog extends StatefulWidget {
 class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
-        padding: const EdgeInsets.all(24),
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: screenHeight * 0.9, // Use 90% of screen height
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with icon
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2260FF).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.payment,
-                    color: Color(0xFF2260FF),
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Registration Fee',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        'Confirm Your Booking',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // Amount Card
+            // Fixed Header
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2260FF), Color(0xFF4A80FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Amount to Pay',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Text(
-                    '₹1',  // TODO: Change to ₹100 for production
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Information Section
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F7FF),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'What happens next?',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(
-                    icon: Icons.check_circle_outline,
-                    text: 'Registration fee confirms your booking',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                    icon: Icons.phone_in_talk,
-                    text: 'Our care provider will contact you soon',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                    icon: Icons.verified_user,
-                    text: 'They will verify details and schedule your appointment',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                    icon: Icons.account_balance_wallet,
-                    text: 'Final payment in 2 installments: 50% before visit, 50% after',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                    icon: Icons.medical_services,
-                    text: 'Total cost depends on condition severity, duration & diagnosis',
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Important Note
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 20, 16, 16),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Registration fee is non-refundable but will be adjusted in your final bill',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange[900],
-                      ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2260FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    child: const Icon(
+                      Icons.payment,
+                      color: Color(0xFF2260FF),
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Registration Fee',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          'Confirm Your Booking',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 22),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 24),
-
-            // Payment Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _handlePayment(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2260FF),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 2,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            // Scrollable Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.payment, color: Colors.white),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Pay ₹1 Now',  // TODO: Change to ₹100 for production
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    // Amount Card
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2260FF), Color(0xFF4A80FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Amount to Pay',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Text(
+                            '₹1',  // TODO: Change to ₹100 for production
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Information Section
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'What happens next?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _buildInfoRow(
+                            icon: Icons.check_circle_outline,
+                            text: 'Registration fee confirms your booking',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildInfoRow(
+                            icon: Icons.phone_in_talk,
+                            text: 'Our care provider will contact you soon',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildInfoRow(
+                            icon: Icons.verified_user,
+                            text: 'They will verify details and schedule your appointment',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildInfoRow(
+                            icon: Icons.account_balance_wallet,
+                            text: 'Final payment in 2 installments: 50% before visit, 50% after',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildInfoRow(
+                            icon: Icons.medical_services,
+                            text: 'Total cost depends on condition severity, duration & diagnosis',
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Important Note
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange[700], size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Registration fee is non-refundable but will be adjusted in your final bill',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.orange[900],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Payment Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => _handlePayment(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2260FF),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.payment, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Pay ₹1 Now',  // TODO: Change to ₹100 for production
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Secure payment badge
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.lock, size: 13, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          'Secure Payment via Razorpay',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Secure payment badge
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.lock, size: 14, color: Colors.grey),
-                SizedBox(width: 4),
-                Text(
-                  'Secure Payment via Razorpay',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -250,15 +268,15 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF2260FF)),
+        Icon(icon, size: 16, color: const Color(0xFF2260FF)),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               color: Colors.black87,
-              height: 1.4,
+              height: 1.3,
             ),
           ),
         ),
