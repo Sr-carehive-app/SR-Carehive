@@ -2166,10 +2166,10 @@ app.post('/send-password-reset-otp', async (req, res) => {
     console.log(`[OTP-RESET] Querying database for email: ${normalizedEmail}`);
     
     const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('email, full_name, user_id')
-      .eq('email', normalizedEmail)
-      .single();
+  .from('patients')
+  .select('email, name, user_id')
+  .eq('email', normalizedEmail)
+  .single();
 
     console.log(`[OTP-RESET] Query result - Data:`, patient);
     console.log(`[OTP-RESET] Query result - Error:`, patientError);
@@ -2182,7 +2182,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
       console.log(`[OTP-RESET] Attempting case-insensitive search...`);
       const { data: altPatient, error: altError } = await supabase
         .from('patients')
-        .select('email, full_name, user_id')
+        .select('email, name, user_id')
         .ilike('email', normalizedEmail);
       
       console.log(`[OTP-RESET] Case-insensitive result:`, altPatient);
@@ -2201,7 +2201,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`[OTP-RESET] User found: ${patient.full_name} <${patient.email}>`);
+  console.log(`[OTP-RESET] User found: ${patient.name} <${patient.email}>`);
 
     // Generate 6-digit OTP
     const otp = generateOTP();
@@ -2242,7 +2242,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
                 <!-- Body -->
                 <tr>
                   <td style="padding: 40px 30px;">
-                    <p style="font-size: 16px; color: #333; margin: 0 0 20px;">Hello ${patient.full_name || 'there'},</p>
+                    <p style="font-size: 16px; color: #333; margin: 0 0 20px;">Hello ${patient.name || 'there'},</p>
                     
                     <p style="font-size: 14px; color: #666; line-height: 1.6; margin: 0 0 20px;">
                       We received a request to reset your password for your SR CareHive account. 
