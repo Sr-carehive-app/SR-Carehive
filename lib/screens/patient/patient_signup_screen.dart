@@ -641,9 +641,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
         }
       } else {
         // Regular sign-up with email/password
+        // Disable email confirmation since we use phone OTP verification
         final authResponse = await supabase.auth.signUp(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
+          emailRedirectTo: null, // Disable email confirmation
+          data: {
+            'email_confirmed': true, // Mark as pre-confirmed since OTP verified
+          },
         );
         final user = authResponse.user;
         if (user != null) {
