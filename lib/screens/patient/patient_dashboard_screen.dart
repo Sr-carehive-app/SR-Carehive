@@ -66,7 +66,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
           _buildDashboard(context, primaryColor),
           const AppointmentsScreen(), // Changed from Chat screen to Appointments
           const ScheduleNurseScreen(), // Changed from placeholder to actual Schedule screen
-          ProfileScreen(userName: userName ?? widget.userName),
+          ProfileScreen(
+            userName: userName ?? widget.userName,
+            onProfileUpdated: _loadProfileData, // Add callback
+          ),
         ],
       ),
 
@@ -79,6 +82,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
           setState(() {
             _currentIndex = index;
           });
+          // Refresh profile data when navigating to Home tab
+          if (index == 0) {
+            _loadProfileData();
+          }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),

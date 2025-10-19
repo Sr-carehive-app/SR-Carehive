@@ -29,55 +29,188 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
     final currentPassword = currentPasswordController.text.trim();
     final newPassword = newPasswordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
+    
+    // Validation
     if (currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields')),
+        const SnackBar(
+          content: Text('❌ Please fill all fields'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
+    
+    // Password strength validation
+    if (newPassword.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Password must be at least 8 characters long'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Check for uppercase, lowercase, number, special character
+    bool hasUppercase = newPassword.contains(RegExp(r'[A-Z]'));
+    bool hasLowercase = newPassword.contains(RegExp(r'[a-z]'));
+    bool hasDigit = newPassword.contains(RegExp(r'[0-9]'));
+    bool hasSpecialChar = newPassword.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+    
+    if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecialChar) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Password must contain:\n• Uppercase letter\n• Lowercase letter\n• Number\n• Special character'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New passwords do not match')),
+        const SnackBar(
+          content: Text('❌ New passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
+    
+    if (currentPassword == newPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ New password must be different from current password'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
+    
     try {
-      // Re-authenticate user (Supabase does not require current password for update, but you may want to check it in your UI)
       final user = supabase.auth.currentUser;
-      if (user == null) {
+      if (user == null || user.email == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not logged in')),
+          const SnackBar(
+            content: Text('❌ User not logged in'),
+            backgroundColor: Colors.red,
+          ),
         );
         return;
       }
-      // Update password
+      
+      print('🔐 Attempting to verify current password for user: ${user.email}');
+      
+      // Step 1: Re-authenticate with current password to verify it's correct
+      try {
+        final signInResponse = await supabase.auth.signInWithPassword(
+          email: user.email!,
+          password: currentPassword,
+        );
+        
+        if (signInResponse.user == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Current password is incorrect'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        
+        print('✅ Current password verified successfully');
+      } on AuthException catch (e) {
+        print('❌ Password verification failed: ${e.message}');
+        if (!mounted) return;
+        
+        String errorMessage = '❌ Current password is incorrect';
+        if (e.message.toLowerCase().contains('invalid')) {
+          errorMessage = '❌ Current password is incorrect';
+        } else if (e.message.toLowerCase().contains('rate limit')) {
+          errorMessage = '❌ Too many attempts. Please try again later';
+        } else {
+          errorMessage = '❌ ${e.message}';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+      
+      // Step 2: Update password
+      print('🔐 Updating password...');
       final response = await supabase.auth.updateUser(
         UserAttributes(password: newPassword),
       );
+      
       if (response.user != null) {
+        print('✅ Password updated successfully');
+        if (!mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password changed successfully!')),
+          const SnackBar(
+            content: Text('✅ Password changed successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
         );
+        
         currentPasswordController.clear();
         newPasswordController.clear();
         confirmPasswordController.clear();
       } else {
+        print('❌ Password update failed - no user returned');
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to change password')),
+          const SnackBar(
+            content: Text('❌ Failed to change password'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } on AuthException catch (e) {
+      print('❌ AuthException during password change: ${e.message}');
+      if (!mounted) return;
+      
+      String errorMessage = e.message;
+      if (e.message.toLowerCase().contains('same')) {
+        errorMessage = 'New password must be different from current password';
+      } else if (e.message.toLowerCase().contains('weak')) {
+        errorMessage = 'Password is too weak. Please use a stronger password';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text('❌ $errorMessage'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
       );
     } catch (e) {
+      print('❌ Unexpected error: ${e.toString()}');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text('❌ Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -90,22 +223,68 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
         iconTheme: const IconThemeData(color: Colors.black),
         centerTitle: true,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Info card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: primaryColor, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Password Requirements',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '• At least 8 characters long\n'
+                    '• Contains uppercase letter (A-Z)\n'
+                    '• Contains lowercase letter (a-z)\n'
+                    '• Contains number (0-9)\n'
+                    '• Contains special character (!@#\$%^&*)',
+                    style: TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             _buildPasswordField('Current Password', currentPasswordController, _obscureCurrent, () => setState(() => _obscureCurrent = !_obscureCurrent)),
             _buildPasswordField('New Password', newPasswordController, _obscureNew, () => setState(() => _obscureNew = !_obscureNew)),
             _buildPasswordField('Confirm New Password', confirmPasswordController, _obscureConfirm, () => setState(() => _obscureConfirm = !_obscureConfirm)),
             const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator(color: Color(0xFF2260FF))
-                : ElevatedButton(
-              onPressed: _changePassword,
-              style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Text('Change Password', style: TextStyle(color: Colors.white)),
+            SizedBox(
+              width: double.infinity,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF2260FF)))
+                  : ElevatedButton(
+                onPressed: _changePassword,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Change Password',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],

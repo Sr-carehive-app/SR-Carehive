@@ -117,7 +117,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
                             ),
                           ),
                           const Text(
-                            '₹1',  // TODO: Change to ₹100 for production
+                            '₹100',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 30,
@@ -225,7 +225,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
                             const Icon(Icons.payment, color: Colors.white, size: 20),
                             const SizedBox(width: 8),
                             const Text(
-                              'Pay ₹1 Now',  // TODO: Change to ₹100 for production
+                              'Pay ₹100 Now',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

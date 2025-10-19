@@ -222,6 +222,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _showImageOptions() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF2260FF)),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage();
+              },
+            ),
+            if (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Remove Avatar', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removeAvatar();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.cancel, color: Colors.grey),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -254,6 +288,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _removeAvatar() async {
+    setState(() { isUploadingImage = true; });
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+      
+      // Delete old image from Storage if exists
+      if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
+        try {
+          final oldFileName = profileImageUrl!.split('/').last.split('?').first;
+          await supabase.storage.from('profile-images').remove([oldFileName]);
+        } catch (e) {
+          print('Error deleting old image from Storage: $e');
+        }
+      }
+      
+      // Update database to remove avatar URL
+      await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
+      
+      setState(() { 
+        profileImageUrl = null;
+        selectedImageFile = null;
+        selectedImageBytes = null;
+      });
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avatar removed successfully!')),
+      );
+      
+      // Navigate back and trigger callback
+      Navigator.pop(context, true);
+    } catch (e) {
+      print('Error removing avatar: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error removing avatar: $e')),
+      );
+    } finally {
+      setState(() { isUploadingImage = false; });
+    }
+  }
+
   Future<void> _uploadImage(XFile image) async {
     setState(() {
       isUploadingImage = true;
@@ -264,21 +342,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = supabase.auth.currentUser;
       
       if (user != null) {
+        // Delete old image if exists
+        if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
+          try {
+            final oldFileName = profileImageUrl!.split('/').last.split('?').first;
+            await supabase.storage.from('profile-images').remove([oldFileName]);
+          } catch (e) {
+            print('Could not delete old image: $e');
+          }
+        }
+        
         // Generate unique filename
-        final fileName = 'profile_${user.id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final fileExtension = image.path.split('.').last.split('?').first;
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final cleanUserId = user.id.replaceAll('-', '').substring(0, 12);
+        final fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
+        
         String imageUrl = '';
         if (kIsWeb) {
           final bytes = await image.readAsBytes();
           await supabase.storage
               .from('profile-images')
-              .uploadBinary(fileName, bytes);
+              .uploadBinary(fileName, bytes, fileOptions: FileOptions(cacheControl: '3600', upsert: true));
           imageUrl = supabase.storage
               .from('profile-images')
               .getPublicUrl(fileName);
         } else {
           await supabase.storage
               .from('profile-images')
-              .upload(fileName, File(image.path));
+              .upload(fileName, File(image.path), fileOptions: FileOptions(cacheControl: '3600', upsert: true));
           imageUrl = supabase.storage
               .from('profile-images')
               .getPublicUrl(fileName);
@@ -428,7 +520,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Return true to indicate profile was updated
       }
     } catch (e) {
       if (!mounted) return;
@@ -485,7 +577,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   bottom: 0,
                   right: 0,
                   child: GestureDetector(
-                    onTap: isUploadingImage ? null : _pickImage,
+                    onTap: isUploadingImage ? null : _showImageOptions,
                     child: CircleAvatar(
                       radius: 14,
                       backgroundColor: primaryColor,

@@ -60,23 +60,51 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
     
+    // Basic validation
     if (password.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields')),
+        const SnackBar(
+          content: Text('❌ Please fill all fields'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
     
-    if (password.length < 6) {
+    // Password strength validation
+    if (password.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters long')),
+        const SnackBar(
+          content: Text('❌ Password must be at least 8 characters long'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Check for uppercase, lowercase, number, special character
+    bool hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    bool hasLowercase = password.contains(RegExp(r'[a-z]'));
+    bool hasDigit = password.contains(RegExp(r'[0-9]'));
+    bool hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+    
+    if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecialChar) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Password must contain:\n• Uppercase letter\n• Lowercase letter\n• Number\n• Special character'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
       );
       return;
     }
     
     if (password != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
+        const SnackBar(
+          content: Text('❌ Passwords do not match'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -89,14 +117,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     
     final supabase = Supabase.instance.client;
     try {
+      print('🔐 Attempting to reset password...');
+      print('📧 Current user: ${supabase.auth.currentUser?.email ?? "No user"}');
+      
       // Use the correct method for password reset
       final response = await supabase.auth.updateUser(UserAttributes(password: password));
+      
       if (response.user != null) {
+        print('✅ Password reset successful for user: ${response.user!.email}');
+        
         // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Password reset successfully! Please log in with your new password.'),
+              content: Text('✅ Password reset successfully! Please log in with your new password.'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 3),
             ),
@@ -115,14 +149,18 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           );
         }
       } else {
+        print('❌ Password reset failed - no user returned');
         setState(() {
           _errorMessage = 'Failed to reset password';
         });
       }
     } on AuthException catch (e) {
+      print('❌ AuthException during password reset: ${e.message}');
+      
       if (e.message.toLowerCase().contains('expired') || 
           e.message.toLowerCase().contains('invalid') ||
           e.message.toLowerCase().contains('code')) {
+        print('⏰ Reset link expired or invalid');
         setState(() {
           _tokenExpired = true;
           _errorMessage = 'Reset link expired or invalid. Please request a new password reset email.';
@@ -133,6 +171,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         });
       }
     } catch (e) {
+      print('❌ Unexpected error during password reset: ${e.toString()}');
       setState(() {
         _errorMessage = e.toString();
       });
@@ -155,31 +194,50 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
     try {
+      // Get the base URL from environment or use localhost
+      String baseUrl = kIsWeb 
+          ? Uri.base.origin 
+          : 'carehive://';
+      
+      String redirectUrl = kIsWeb
+          ? '$baseUrl/reset-password'
+          : 'carehive://reset-password';
+      
+      print('Re-sending password reset email to: $email');
+      print('📍 Redirect URL: $redirectUrl');
+      print('🌐 Base URL: $baseUrl');
+      
       await supabase.auth.resetPasswordForEmail(
         email,
-        redirectTo: kIsWeb
-            ? 'http://localhost:5173/reset-password'
-            : 'carehive://reset-password',
+        redirectTo: redirectUrl,
       );
+      
+      print('✅ Password reset email sent successfully via Supabase!');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password reset email sent! Check your inbox.'),
+          content: Text('✅ Password reset email sent! Check your inbox and spam folder.'),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 5),
         ),
       );
       Navigator.of(context).pop();
     } on AuthException catch (e) {
+      print('AuthException: ${e.message}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.message}'),
+          content: Text('❌ Error: ${e.message}'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
         ),
       );
     } catch (e) {
+      print('Error: ${e.toString()}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('❌ Error: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
         ),
       );
     } finally {
@@ -208,30 +266,69 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   Widget _buildResetPasswordForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 20),
-        const Text(
-          'Set New Password',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2260FF)),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Enter your new password below',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
-        ),
-        const SizedBox(height: 32),
-        TextField(
-          controller: passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'New Password',
-            hintText: 'Enter your new password',
-            border: OutlineInputBorder(),
-            filled: true,
-            fillColor: Color(0xFFEDEFFF),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+          const Text(
+            'Set New Password',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2260FF)),
           ),
+          const SizedBox(height: 8),
+          const Text(
+            'Enter your new password below',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          // Password Requirements Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: const [
+                    Icon(Icons.info_outline, color: Color(0xFF2260FF), size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Password Requirements',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2260FF),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '• At least 8 characters long\n'
+                  '• Contains uppercase letter (A-Z)\n'
+                  '• Contains lowercase letter (a-z)\n'
+                  '• Contains number (0-9)\n'
+                  '• Contains special character (!@#\$%^&*)',
+                  style: TextStyle(fontSize: 12, color: Colors.black87),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'New Password',
+              hintText: 'Enter your new password',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Color(0xFFEDEFFF),
+            ),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -271,10 +368,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
                 child: const Text(
                   'Reset Password',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
-      ],
+        ],
+      ),
     );
   }
 

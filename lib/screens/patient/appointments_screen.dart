@@ -309,6 +309,126 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                     ),
                                   ],
                                   const SizedBox(height: 12),
+                                  
+                                  // Patient Details Section
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.blue.shade100),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          '👤 Patient Details',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        if (appointment['phone'] != null) ...[
+                                          Row(
+                                            children: [
+                                              Icon(Icons.phone, size: 16, color: primaryColor),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                appointment['phone'],
+                                                style: const TextStyle(fontSize: 13),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                        ],
+                                        if (appointment['address'] != null) ...[
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Icon(Icons.location_on, size: 16, color: primaryColor),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  appointment['address'],
+                                                  style: const TextStyle(fontSize: 13),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                        ],
+                                        if (appointment['emergency_contact'] != null) ...[
+                                          Row(
+                                            children: [
+                                              Icon(Icons.emergency, size: 16, color: Colors.red),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Emergency: ${appointment['emergency_contact']}',
+                                                style: const TextStyle(fontSize: 13),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                        ],
+                                        if (appointment['aadhar_number'] != null) ...[
+                                          Row(
+                                            children: [
+                                              Icon(Icons.credit_card, size: 16, color: primaryColor),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Aadhar: ${appointment['aadhar_number']}',
+                                                style: const TextStyle(fontSize: 13),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  
+                                  // Primary Doctor Details (if provided)
+                                  if (appointment['primary_doctor_name'] != null || 
+                                      appointment['primary_doctor_phone'] != null ||
+                                      appointment['primary_doctor_location'] != null) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.green.shade100),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            '🩺 Primary Doctor',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          if (appointment['primary_doctor_name'] != null)
+                                            Text('Name: ${appointment['primary_doctor_name']}', 
+                                              style: const TextStyle(fontSize: 13)),
+                                          if (appointment['primary_doctor_phone'] != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text('Phone: ${appointment['primary_doctor_phone']}',
+                                              style: const TextStyle(fontSize: 13)),
+                                          ],
+                                          if (appointment['primary_doctor_location'] != null) ...[
+                                            const SizedBox(height: 4),
+                                            Text('Location: ${appointment['primary_doctor_location']}',
+                                              style: const TextStyle(fontSize: 13)),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  
+                                  const SizedBox(height: 12),
                                   Row(
                                     children: [
                                       Icon(Icons.phone, size: 16, color: primaryColor),
@@ -455,12 +575,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           // Registration Payment Status
           _buildPaymentStatusRow(
             'Registration Fee',
-            '₹1',  // TODO: Change to ₹100 for production
+            '₹100',
             registrationPaid,
             appointment['registration_payment_id'],
           ),
 
-          // Show "Pay ₹1" button if approved and not paid (TODO: Change to ₹100 for production)
+          // Show "Pay ₹100" button if approved and not paid
           if (status == 'approved' && !registrationPaid) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -476,7 +596,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 ),
                 icon: const Icon(Icons.payment, color: Colors.white),
                 label: const Text(
-                  'Pay ₹1 to Register Booking',  // TODO: Change to ₹100 for production
+                  'Pay ₹100 to Register Booking',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

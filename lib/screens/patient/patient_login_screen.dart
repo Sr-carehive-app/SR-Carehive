@@ -3,9 +3,12 @@ import 'package:care12/screens/patient/patient_dashboard_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Provider;
 import 'patient_signup_screen.dart';
+import 'forgot_password_otp_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:care12/widgets/google_logo_widget.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({Key? key}) : super(key: key);
@@ -216,6 +219,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
   Future<void> _handleForgotPassword() async {
     final emailController = TextEditingController();
     bool isLoading = false;
+    
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -237,7 +241,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'We\'ll send you a password reset link to your email address.',
+                'We\'ll send you a 6-digit OTP to reset your password.',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
@@ -268,25 +272,81 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                       }
                       
                       setState(() => isLoading = true);
-                      final supabase = Supabase.instance.client;
+                      
                       try {
-                        // Use proper redirect URL for password reset
-                        await supabase.auth.resetPasswordForEmail(
-                          email,
-                          redirectTo: kIsWeb
-                              ? 'http://localhost:5173/reset-password'
-                              : 'carehive://reset-password',
+                        print('📧 Sending OTP to: $email');
+                        
+                        // Call backend to send OTP via Nodemailer
+                        final response = await http.post(
+                          Uri.parse('http://localhost:9090/send-password-reset-otp'),
+                          headers: {'Content-Type': 'application/json'},
+                          body: json.encode({'email': email}),
                         );
+
+                        final data = json.decode(response.body);
+                        print('Response: $data');
+
+                        if (!mounted) return;
+                        
+                        if (response.statusCode == 200 && data['success'] == true) {
+                          print('✅ OTP sent successfully!');
+                          
+                          Navigator.pop(context); // Close dialog
+                          
+                          // Navigate to OTP screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ForgotPasswordOTPScreen(email: email),
+                            ),
+                          );
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✅ OTP sent to $email! Check your email and spam folder.'),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        } else {
+                          print('❌ Failed to send OTP: ${data['error']}');
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('❌ ${data['error'] ?? 'Failed to send OTP'}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        print('❌ Error: $e');
                         
                         if (!mounted) return;
-                        Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Password reset email sent to $email! Please check your inbox and spam folder.'),
-                            backgroundColor: Colors.green,
-                            duration: const Duration(seconds: 5),
+                          const SnackBar(
+                            content: Text('❌ Network error. Please check your connection.'),
+                            backgroundColor: Colors.red,
                           ),
                         );
+                      } finally {
+                        if (mounted) {
+                          setState(() => isLoading = false);
+                        }
+                      }
+                    },
+              child: isLoading 
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Send OTP'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
                       } on AuthException catch (e) {
                         if (!mounted) return;
                         String errorMessage = 'Failed to send reset email. ';

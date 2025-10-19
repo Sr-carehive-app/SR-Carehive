@@ -2088,4 +2088,382 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
   }
 });
 
+// ============================================================================
+// OTP-BASED PASSWORD RESET SYSTEM
+// ============================================================================
+
+// In-memory OTP storage (for production, use Redis or database)
+const passwordResetOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt }
+
+// Generate 6-digit OTP
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Send OTP via email for password reset
+app.post('/send-password-reset-otp', async (req, res) => {
+  try {
+    const { email, resend = false } = req.body;
+    
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[OTP-RESET] ${resend ? 'Resend' : 'New'} request for email: ${normalizedEmail}`);
+
+    // Validate email format
+    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check for resend cooldown (2 minutes)
+    const existingOTP = passwordResetOTPs.get(normalizedEmail);
+    if (existingOTP && existingOTP.lastSentAt) {
+      const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
+      const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
+      
+      if (timeSinceLastSend < cooldownPeriod) {
+        const remainingTime = Math.ceil((cooldownPeriod - timeSinceLastSend) / 1000); // seconds
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        
+        console.log(`[OTP-RESET] Cooldown active for ${normalizedEmail}. Remaining: ${minutes}m ${seconds}s`);
+        
+        return res.status(429).json({ 
+          error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
+          remainingSeconds: remainingTime,
+          canResendAt: existingOTP.lastSentAt + cooldownPeriod
+        });
+      }
+    }
+
+    if (!supabase) {
+      console.error('[ERROR] Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Check if user exists in database
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('email, full_name, user_id')
+      .eq('email', normalizedEmail)
+      .single();
+
+    if (patientError || !patient) {
+      console.log(`[OTP-RESET] User not found: ${normalizedEmail}`);
+      // Return success to prevent email enumeration
+      return res.json({ 
+        success: true, 
+        message: 'If this email exists, an OTP has been sent.',
+        canResendAfter: 120 // 2 minutes
+      });
+    }
+
+    console.log(`[OTP-RESET] User found: ${patient.full_name} <${patient.email}>`);
+
+    // Generate 6-digit OTP
+    const otp = generateOTP();
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
+    const lastSentAt = Date.now();
+
+    // Store OTP in memory
+    passwordResetOTPs.set(normalizedEmail, {
+      otp,
+      expiresAt,
+      attempts: 0,
+      userId: patient.user_id,
+      lastSentAt
+    });
+
+    console.log(`[OTP-RESET] Generated OTP for ${normalizedEmail}: ${otp} (expires in 10 min, can resend after 2 min)`);
+
+    // Create OTP email HTML
+    const otpEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 40px 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🔐 Reset Your Password</h1>
+                  </td>
+                </tr>
+                
+                <!-- Body -->
+                <tr>
+                  <td style="padding: 40px 30px;">
+                    <p style="font-size: 16px; color: #333; margin: 0 0 20px;">Hello ${patient.full_name || 'there'},</p>
+                    
+                    <p style="font-size: 14px; color: #666; line-height: 1.6; margin: 0 0 20px;">
+                      We received a request to reset your password for your SR CareHive account. 
+                      Use the OTP below to verify your identity:
+                    </p>
+                    
+                    <!-- OTP Box -->
+                    <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; text-align: center; border-radius: 8px; margin: 30px 0;">
+                      <p style="margin: 0 0 10px; font-size: 14px; color: #ffffff; opacity: 0.9;">Your OTP Code</p>
+                      <p style="margin: 0; font-size: 42px; font-weight: bold; color: #ffffff; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                        ${otp}
+                      </p>
+                    </div>
+                    
+                    <!-- Warning Box -->
+                    <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                      <p style="margin: 0; font-size: 13px; color: #856404;">
+                        <strong>⚠️ Important:</strong><br/>
+                        • This OTP will expire in <strong>10 minutes</strong><br/>
+                        • Do not share this code with anyone<br/>
+                        • You can request a new OTP after <strong>2 minutes</strong><br/>
+                        • If you didn't request this, please ignore this email
+                      </p>
+                    </div>
+                    
+                    <p style="font-size: 14px; color: #666; line-height: 1.6; margin: 20px 0 0;">
+                      After entering the OTP, you'll be able to set a new password for your account.
+                    </p>
+                  </td>
+                </tr>
+                
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+                    <p style="margin: 0 0 10px; font-size: 14px; color: #2260FF; font-weight: bold;">SR CareHive</p>
+                    <p style="margin: 0 0 10px; font-size: 12px; color: #999;">
+                      Your trusted healthcare companion
+                    </p>
+                    <p style="margin: 0; font-size: 11px; color: #999;">
+                      This is an automated email. Please do not reply to this message.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Security Notice -->
+              <table width="600" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+                <tr>
+                  <td style="text-align: center; padding: 20px;">
+                    <p style="font-size: 11px; color: #999; margin: 0;">
+                      🔒 For security reasons, never share your OTP or password with anyone.<br/>
+                      SR CareHive will never ask for your OTP via phone or chat.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    // Send OTP email via Nodemailer
+    if (!mailer) {
+      console.error('[ERROR] Nodemailer not configured');
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    await sendEmail({
+      to: normalizedEmail,
+      subject: '🔐 Your Password Reset OTP - SR CareHive',
+      html: otpEmailHtml
+    });
+
+    console.log(`[SUCCESS] OTP email sent to: ${normalizedEmail}`);
+
+    res.json({ 
+      success: true, 
+      message: resend 
+        ? 'New OTP sent successfully! Check your email.' 
+        : 'OTP sent successfully to your email. Please check your inbox and spam folder.',
+      expiresIn: 600, // 10 minutes in seconds
+      canResendAfter: 120 // 2 minutes in seconds
+    });
+
+  } catch (e) {
+    console.error('[ERROR] send-password-reset-otp:', e);
+    res.status(500).json({ 
+      error: 'Failed to send OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// Verify OTP
+app.post('/verify-password-reset-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedOTP = otp.trim();
+
+    console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedEmail}`);
+
+    const otpData = passwordResetOTPs.get(normalizedEmail);
+
+    if (!otpData) {
+      console.log(`[OTP-VERIFY] No OTP found for: ${normalizedEmail}`);
+      return res.status(400).json({ 
+        error: 'Invalid or expired OTP. Please request a new one.' 
+      });
+    }
+
+    // Check expiry
+    if (Date.now() > otpData.expiresAt) {
+      console.log(`[OTP-VERIFY] OTP expired for: ${normalizedEmail}`);
+      passwordResetOTPs.delete(normalizedEmail);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.' 
+      });
+    }
+
+    // Check attempts (max 5 attempts)
+    if (otpData.attempts >= 5) {
+      console.log(`[OTP-VERIFY] Too many attempts for: ${normalizedEmail}`);
+      passwordResetOTPs.delete(normalizedEmail);
+      return res.status(429).json({ 
+        error: 'Too many failed attempts. Please request a new OTP.' 
+      });
+    }
+
+    // Verify OTP
+    if (normalizedOTP !== otpData.otp) {
+      otpData.attempts += 1;
+      passwordResetOTPs.set(normalizedEmail, otpData);
+      
+      const remainingAttempts = 5 - otpData.attempts;
+      console.log(`[OTP-VERIFY] Invalid OTP for: ${normalizedEmail}. Remaining attempts: ${remainingAttempts}`);
+      
+      return res.status(400).json({ 
+        error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
+        remainingAttempts
+      });
+    }
+
+    console.log(`[OTP-VERIFY] ✅ OTP verified successfully for: ${normalizedEmail}`);
+
+    // OTP verified - mark as verified but don't delete yet
+    otpData.verified = true;
+    passwordResetOTPs.set(normalizedEmail, otpData);
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. You can now reset your password.',
+      userId: otpData.userId
+    });
+
+  } catch (e) {
+    console.error('[ERROR] verify-password-reset-otp:', e);
+    res.status(500).json({ 
+      error: 'Failed to verify OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// Reset password with OTP (final step)
+app.post('/reset-password-with-otp', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[PASSWORD-RESET] Reset attempt for: ${normalizedEmail}`);
+
+    const otpData = passwordResetOTPs.get(normalizedEmail);
+
+    if (!otpData || !otpData.verified) {
+      console.log(`[PASSWORD-RESET] OTP not verified for: ${normalizedEmail}`);
+      return res.status(400).json({ 
+        error: 'OTP not verified. Please verify OTP first.' 
+      });
+    }
+
+    // Check if OTP is still valid
+    if (Date.now() > otpData.expiresAt) {
+      console.log(`[PASSWORD-RESET] OTP expired for: ${normalizedEmail}`);
+      passwordResetOTPs.delete(normalizedEmail);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.' 
+      });
+    }
+
+    // Validate password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    if (!supabase) {
+      console.error('[ERROR] Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Update password in Supabase Auth
+    const { data, error } = await supabase.auth.admin.updateUserById(
+      otpData.userId,
+      { password: newPassword }
+    );
+
+    if (error) {
+      console.error('[ERROR] Failed to update password:', error.message);
+      return res.status(500).json({ 
+        error: 'Failed to update password', 
+        details: error.message 
+      });
+    }
+
+    console.log(`[SUCCESS] ✅ Password reset successfully for: ${normalizedEmail}`);
+
+    // Delete OTP after successful password reset
+    passwordResetOTPs.delete(normalizedEmail);
+
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully! You can now login with your new password.' 
+    });
+
+  } catch (e) {
+    console.error('[ERROR] reset-password-with-otp:', e);
+    res.status(500).json({ 
+      error: 'Failed to reset password', 
+      details: e.message 
+    });
+  }
+});
+
+// Clean up expired OTPs every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  
+  for (const [email, data] of passwordResetOTPs.entries()) {
+    if (now > data.expiresAt) {
+      passwordResetOTPs.delete(email);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`[OTP-CLEANUP] Removed ${cleaned} expired OTP(s)`);
+  }
+}, 5 * 60 * 1000);
+
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));
