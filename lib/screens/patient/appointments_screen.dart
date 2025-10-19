@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:care12/widgets/registration_payment_dialog.dart';
 import 'package:care12/models/payment_models.dart';
 import 'package:care12/services/payment_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({Key? key}) : super(key: key);
@@ -1210,6 +1213,28 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           'would_recommend': wouldRecommend,
           'satisfied_with_service': satisfiedWithService,
         });
+
+        // Send thank you email notification
+        try {
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final notifyUri = Uri.parse('$apiBase/api/notify-feedback-submitted');
+          
+          await http.post(
+            notifyUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'appointmentId': appointmentId,
+              'patientEmail': appointment['patient_email'],
+              'patientName': appointment['full_name'],
+              'overallRating': overallRating,
+              'feedbackText': positiveFeedbackCtrl.text.trim().isEmpty 
+                  ? improvementSuggestionsCtrl.text.trim() 
+                  : positiveFeedbackCtrl.text.trim(),
+            }),
+          );
+        } catch (notifyError) {
+          print('[WARN] Could not send feedback notification: $notifyError');
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

@@ -571,6 +571,9 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               'nurseName': appt['nurse_name'],
               'postVisitRemarks': postVisitRemarks,
               'doctorName': doctorNameCtrl.text.trim().isEmpty ? null : doctorNameCtrl.text.trim(),
+              'doctorPhone': doctorPhoneCtrl.text.trim().isEmpty ? null : doctorPhoneCtrl.text.trim(),
+              'doctorSpecialization': doctorSpecializationCtrl.text.trim().isEmpty ? null : doctorSpecializationCtrl.text.trim(),
+              'doctorClinicAddress': doctorClinicAddressCtrl.text.trim().isEmpty ? null : doctorClinicAddressCtrl.text.trim(),
             }),
           );
         } catch (notifyError) {

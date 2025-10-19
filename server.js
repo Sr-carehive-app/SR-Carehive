@@ -1528,9 +1528,10 @@ app.post('/api/notify-pre-payment', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const finalAmount = (totalAmount / 2).toFixed(2);
+    // Calculate final amount correctly - it should be same as pre-visit (50% each)
+    const finalAmount = amount; // Since pre-visit is 50%, final is also 50%
 
-    console.log(`[INFO] Sending pre-payment notification for appointment #${appointmentId}`);
+    console.log(`[INFO] Sending pre-payment notification for appointment #${appointmentId}. Amount: ${amount}, Remaining: ${finalAmount}`);
 
     // Fetch full appointment details for admin notification
     let fullAppointment = null;
@@ -1870,7 +1871,10 @@ app.post('/api/notify-visit-completed', async (req, res) => {
       patientPhone,
       nurseName,
       postVisitRemarks,
-      doctorName
+      doctorName,
+      doctorPhone,
+      doctorSpecialization,
+      doctorClinicAddress
     } = req.body;
 
     if (!appointmentId || !patientEmail) {
@@ -1913,7 +1917,15 @@ app.post('/api/notify-visit-completed', async (req, res) => {
             <h3 style="margin-top: 0; color: #2e7d32;">📋 Visit Summary</h3>
             ${postVisitRemarks ? `<p style="margin: 5px 0;"><strong>Nurse Remarks:</strong><br/>${postVisitRemarks}</p>` : ''}
             ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
-            ${doctorName ? `<p style="margin: 5px 0;"><strong>Recommended Doctor:</strong> ${doctorName}</p>` : ''}
+            ${doctorName ? `
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #c8e6c9;">
+                <p style="margin: 5px 0; color: #2e7d32; font-weight: bold;">👨‍⚕️ Recommended Doctor:</p>
+                <p style="margin: 5px 0;"><strong>Name:</strong> ${doctorName}</p>
+                ${doctorPhone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${doctorPhone}</p>` : ''}
+                ${doctorSpecialization ? `<p style="margin: 5px 0;"><strong>Specialization:</strong> ${doctorSpecialization}</p>` : ''}
+                ${doctorClinicAddress ? `<p style="margin: 5px 0;"><strong>Clinic:</strong> ${doctorClinicAddress}</p>` : ''}
+              </div>
+            ` : ''}
           </div>
 
           <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
@@ -1975,6 +1987,103 @@ app.post('/api/notify-visit-completed', async (req, res) => {
     res.json({ success: true, message: 'Notifications sent successfully' });
   } catch (e) {
     console.error('[ERROR] notify-visit-completed:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// 6. Feedback Submission Notification
+app.post('/api/notify-feedback-submitted', async (req, res) => {
+  try {
+    const {
+      appointmentId,
+      patientEmail,
+      patientName,
+      overallRating,
+      feedbackText
+    } = req.body;
+
+    if (!appointmentId || !patientEmail) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[INFO] Sending feedback thank you email for appointment #${appointmentId}`);
+
+    // Patient thank you email
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">⭐ Thank You for Your Feedback!</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Valued Customer'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            We sincerely appreciate you taking the time to share your feedback about our service! 🙏
+          </p>
+
+          <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border-left: 4px solid #ffa726;">
+            <div style="font-size: 48px; margin-bottom: 10px;">
+              ${'⭐'.repeat(overallRating || 5)}
+            </div>
+            <p style="margin: 0; color: #e65100; font-size: 18px; font-weight: bold;">
+              Your Rating: ${overallRating || 'N/A'} / 5
+            </p>
+          </div>
+
+          <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
+            <h4 style="margin-top: 0; color: #2e7d32;">💚 Your feedback helps us improve!</h4>
+            <p style="color: #2e7d32; margin: 10px 0; line-height: 1.6;">
+              At SR CareHive, we're committed to providing the best possible care. Your honest feedback allows us to continuously improve our services and better serve you.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${FRONTEND_URL}/patient/appointments" 
+               style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Your Appointments
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+            SR CareHive | srcarehive@gmail.com | Thank you for choosing us!
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Admin notification email
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #ffa726;">⭐ New Feedback Received</h2>
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Appointment ID:</strong> #${appointmentId}</p>
+          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Overall Rating:</strong> ${'⭐'.repeat(overallRating || 0)} (${overallRating || 0}/5)</p>
+          ${feedbackText ? `<p><strong>Feedback:</strong><br/>${feedbackText}</p>` : ''}
+        </div>
+      </div>
+    `;
+
+    // Send emails
+    await sendEmail({
+      to: patientEmail,
+      subject: `⭐ Thank You for Your Feedback - Appointment #${appointmentId}`,
+      html: patientHtml
+    });
+
+    // Send to admin emails
+    await sendEmail({
+      to: ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'],
+      subject: `⭐ New Feedback - Appointment #${appointmentId}`,
+      html: adminHtml
+    });
+
+    console.log(`[SUCCESS] Feedback thank you emails sent for appointment #${appointmentId}`);
+
+    res.json({ success: true, message: 'Feedback notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-feedback-submitted:', e);
     res.status(500).json({ error: 'Failed to send notifications', details: e.message });
   }
 });
