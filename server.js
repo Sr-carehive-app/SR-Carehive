@@ -2163,14 +2163,36 @@ app.post('/send-password-reset-otp', async (req, res) => {
     }
 
     // Check if user exists in database
+    console.log(`[OTP-RESET] Querying database for email: ${normalizedEmail}`);
+    
     const { data: patient, error: patientError } = await supabase
       .from('patients')
       .select('email, full_name, user_id')
       .eq('email', normalizedEmail)
       .single();
 
+    console.log(`[OTP-RESET] Query result - Data:`, patient);
+    console.log(`[OTP-RESET] Query result - Error:`, patientError);
+
     if (patientError || !patient) {
-      console.log(`[OTP-RESET] User not found: ${normalizedEmail}`);
+      console.log(`[OTP-RESET] ❌ User not found: ${normalizedEmail}`);
+      console.log(`[OTP-RESET] Error details:`, patientError?.message, patientError?.code);
+      
+      // For debugging: Try case-insensitive search
+      console.log(`[OTP-RESET] Attempting case-insensitive search...`);
+      const { data: altPatient, error: altError } = await supabase
+        .from('patients')
+        .select('email, full_name, user_id')
+        .ilike('email', normalizedEmail);
+      
+      console.log(`[OTP-RESET] Case-insensitive result:`, altPatient);
+      
+      if (altPatient && altPatient.length > 0) {
+        console.log(`[OTP-RESET] ⚠️ Found user with case-insensitive match: ${altPatient[0].email}`);
+        console.log(`[OTP-RESET] Database has: "${altPatient[0].email}"`);
+        console.log(`[OTP-RESET] Frontend sent: "${normalizedEmail}"`);
+      }
+      
       // Return success to prevent email enumeration
       return res.json({ 
         success: true, 
