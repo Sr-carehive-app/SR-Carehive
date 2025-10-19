@@ -2162,7 +2162,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
       return res.status(500).json({ error: 'Database connection not available' });
     }
 
-    // Check if user exists in database
+    
     console.log(`[OTP-RESET] Querying database for email: ${normalizedEmail}`);
     
     const { data: patient, error: patientError } = await supabase
