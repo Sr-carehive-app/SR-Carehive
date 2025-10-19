@@ -71,29 +71,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
     
-    // Password strength validation
-    if (password.length < 8) {
+    // Simple password validation - minimum 6 characters
+    if (password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('❌ Password must be at least 8 characters long'),
+          content: Text('❌ Password must be at least 6 characters long'),
           backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    
-    // Check for uppercase, lowercase, number, special character
-    bool hasUppercase = password.contains(RegExp(r'[A-Z]'));
-    bool hasLowercase = password.contains(RegExp(r'[a-z]'));
-    bool hasDigit = password.contains(RegExp(r'[0-9]'));
-    bool hasSpecialChar = password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
-    
-    if (!hasUppercase || !hasLowercase || !hasDigit || !hasSpecialChar) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Password must contain:\n• Uppercase letter\n• Lowercase letter\n• Number\n• Special character'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
         ),
       );
       return;
@@ -308,11 +291,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '• At least 8 characters long\n'
-                  '• Contains uppercase letter (A-Z)\n'
-                  '• Contains lowercase letter (a-z)\n'
-                  '• Contains number (0-9)\n'
-                  '• Contains special character (!@#\$%^&*)',
+                  '• At least 6 characters long',
                   style: TextStyle(fontSize: 12, color: Colors.black87),
                 ),
               ],
