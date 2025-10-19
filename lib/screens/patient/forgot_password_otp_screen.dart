@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import '../../config/api_config.dart';
 
 class ForgotPasswordOTPScreen extends StatefulWidget {
   final String email;
@@ -111,9 +112,10 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
 
     try {
       print('🔐 Verifying OTP for: ${widget.email}');
+      print('🌐 Using API: ${ApiConfig.verifyPasswordResetOtp}');
       
       final response = await http.post(
-        Uri.parse('http://localhost:9090/verify-password-reset-otp'),
+        Uri.parse(ApiConfig.verifyPasswordResetOtp),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': widget.email,
@@ -197,9 +199,10 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
 
     try {
       print('🔐 Resetting password for: ${widget.email}');
+      print('🌐 Using API: ${ApiConfig.resetPasswordWithOtp}');
       
       final response = await http.post(
-        Uri.parse('http://localhost:9090/reset-password-with-otp'),
+        Uri.parse(ApiConfig.resetPasswordWithOtp),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': widget.email,
@@ -260,9 +263,10 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
 
     try {
       print('📧 Resending OTP to: ${widget.email}');
+      print('🌐 Using API: ${ApiConfig.sendPasswordResetOtp}');
       
       final response = await http.post(
-        Uri.parse('http://localhost:9090/send-password-reset-otp'),
+        Uri.parse(ApiConfig.sendPasswordResetOtp),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': widget.email,

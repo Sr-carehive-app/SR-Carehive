@@ -10,6 +10,7 @@ import 'screens/patient/schedule_nurse_screen.dart';
 import 'screens/patient/profile/profile_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:async';
+import 'config/api_config.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -39,6 +40,10 @@ class ErrorScreen extends StatelessWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
+  
+  // Log API configuration for debugging
+  ApiConfig.logConfig();
+  
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,

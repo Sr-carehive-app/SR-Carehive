@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../config/api_config.dart';
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({Key? key}) : super(key: key);
@@ -275,10 +276,11 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                       
                       try {
                         print('📧 Sending OTP to: $email');
+                        print('🌐 Using API: ${ApiConfig.sendPasswordResetOtp}');
                         
                         // Call backend to send OTP via Nodemailer
                         final response = await http.post(
-                          Uri.parse('http://localhost:9090/send-password-reset-otp'),
+                          Uri.parse(ApiConfig.sendPasswordResetOtp),
                           headers: {'Content-Type': 'application/json'},
                           body: json.encode({'email': email}),
                         );
