@@ -88,6 +88,12 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
     return _otpControllers.map((c) => c.text).join();
   }
 
+  void _showError(String message) {
+    setState(() {
+      _errorMessage = message;
+    });
+  }
+
   Future<void> _verifyOTP() async {
     final otp = _getOTP();
     
@@ -307,16 +313,7 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
       print('❌ Error resending OTP: $e');
       
       if (!mounted) return;
-      _showError('Network error. Please check your connection.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-      }
-    } catch (e) {
-      print('❌ Error resending OTP: $e');
+        _showError('Network error. Please check your connection.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

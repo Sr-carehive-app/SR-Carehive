@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Provider;
-import 'patient_login_screen.dart';
 import 'patient_dashboard_screen.dart';
+import 'patient_login_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -687,7 +687,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               );
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
+                MaterialPageRoute(builder: (_) => PatientLoginScreen()),
               );
             }
           }
@@ -706,7 +706,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               // Navigate to login screen
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
+                MaterialPageRoute(builder: (_) => PatientLoginScreen()),
               );
             }
           } else {
@@ -854,7 +854,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const PatientLoginScreen(),
+                  builder: (_) => PatientLoginScreen(),
                 ),
                 (route) => false,
               );
@@ -1241,3 +1241,5 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     );
   }
 }
+
+
