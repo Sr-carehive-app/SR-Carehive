@@ -672,28 +672,41 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
               // Feedback button for completed appointments
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _showFeedbackDialog(appointment['id'].toString(), appointment),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.amber,
-                    side: const BorderSide(color: Colors.amber),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              FutureBuilder<bool>(
+                future: _checkIfFeedbackExists(appointment['id'].toString()),
+                builder: (context, snapshot) {
+                  final feedbackExists = snapshot.data ?? false;
+                  
+                  return SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: feedbackExists 
+                          ? null 
+                          : () => _showFeedbackDialog(appointment['id'].toString(), appointment),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: feedbackExists ? Colors.grey : Colors.amber,
+                        side: BorderSide(color: feedbackExists ? Colors.grey : Colors.amber),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        backgroundColor: feedbackExists ? Colors.grey.shade100 : null,
+                      ),
+                      icon: Icon(
+                        feedbackExists ? Icons.check_circle : Icons.star, 
+                        color: feedbackExists ? Colors.grey : Colors.amber,
+                      ),
+                      label: Text(
+                        feedbackExists ? '✅ Feedback Submitted' : 'Share Your Feedback',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: feedbackExists ? Colors.grey : Colors.amber,
+                        ),
+                      ),
                     ),
-                  ),
-                  icon: const Icon(Icons.star, color: Colors.amber),
-                  label: const Text(
-                    'Share Your Feedback',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber,
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             ],
           ],
@@ -1007,6 +1020,23 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
+    }
+  }
+
+  // Check if feedback already exists for this appointment
+  Future<bool> _checkIfFeedbackExists(String appointmentId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final existingFeedback = await supabase
+          .from('appointment_feedback')
+          .select('id')
+          .eq('appointment_id', appointmentId)
+          .maybeSingle();
+      
+      return existingFeedback != null;
+    } catch (e) {
+      print('[ERROR] Failed to check feedback: $e');
+      return false;
     }
   }
 
