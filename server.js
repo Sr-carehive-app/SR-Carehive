@@ -191,8 +191,26 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
     console.warn('[EMAIL] Transport not configured. Skipping send to', to);
     return { skipped: true };
   }
-  const from = `${SENDER_NAME} <${SENDER_EMAIL}>`;
-  return mailer.sendMail({ from, to, subject, html, attachments });
+  
+  try {
+    const from = `${SENDER_NAME} <${SENDER_EMAIL}>`;
+    console.log(`[EMAIL] Attempting to send email to: ${to}`);
+    console.log(`[EMAIL] Subject: ${subject}`);
+    console.log(`[EMAIL] From: ${from}`);
+    
+    const info = await mailer.sendMail({ from, to, subject, html, attachments });
+    
+    console.log(`[EMAIL] ✅ Email sent successfully!`);
+    console.log(`[EMAIL] Message ID: ${info.messageId}`);
+    console.log(`[EMAIL] Response: ${info.response}`);
+    
+    return info;
+  } catch (error) {
+    console.error(`[EMAIL] ❌ Failed to send email to ${to}`);
+    console.error(`[EMAIL] Error: ${error.message}`);
+    console.error(`[EMAIL] Full error:`, error);
+    throw error; // Re-throw to handle it in calling function
+  }
 }
 
 async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
@@ -2272,22 +2290,39 @@ app.post('/send-password-reset-otp', async (req, res) => {
       return res.status(500).json({ error: 'Email service not configured' });
     }
 
-    await sendEmail({
-      to: normalizedEmail,
-      subject: '🔐 Your Password Reset OTP - SR CareHive',
-      html: otpEmailHtml
-    });
+    console.log(`[OTP-RESET] Attempting to send OTP email...`);
+    
+    try {
+      const emailResult = await sendEmail({
+        to: normalizedEmail,
+        subject: '🔐 Your Password Reset OTP - SR CareHive',
+        html: otpEmailHtml
+      });
 
-    console.log(`[SUCCESS] OTP email sent to: ${normalizedEmail}`);
+      if (emailResult.skipped) {
+        console.error('[ERROR] Email was skipped - mailer not configured');
+        return res.status(500).json({ error: 'Email service not available' });
+      }
 
-    res.json({ 
-      success: true, 
-      message: resend 
-        ? 'New OTP sent successfully! Check your email.' 
-        : 'OTP sent successfully to your email. Please check your inbox and spam folder.',
-      expiresIn: 600, // 10 minutes in seconds
-      canResendAfter: 120 // 2 minutes in seconds
-    });
+      console.log(`[SUCCESS] ✅ OTP email sent successfully to: ${normalizedEmail}`);
+
+      res.json({ 
+        success: true, 
+        message: resend 
+          ? 'New OTP sent successfully! Check your email.' 
+          : 'OTP sent successfully to your email. Please check your inbox and spam folder.',
+        expiresIn: 600, // 10 minutes in seconds
+        canResendAfter: 120 // 2 minutes in seconds
+      });
+    } catch (emailError) {
+      console.error('[ERROR] Failed to send OTP email:', emailError.message);
+      console.error('[ERROR] Full error:', emailError);
+      
+      return res.status(500).json({ 
+        error: 'Failed to send OTP email. Please try again later.',
+        details: emailError.message
+      });
+    }
 
   } catch (e) {
     console.error('[ERROR] send-password-reset-otp:', e);
