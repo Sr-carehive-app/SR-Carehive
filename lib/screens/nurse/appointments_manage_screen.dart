@@ -371,6 +371,237 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     }
   }
 
+  Future<void> _submitPostVisitConsultation(Map<String, dynamic> appt) async {
+    final postVisitRemarksCtrl = TextEditingController();
+    final doctorNameCtrl = TextEditingController();
+    final doctorPhoneCtrl = TextEditingController();
+    final doctorSpecializationCtrl = TextEditingController();
+    final doctorClinicAddressCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.medical_services, color: Colors.green.shade700),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Post-Visit Consultation',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Visit Completion',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: postVisitRemarksCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Post-Visit Remarks *',
+                  hintText: 'Describe the service provided, patient condition, etc.',
+                  border: OutlineInputBorder(),
+                  helperText: 'Required: Summary of your visit',
+                ),
+                maxLines: 4,
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 12),
+              const Text(
+                'Recommended Doctor (Optional)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: doctorNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Doctor Name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: doctorPhoneCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Doctor Phone',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: doctorSpecializationCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Specialization',
+                  hintText: 'e.g., Cardiologist, Pediatrician',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: doctorClinicAddressCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Clinic Address',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'This will enable final payment for the patient',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Submit & Enable Final Payment', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      final postVisitRemarks = postVisitRemarksCtrl.text.trim();
+      
+      // Validation
+      if (postVisitRemarks.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Post-visit remarks are required'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      try {
+        if (!mounted) return;
+        
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Submitting...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        
+        // Update in Supabase
+        final supabase = Supabase.instance.client;
+        await supabase.from('appointments').update({
+          'post_visit_remarks': postVisitRemarks,
+          'consulted_doctor_name': doctorNameCtrl.text.trim().isEmpty ? null : doctorNameCtrl.text.trim(),
+          'consulted_doctor_phone': doctorPhoneCtrl.text.trim().isEmpty ? null : doctorPhoneCtrl.text.trim(),
+          'consulted_doctor_specialization': doctorSpecializationCtrl.text.trim().isEmpty ? null : doctorSpecializationCtrl.text.trim(),
+          'consulted_doctor_clinic_address': doctorClinicAddressCtrl.text.trim().isEmpty ? null : doctorClinicAddressCtrl.text.trim(),
+          'visit_completed_at': DateTime.now().toIso8601String(),
+          'visit_completion_enabled': true, // Enable final payment
+        }).eq('id', appt['id']);
+        
+        // Send email/SMS notification to patient
+        try {
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final notifyUri = Uri.parse('$apiBase/api/notify-visit-completed');
+          
+          await http.post(
+            notifyUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'appointmentId': appt['id'],
+              'patientEmail': appt['patient_email'],
+              'patientName': appt['full_name'],
+              'patientPhone': appt['phone'],
+              'nurseName': appt['nurse_name'],
+              'postVisitRemarks': postVisitRemarks,
+              'doctorName': doctorNameCtrl.text.trim().isEmpty ? null : doctorNameCtrl.text.trim(),
+            }),
+          );
+        } catch (notifyError) {
+          print('[WARN] Could not send visit completion notification: $notifyError');
+        }
+        
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Visit completed! Final payment enabled for patient.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        _load(); // Reload appointments
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading if still open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _viewDetails(Map<String, dynamic> a) async {
     String fmtDate() { final d = DateTime.tryParse(a['date'] ?? ''); return d != null ? DateFormat('MMM dd, yyyy').format(d) : 'N/A'; }
     String fmtVal(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '-' : v.toString();
@@ -669,6 +900,21 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             ),
                             label: const Text('Set Total Amount', style: TextStyle(color:Colors.white, fontWeight: FontWeight.bold)),
                             onPressed: () => _setAmountDialog(a),
+                          )),
+                          const SizedBox(width:8),
+                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                        ]),
+                      ] else if(status.toLowerCase()=='pre_paid' && (a['visit_completion_enabled'] != true))...[
+                        // Show "Complete Visit" button for pre-paid appointments not yet completed
+                        Row(children:[
+                          Expanded(child: ElevatedButton.icon(
+                            icon: const Icon(Icons.medical_services, color: Colors.white),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            label: const Text('Complete Visit & Enable Final Payment', style: TextStyle(color:Colors.white, fontWeight: FontWeight.bold)),
+                            onPressed: () => _submitPostVisitConsultation(a),
                           )),
                           const SizedBox(width:8),
                           IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))

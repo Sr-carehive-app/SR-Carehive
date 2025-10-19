@@ -529,6 +529,17 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
+    // Validate password length (minimum 6 characters)
+    if (!_isGoogleUser && passwordController.text.trim().length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 6 characters long'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
     // Validate date format
     try {
       DateFormat('yyyy-MM-dd').parseStrict(dobController.text.trim());
@@ -878,7 +889,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             const SizedBox(height: 20),
             if (!_isGoogleUser) ...[
               buildTextField(
-                label: 'Password',
+                label: 'Password (Should be 6 characters)',
                 hint: '******',
                 controller: passwordController,
                 obscure: _obscureText,

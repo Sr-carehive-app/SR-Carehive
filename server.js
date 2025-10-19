@@ -331,7 +331,8 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
               ${type === 'NEW_APPOINTMENT' ? '⚡ Action Required: Review and assign nurse' :
                 type === 'REGISTRATION_PAYMENT' ? '✅ Patient paid registration fee - Review appointment' :
                 type === 'PRE_VISIT_PAYMENT' ? '✅ Patient ready for appointment - Proceed with visit' :
-                type === 'FINAL_PAYMENT' ? '🎉 Service completed - All payments received!' : ''}
+                type === 'FINAL_PAYMENT' ? '🎉 Service completed - All payments received!' :
+                type === 'VISIT_COMPLETED' ? '✅ Visit completed - Final payment enabled for patient' : ''}
             </p>
           </div>
 
@@ -1855,6 +1856,125 @@ app.post('/api/notify-final-payment', async (req, res) => {
     res.json({ success: true, message: 'Notifications sent successfully' });
   } catch (e) {
     console.error('[ERROR] notify-final-payment:', e);
+    res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// 5. Visit Completion Notification (enables final payment)
+app.post('/api/notify-visit-completed', async (req, res) => {
+  try {
+    const { 
+      appointmentId, 
+      patientEmail, 
+      patientName,
+      patientPhone,
+      nurseName,
+      postVisitRemarks,
+      doctorName
+    } = req.body;
+
+    if (!appointmentId || !patientEmail) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[INFO] Sending visit completion notification for appointment #${appointmentId}`);
+
+    // Fetch full appointment details
+    let fullAppointment = null;
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      fullAppointment = data;
+    } catch (err) {
+      console.warn('[WARN] Could not fetch full appointment:', err.message);
+    }
+
+    const totalAmount = fullAppointment?.total_amount || 0;
+    const finalAmount = (totalAmount / 2).toFixed(2);
+
+    // Patient email
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Visit Completed!</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          
+          <p style="color: #555; line-height: 1.6;">
+            Your nurse has completed the visit and submitted the post-visit consultation summary.
+          </p>
+
+          <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
+            <h3 style="margin-top: 0; color: #2e7d32;">📋 Visit Summary</h3>
+            ${postVisitRemarks ? `<p style="margin: 5px 0;"><strong>Nurse Remarks:</strong><br/>${postVisitRemarks}</p>` : ''}
+            ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
+            ${doctorName ? `<p style="margin: 5px 0;"><strong>Recommended Doctor:</strong> ${doctorName}</p>` : ''}
+          </div>
+
+          <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
+            <h4 style="margin-top: 0; color: #e65100;">💳 Final Payment Now Available</h4>
+            <p style="color: #e65100; margin: 10px 0;">
+              You can now complete your final payment of <strong>₹${finalAmount}</strong> to complete this appointment.
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${FRONTEND_URL}/patient/appointments" 
+               style="display: inline-block; background: #4caf50; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+              Pay Final Amount (₹${finalAmount})
+            </a>
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            SR CareHive | srcarehive@gmail.com
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Send email to patient
+    await sendEmail({ 
+      to: patientEmail, 
+      subject: `✅ Visit Completed - Final Payment Available - Appointment #${appointmentId}`, 
+      html: patientHtml 
+    });
+
+    // Send SMS
+    if (twilioClient && patientPhone) {
+      try {
+        let phone = patientPhone.trim();
+        if (!phone.startsWith('+')) phone = `+91${phone}`;
+        
+        await twilioClient.messages.create({
+          body: `CareHive: Visit completed! You can now pay the final amount ₹${finalAmount} to complete your appointment #${appointmentId}. Thank you for choosing us!`,
+          from: TWILIO_PHONE_NUMBER,
+          to: phone
+        });
+        console.log(`[SUCCESS] Visit completion SMS sent to ${phone.slice(0,6)}***`);
+      } catch (smsErr) {
+        console.error('[ERROR] SMS failed:', smsErr.message);
+      }
+    }
+    
+    // Send admin notification
+    if (fullAppointment) {
+      await sendAdminNotification({
+        appointment: fullAppointment,
+        type: 'VISIT_COMPLETED',
+        paymentDetails: null
+      });
+    }
+    
+    console.log(`[SUCCESS] Visit completion notifications sent for appointment #${appointmentId}`);
+
+    res.json({ success: true, message: 'Notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-visit-completed:', e);
     res.status(500).json({ error: 'Failed to send notifications', details: e.message });
   }
 });

@@ -322,6 +322,57 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                     _buildPaymentSection(appointment),
                                   ],
                                   
+                                  // Post-Visit Consultation Details (shown after visit completed by nurse)
+                                  if (appointment['visit_completion_enabled'] == true && 
+                                      (appointment['post_visit_remarks'] != null || appointment['consulted_doctor_name'] != null)) ...[
+                                    const Divider(height: 24),
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.green.shade200),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(Icons.medical_services, color: Colors.green.shade700),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                '📋 Post-Visit Summary',
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                              ),
+                                            ],
+                                          ),
+                                          if (appointment['post_visit_remarks'] != null) ...[
+                                            const SizedBox(height: 12),
+                                            const Text('Nurse Remarks:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const SizedBox(height: 4),
+                                            Text(appointment['post_visit_remarks']),
+                                          ],
+                                          if (appointment['consulted_doctor_name'] != null) ...[
+                                            const SizedBox(height: 12),
+                                            const Divider(),
+                                            const Text('🩺 Recommended Doctor', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const SizedBox(height: 8),
+                                            if (appointment['consulted_doctor_name'] != null)
+                                              Text('Name: ${appointment['consulted_doctor_name']}'),
+                                            if (appointment['consulted_doctor_phone'] != null)
+                                              Text('Phone: ${appointment['consulted_doctor_phone']}'),
+                                            if (appointment['consulted_doctor_specialization'] != null)
+                                              Text('Specialization: ${appointment['consulted_doctor_specialization']}'),
+                                            if (appointment['consulted_doctor_clinic_address'] != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text('Clinic: ${appointment['consulted_doctor_clinic_address']}'),
+                                            ],
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  
                                   // Nurse assignment details (shown when approved)
                                   if ((appointment['status'] ?? '').toString().toLowerCase() == 'approved') ...[
                                     const Divider(height: 24),
@@ -361,7 +412,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     return status == 'approved' || 
            status == 'booked' || 
            status == 'amount_set' || 
-           status == 'pre_paid';
+           status == 'pre_paid' ||
+           status == 'completed';
   }
 
   Widget _buildPaymentSection(Map<String, dynamic> appointment) {
@@ -526,8 +578,36 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               appointment['final_payment_id'],
             ),
 
-            // Final payment button
-            if (prePaid && !finalPaid) ...[
+            // Show visit completion status if pre-paid but visit not completed
+            if (prePaid && !finalPaid && (appointment['visit_completion_enabled'] != true)) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Nurse will enable final payment after completing your visit',
+                        style: TextStyle(
+                          color: Colors.blue.shade900,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Final payment button - only show when visit completion is enabled
+            if (prePaid && !finalPaid && (appointment['visit_completion_enabled'] == true)) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -585,6 +665,31 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              // Feedback button for completed appointments
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showFeedbackDialog(appointment['id'].toString(), appointment),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.amber,
+                    side: const BorderSide(color: Colors.amber),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.star, color: Colors.amber),
+                  label: const Text(
+                    'Share Your Feedback',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -883,6 +988,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+      
+      // Show feedback dialog after short delay
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        _showFeedbackDialog(appointmentId, appointment);
+      }
     } catch (e) {
       // Close loading dialog
       navigator.pop();
@@ -894,5 +1005,259 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         ),
       );
     }
+  }
+
+  // Show feedback dialog after final payment
+  Future<void> _showFeedbackDialog(String appointmentId, Map<String, dynamic> appointment) async {
+    // Check if feedback already exists
+    try {
+      final supabase = Supabase.instance.client;
+      final existingFeedback = await supabase
+          .from('appointment_feedback')
+          .select('id')
+          .eq('appointment_id', appointmentId)
+          .maybeSingle();
+      
+      if (existingFeedback != null) {
+        // Feedback already submitted
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ You have already submitted feedback for this appointment'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      print('[ERROR] Failed to check existing feedback: $e');
+      // Continue to show dialog anyway
+    }
+    
+    int overallRating = 0;
+    int nurseProfessionalismRating = 0;
+    int serviceQualityRating = 0;
+    int communicationRating = 0;
+    int punctualityRating = 0;
+    bool wouldRecommend = false;
+    bool satisfiedWithService = false;
+    
+    final positiveFeedbackCtrl = TextEditingController();
+    final improvementSuggestionsCtrl = TextEditingController();
+    final additionalCommentsCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Column(
+            children: [
+              const Icon(Icons.star, color: Colors.amber, size: 48),
+              const SizedBox(height: 8),
+              const Text(
+                'Rate Your Experience',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Help us improve our service',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.normal),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Overall Rating
+                _buildRatingRow('Overall Experience', overallRating, (rating) {
+                  setState(() => overallRating = rating);
+                }),
+                const Divider(height: 24),
+                
+                // Nurse Professionalism
+                _buildRatingRow('Nurse Professionalism', nurseProfessionalismRating, (rating) {
+                  setState(() => nurseProfessionalismRating = rating);
+                }),
+                const Divider(height: 24),
+                
+                // Service Quality
+                _buildRatingRow('Service Quality', serviceQualityRating, (rating) {
+                  setState(() => serviceQualityRating = rating);
+                }),
+                const Divider(height: 24),
+                
+                // Communication
+                _buildRatingRow('Communication', communicationRating, (rating) {
+                  setState(() => communicationRating = rating);
+                }),
+                const Divider(height: 24),
+                
+                // Punctuality
+                _buildRatingRow('Punctuality', punctualityRating, (rating) {
+                  setState(() => punctualityRating = rating);
+                }),
+                const Divider(height: 24),
+                
+                // Positive Feedback
+                TextField(
+                  controller: positiveFeedbackCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'What did you like?',
+                    hintText: 'Tell us what you appreciated...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                
+                // Improvement Suggestions
+                TextField(
+                  controller: improvementSuggestionsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Any suggestions for improvement?',
+                    hintText: 'How can we serve you better...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                
+                // Additional Comments
+                TextField(
+                  controller: additionalCommentsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Additional Comments',
+                    hintText: 'Any other feedback...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                
+                // Checkboxes
+                CheckboxListTile(
+                  title: const Text('I would recommend this service'),
+                  value: wouldRecommend,
+                  onChanged: (value) {
+                    setState(() => wouldRecommend = value ?? false);
+                  },
+                ),
+                CheckboxListTile(
+                  title: const Text('I am satisfied with the service'),
+                  value: satisfiedWithService,
+                  onChanged: (value) {
+                    setState(() => satisfiedWithService = value ?? false);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Skip'),
+            ),
+            ElevatedButton(
+              onPressed: overallRating == 0 
+                ? null
+                : () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Submit Feedback', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true && overallRating > 0) {
+      try {
+        final supabase = Supabase.instance.client;
+        final user = supabase.auth.currentUser;
+        
+        // Get patient ID
+        String? patientId;
+        if (user != null) {
+          try {
+            final patient = await supabase
+                .from('patients')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            patientId = patient?['id']?.toString();
+          } catch (_) {}
+        }
+
+        // Submit feedback
+        await supabase.from('appointment_feedback').insert({
+          'appointment_id': appointmentId,
+          'patient_id': patientId,
+          'overall_rating': overallRating,
+          'nurse_professionalism_rating': nurseProfessionalismRating,
+          'service_quality_rating': serviceQualityRating,
+          'communication_rating': communicationRating,
+          'punctuality_rating': punctualityRating,
+          'positive_feedback': positiveFeedbackCtrl.text.trim().isEmpty ? null : positiveFeedbackCtrl.text.trim(),
+          'improvement_suggestions': improvementSuggestionsCtrl.text.trim().isEmpty ? null : improvementSuggestionsCtrl.text.trim(),
+          'additional_comments': additionalCommentsCtrl.text.trim().isEmpty ? null : additionalCommentsCtrl.text.trim(),
+          'would_recommend': wouldRecommend,
+          'satisfied_with_service': satisfiedWithService,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Thank you for your feedback!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed to submit feedback: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildRatingRow(String label, int rating, Function(int) onRatingChange) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: List.generate(5, (index) {
+            return GestureDetector(
+              onTap: () => onRatingChange(index + 1),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(
+                  index < rating ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 32,
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
   }
 } 
