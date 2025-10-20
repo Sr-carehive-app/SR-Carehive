@@ -1377,9 +1377,15 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               'patientEmail': appointment['patient_email'],
               'patientName': appointment['full_name'],
               'overallRating': overallRating,
-              'feedbackText': positiveFeedbackCtrl.text.trim().isEmpty 
-                  ? improvementSuggestionsCtrl.text.trim() 
-                  : positiveFeedbackCtrl.text.trim(),
+              'nurseProfessionalismRating': nurseProfessionalismRating,
+              'serviceQualityRating': serviceQualityRating,
+              'communicationRating': communicationRating,
+              'punctualityRating': punctualityRating,
+              'positiveFeedback': positiveFeedbackCtrl.text.trim(),
+              'improvementSuggestions': improvementSuggestionsCtrl.text.trim(),
+              'additionalComments': additionalCommentsCtrl.text.trim(),
+              'wouldRecommend': wouldRecommend,
+              'satisfiedWithService': satisfiedWithService,
             }),
           );
         } catch (notifyError) {

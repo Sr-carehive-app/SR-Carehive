@@ -2009,12 +2009,15 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
       patientEmail,
       patientName,
       overallRating,
-      feedbackText,
-      serviceType,
-      visitDate,
-      visitTime,
-      nurseName,
-      additionalComments
+      nurseProfessionalismRating,
+      serviceQualityRating,
+      communicationRating,
+      punctualityRating,
+      positiveFeedback,
+      improvementSuggestions,
+      additionalComments,
+      wouldRecommend,
+      satisfiedWithService
     } = req.body;
 
     if (!appointmentId || !patientEmail) {
@@ -2024,7 +2027,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
     console.log(`[INFO] Sending feedback thank you email for appointment #${appointmentId}`);
 
     // healthcare seeker thank you email
-    const patientHtml = `
+  const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
           <h1 style="color: white; margin: 0; font-size: 28px;">Thank You for Your Feedback!</h1>
@@ -2039,18 +2042,23 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
               ${'⭐'.repeat(overallRating || 5)}
             </div>
             <p style="margin: 0; color: #e65100; font-size: 18px; font-weight: bold;">
-              Your Rating: ${overallRating || 'N/A'} / 5
+              Your Overall Rating: ${overallRating || 'N/A'} / 5
             </p>
-            ${feedbackText ? `<p style='margin: 10px 0 0 0; color: #333;'><strong>Your Feedback:</strong><br/>${feedbackText}</p>` : ''}
+            <div style="margin-top: 10px; text-align: left; color: #333;">
+              <p><strong>Professionalism:</strong> ${nurseProfessionalismRating || 'N/A'} / 5</p>
+              <p><strong>Service Quality:</strong> ${serviceQualityRating || 'N/A'} / 5</p>
+              <p><strong>Communication:</strong> ${communicationRating || 'N/A'} / 5</p>
+              <p><strong>Punctuality:</strong> ${punctualityRating || 'N/A'} / 5</p>
+              <p><strong>Would Recommend:</strong> ${wouldRecommend ? 'Yes' : 'No'}</p>
+              <p><strong>Satisfied with Service:</strong> ${satisfiedWithService ? 'Yes' : 'No'}</p>
+              ${positiveFeedback ? `<p><strong>What you liked:</strong> ${positiveFeedback}</p>` : ''}
+              ${improvementSuggestions ? `<p><strong>Suggestions for Improvement:</strong> ${improvementSuggestions}</p>` : ''}
+              ${additionalComments ? `<p><strong>Additional Comments:</strong> ${additionalComments}</p>` : ''}
+            </div>
           </div>
           <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h4 style="margin-top: 0;">Feedback Details</h4>
             <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
-            ${serviceType ? `<p style='margin: 5px 0;'><strong>Service Type:</strong> ${serviceType}</p>` : ''}
-            ${visitDate ? `<p style='margin: 5px 0;'><strong>Date:</strong> ${visitDate}</p>` : ''}
-            ${visitTime ? `<p style='margin: 5px 0;'><strong>Time:</strong> ${visitTime}</p>` : ''}
-            ${nurseName ? `<p style='margin: 5px 0;'><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
-            ${additionalComments ? `<p style='margin: 5px 0;'><strong>Additional Comments:</strong> ${additionalComments}</p>` : ''}
           </div>
           <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
             <h4 style="margin-top: 0; color: #2e7d32;">Your feedback helps us improve!</h4>
@@ -2079,11 +2087,14 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Overall Rating:</strong> ${'⭐'.repeat(overallRating || 0)} (${overallRating || 0}/5)</p>
-          ${feedbackText ? `<p><strong>Feedback:</strong><br/>${feedbackText}</p>` : ''}
-          ${serviceType ? `<p><strong>Service Type:</strong> ${serviceType}</p>` : ''}
-          ${visitDate ? `<p><strong>Date:</strong> ${visitDate}</p>` : ''}
-          ${visitTime ? `<p><strong>Time:</strong> ${visitTime}</p>` : ''}
-          ${nurseName ? `<p><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
+          <p><strong>Professionalism:</strong> ${nurseProfessionalismRating || 'N/A'} / 5</p>
+          <p><strong>Service Quality:</strong> ${serviceQualityRating || 'N/A'} / 5</p>
+          <p><strong>Communication:</strong> ${communicationRating || 'N/A'} / 5</p>
+          <p><strong>Punctuality:</strong> ${punctualityRating || 'N/A'} / 5</p>
+          <p><strong>Would Recommend:</strong> ${wouldRecommend ? 'Yes' : 'No'}</p>
+          <p><strong>Satisfied with Service:</strong> ${satisfiedWithService ? 'Yes' : 'No'}</p>
+          ${positiveFeedback ? `<p><strong>What they liked:</strong> ${positiveFeedback}</p>` : ''}
+          ${improvementSuggestions ? `<p><strong>Suggestions for Improvement:</strong> ${improvementSuggestions}</p>` : ''}
           ${additionalComments ? `<p><strong>Additional Comments:</strong> ${additionalComments}</p>` : ''}
         </div>
       </div>
