@@ -3,6 +3,38 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class NurseApiService {
+  // Send OTP for nurse login
+  static Future<bool> sendOtp({required String email}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/api/nurse/send-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (resp.statusCode == 200) return true;
+    return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
+  }
+
+  // Verify OTP for nurse login
+  static Future<dynamic> verifyOtp({required String email, required String otp}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/api/nurse/verify-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'otp': otp}),
+    );
+    if (resp.statusCode == 200) return true;
+    return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
+  }
+
+  // Resend OTP for nurse login
+  static Future<bool> resendOtp({required String email}) async {
+    final resp = await http.post(
+      Uri.parse('$_base/api/nurse/resend-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (resp.statusCode == 200) return true;
+    return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
+  }
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
   static String? _token; // in-memory bearer token
 

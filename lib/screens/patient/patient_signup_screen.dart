@@ -946,7 +946,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             ],
             buildTextField(
               label: 'Email',
-              hint: 'example@example.com',
+              hint: 'example@domain.com',
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
               enabled: !_isGoogleUser,

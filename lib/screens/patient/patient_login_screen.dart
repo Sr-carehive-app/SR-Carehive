@@ -412,7 +412,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               enableSuggestions: false,
               enableInteractiveSelection: true,
               decoration: InputDecoration(
-                hintText: 'example@example.com',
+                hintText: 'example@domain.com',
                 filled: true,
                 fillColor: const Color(0xFFEDEFFF),
                 border: OutlineInputBorder(
