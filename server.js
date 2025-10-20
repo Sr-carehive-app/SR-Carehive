@@ -390,7 +390,7 @@ async function sendApprovalEmail(appointment) {
           <li><b>Comments:</b> ${appointment.nurse_comments || '-'}</li>
           <li><b>Available:</b> ${appointment.nurse_available ? 'Yes' : 'No'}</li>
         </ul>
-        <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} • ${appointment.duration_hours ?? '-'} hr</p>
+        <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} •</p>
         <p>— Serechi By SR CareHive</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
