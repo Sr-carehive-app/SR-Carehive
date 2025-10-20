@@ -910,7 +910,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             // First Name
             buildTextField(
               label: 'First Name *',
-              hint: 'John',
+              hint: 'Nitin',
               controller: firstNameController,
               keyboardType: TextInputType.name,
             ),

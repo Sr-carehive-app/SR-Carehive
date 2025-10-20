@@ -910,26 +910,26 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                           IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
                       ] else ...[
-                        // Original approve/reject buttons for pending
+                        // Approve/Reject buttons disabled for amount_set status
                         Row(children:[
                           Expanded(
-  child: OutlinedButton.icon(
-    icon: const Icon(Icons.close, color: Colors.red),
-    label: const Text('Reject', style: TextStyle(color:Colors.red)),
-    onPressed: status.toLowerCase()=='completed' ? null : (status.toLowerCase()=='rejected' ? null : () => _rejectDialog(a)),
-  ),
-),
-const SizedBox(width:8),
-Expanded(
-  child: ElevatedButton.icon(
-    icon: const Icon(Icons.check_circle, color: Colors.white),
-    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-    label: const Text('Approve', style: TextStyle(color:Colors.white)),
-    onPressed: status.toLowerCase()=='completed' ? null : (status.toLowerCase()=='approved' ? null : () => _approveDialog(a)),
-  ),
-),
-const SizedBox(width:8),
-IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.close, color: Colors.red),
+                              label: const Text('Reject', style: TextStyle(color:Colors.red)),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='rejected' || status.toLowerCase()=='amount_set') ? null : () => _rejectDialog(a),
+                            ),
+                          ),
+                          const SizedBox(width:8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.check_circle, color: Colors.white),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                              label: const Text('Approve', style: TextStyle(color:Colors.white)),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='approved' || status.toLowerCase()=='amount_set') ? null : () => _approveDialog(a),
+                            ),
+                          ),
+                          const SizedBox(width:8),
+                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
                       ]
                     ])));
