@@ -76,7 +76,7 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_SECURE = (process.env.SMTP_SECURE || '').toLowerCase() === 'true';
 const SENDER_EMAIL = (process.env.SENDER_EMAIL || 'srcarehive@gmail.com').trim();
-const SENDER_NAME = (process.env.SENDER_NAME || 'Care Hive').trim();
+const SENDER_NAME = (process.env.SENDER_NAME || 'SR CareHive').trim();
 
 // Admin/Nurse emails that receive all notifications
 const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
@@ -226,7 +226,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
     const attach = [{ filename: `receipt_${orderId}.pdf`, content: pdf }];
 
     const patientEmail = appointment?.patient_email;
-    const subject = 'Your Care Hive payment confirmation';
+    const subject = 'Your Serechi payment confirmation';
     const html = `
       <div>
         <p>Hi ${appointment?.full_name || 'Patient'},</p>
@@ -239,7 +239,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
           <li><b>Duration:</b> ${appointment?.duration_hours ?? '-'} hr</li>
         </ul>
         <p>Receipt attached.</p>
-        <p>— Care Hive</p>
+        <p>— SR CareHive</p>
       </div>`;
 
     if (patientEmail) await sendEmail({ to: patientEmail, subject, html, attachments: attach });
@@ -321,7 +321,7 @@ async function sendRejectionEmail(appointment) {
         <p>Hi ${appointment.full_name || 'Patient'},</p>
         <p>We’re sorry to inform you that your nurse request was <b>rejected</b> at this time.</p>
         <p><b>Reason:</b> ${appointment.rejection_reason || '-'}</p>
-        <p>— Care Hive</p>
+        <p>— Serechi By SR CareHive</p>
       </div>`;
     await sendEmail({ to, subject: 'Your nurse appointment was rejected', html, attachments });
   } catch (e) {
@@ -854,22 +854,28 @@ app.post('/api/nurse/appointments/archive-past', async (req, res) => {
     for (const a of (all || [])) {
       if (!a.date) continue;
       try {
-        const d = new Date(a.date + 'T00:00:00Z');
-        let hour = 0, minute = 0;
-        if (a.time) {
-          const m = String(a.time).match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        // Compare strictly in IST by string/date components to avoid TZ drift
+        const dateStr = String(a.date).slice(0,10);
+        if (dateStr < todayIstStr) { toArchive.push(a); continue; }
+        if (dateStr === todayIstStr) {
+          // Parse time like '6:00 PM' as 24h local values
+          let hour = 0, minute = 0;
+          const m = String(a.time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
           if (m) {
-            hour = parseInt(m[1]);
-            minute = parseInt(m[2]);
+            hour = parseInt(m[1], 10);
+            minute = parseInt(m[2], 10);
             const ap = m[3].toUpperCase();
             if (ap === 'PM' && hour < 12) hour += 12;
             if (ap === 'AM' && hour === 12) hour = 0;
           }
+          const nowHour = nowIst.getUTCHours() + 5; // 5h from UTC to IST hours; adjust minutes below
+          const nowMinute = nowIst.getUTCMinutes() + 30; // +30 mins
+          const adjHour = (nowHour + Math.floor(nowMinute / 60)) % 24;
+          const adjMinute = nowMinute % 60;
+          if (hour < adjHour || (hour === adjHour && minute < adjMinute)) {
+            toArchive.push(a);
+          }
         }
-        const istDateTime = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour, minute));
-        const istMs = istDateTime.getTime() + (5.5 * 60 * 60 * 1000);
-        const finalIst = new Date(istMs);
-        if (finalIst < nowIst) toArchive.push(a);
       } catch {}
     }
     if (!toArchive.length) return res.json({ archived: 0 });
@@ -983,8 +989,8 @@ app.get('/api/email/test', async (req, res) => {
     if (!to) return res.status(400).json({ error: 'Provide ?to=email@example.com' });
     const info = await sendEmail({
       to,
-      subject: 'Care Hive email test',
-      html: '<p>This is a test email from Care Hive server. SMTP is working ✅</p>'
+      subject: 'Serechi By SR CareHive email test',
+      html: '<p>This is a test email from Serechi By SR CareHive server. SMTP is working ✅</p>'
     });
     res.json({ ok: true, to, messageId: info?.messageId || null });
   } catch (e) {

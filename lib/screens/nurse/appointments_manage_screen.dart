@@ -774,9 +774,20 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   }
 
   bool _isPast(Map a){
-    final dt=_parseIst(a); if(dt==null) return false;
-    final nowLocal=DateTime.now();
-    return dt.isBefore(nowLocal);
+    // Compare using date strings first to avoid timezone ambiguity
+    final dateStr = (a['date'] ?? '').toString();
+    if (dateStr.isEmpty) return false;
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    if (dateStr.compareTo(todayStr) < 0) return true; // past date
+    if (dateStr.compareTo(todayStr) > 0) return false; // future date
+    // Same day: compare time in minutes; if time missing, consider it NOT past yet
+    final timeStr = (a['time'] ?? '').toString().trim();
+    if (timeStr.isEmpty) return false; // time unknown on same day -> not past
+    int apptMins = 0;
+    try { final t = DateFormat('h:mm a').parseStrict(timeStr); apptMins = t.hour * 60 + t.minute; } catch(_){ return false; }
+    final now = DateTime.now();
+    final nowMins = now.hour * 60 + now.minute;
+    return apptMins < nowMins;
   }
 
   @override
@@ -971,6 +982,8 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         final want=_historySub.toLowerCase();
         base = base.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
       }
+      // Safety filter: ensure only truly past items appear in History
+      base = base.where((e) => _isPast(e)).toList();
       base.sort((a,b){
         DateTime? ad=_parseIst(a); DateTime? bd=_parseIst(b);
         ad ??= DateTime.tryParse(a['date']??'') ?? DateTime.fromMillisecondsSinceEpoch(0);
