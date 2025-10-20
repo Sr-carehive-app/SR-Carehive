@@ -757,10 +757,27 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     }
   }
 
+  // Combine stored date ('yyyy-MM-dd') and time ('h:mm a') as local time.
+  // Avoid UTC conversion to prevent shifting to previous day, which incorrectly
+  // classifies upcoming appointments as history.
   DateTime? _parseIst(Map a) {
-    final dateStr = (a['date'] ?? '').toString(); if (dateStr.isEmpty) return null; DateTime? base = DateTime.tryParse(dateStr); if (base == null) return null; base = base.toUtc(); final timeStr = (a['time'] ?? '').toString().trim(); int hour=0,minute=0; if (timeStr.isNotEmpty) { try { final t = DateFormat('h:mm a').parseStrict(timeStr); hour = t.hour; minute = t.minute; } catch(_){} } return DateTime(base.year, base.month, base.day, hour, minute).add(const Duration(hours:5, minutes:30)); }
+    final dateStr = (a['date'] ?? '').toString();
+    if (dateStr.isEmpty) return null;
+    final base = DateTime.tryParse(dateStr); // local midnight
+    if (base == null) return null;
+    final timeStr = (a['time'] ?? '').toString().trim();
+    int hour=0, minute=0;
+    if (timeStr.isNotEmpty) {
+      try { final t = DateFormat('h:mm a').parseStrict(timeStr); hour = t.hour; minute = t.minute; } catch(_){}
+    }
+    return DateTime(base.year, base.month, base.day, hour, minute);
+  }
 
-  bool _isPast(Map a){ final dt=_parseIst(a); if(dt==null) return false; final nowIst=DateTime.now().toUtc().add(const Duration(hours:5, minutes:30)); return dt.isBefore(nowIst); }
+  bool _isPast(Map a){
+    final dt=_parseIst(a); if(dt==null) return false;
+    final nowLocal=DateTime.now();
+    return dt.isBefore(nowLocal);
+  }
 
   @override
   Widget build(BuildContext context) {
