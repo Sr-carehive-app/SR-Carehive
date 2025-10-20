@@ -947,7 +947,6 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   }
 
   Widget _filtersBar(){
-  final options=['All','Pending','Approved','Rejected'];
   final options=['All','Pending','Approved','Rejected','Completed'];
   return Wrap(
     spacing:8,
