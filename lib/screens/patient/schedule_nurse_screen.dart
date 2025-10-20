@@ -23,6 +23,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   final TextEditingController ageController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
+  final TextEditingController patientEmailController = TextEditingController();
   final TextEditingController emergencyContactController = TextEditingController();
   final TextEditingController problemController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
@@ -85,6 +86,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     ageController.dispose();
     phoneController.dispose();
     addressController.dispose();
+    patientEmailController.dispose();
     emergencyContactController.dispose();
     problemController.dispose();
     aadharController.dispose();
@@ -171,6 +173,15 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     }
     if (int.tryParse(ageController.text.trim()) == null) {
       _showErrorSnackBar('Please enter a valid age');
+      return false;
+    }
+    // Email required and valid
+    if (patientEmailController.text.trim().isEmpty) {
+      _showErrorSnackBar('Please enter your email');
+      return false;
+    }
+        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(patientEmailController.text.trim())) {
+      _showErrorSnackBar('Please enter a valid email');
       return false;
     }
     if (phoneController.text.trim().isEmpty) {
@@ -361,7 +372,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'time': selectedTime,
         'problem': problemController.text.trim(),
         'patient_type': selectedPatient,
-        'patient_email': (user?.email ?? '').trim(),
+        'patient_email': patientEmailController.text.trim(),
         'status': 'pending', // Admin will approve/reject
         'created_at': DateTime.now().toIso8601String(),
       };
@@ -687,6 +698,9 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           buildTextField('Full Name', controller: fullNameController),
           const SizedBox(height: 16),
           buildTextField('Age', controller: ageController, keyboardType: TextInputType.number),
+          const SizedBox(height: 16),
+          // Patient Email (required)
+          buildTextField('Email', controller: patientEmailController, keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 16),
           buildPhoneField('Phone Number', phoneController, selectedCountryCode, (value) {
             setState(() => selectedCountryCode = value!);

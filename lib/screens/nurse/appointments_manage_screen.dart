@@ -635,6 +635,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               const Divider(height: 24),
               const Text('📞 Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
+              _kv('Email', fmtVal(a['patient_email'])),
               _kv('Phone', fmtVal(a['phone'])),
               _kv('Address', fmtVal(a['address'])),
               _kv('Emergency Contact', fmtVal(a['emergency_contact'])),
