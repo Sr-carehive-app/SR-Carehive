@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
@@ -37,6 +38,21 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   String selectedPatient = 'Yourself';
   String selectedGender = 'Female';
   
+  // Country codes for phone validation
+  String selectedCountryCode = '+91';
+  String selectedEmergencyCountryCode = '+91';
+  String selectedPrimaryDoctorCountryCode = '+91';
+  
+  // Country codes list with phone number lengths
+  final List<Map<String, dynamic>> countryCodes = [
+    {'code': '+91', 'country': 'India', 'length': 10},
+    {'code': '+1', 'country': 'USA', 'length': 10},
+    {'code': '+44', 'country': 'UK', 'length': 10},
+    {'code': '+971', 'country': 'UAE', 'length': 9},
+    {'code': '+61', 'country': 'Australia', 'length': 9},
+    {'code': '+65', 'country': 'Singapore', 'length': 8},
+  ];
+  
   bool isLoading = false;
   bool isSubmitting = false;
 
@@ -46,6 +62,20 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     weekDates = getCurrentWeekDates();
     updateTimeSlotsForDate(selectedDate);
     _loadUserData();
+  }
+
+  // Helper methods for dynamic phone validation
+  int getPhoneNumberLength(String countryCode) {
+    final country = countryCodes.firstWhere(
+      (c) => c['code'] == countryCode,
+      orElse: () => {'code': '+91', 'country': 'India', 'length': 10},
+    );
+    return country['length'] as int;
+  }
+
+  String getPhonePlaceholder(String countryCode) {
+    final length = getPhoneNumberLength(countryCode);
+    return '9' * length; // e.g., "9999999999" for 10 digits
   }
 
   @override
@@ -146,12 +176,36 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       _showErrorSnackBar('Please enter phone number');
       return false;
     }
+    // Validate phone number format based on country code
+    final phone = phoneController.text.trim();
+    final requiredLength = getPhoneNumberLength(selectedCountryCode);
+    if (phone.length != requiredLength || int.tryParse(phone) == null) {
+      _showErrorSnackBar('Phone number must be $requiredLength digits for $selectedCountryCode');
+      return false;
+    }
+    // For Indian numbers, check if starts with 6-9
+    if (selectedCountryCode == '+91' && !RegExp(r'^[6-9]').hasMatch(phone)) {
+      _showErrorSnackBar('Indian phone number must start with 6, 7, 8, or 9');
+      return false;
+    }
     if (addressController.text.trim().isEmpty) {
       _showErrorSnackBar('Please enter address');
       return false;
     }
     if (emergencyContactController.text.trim().isEmpty) {
       _showErrorSnackBar('Please enter emergency contact');
+      return false;
+    }
+    // Validate emergency contact phone format based on country code
+    final emergencyPhone = emergencyContactController.text.trim();
+    final emergencyRequiredLength = getPhoneNumberLength(selectedEmergencyCountryCode);
+    if (emergencyPhone.length != emergencyRequiredLength || int.tryParse(emergencyPhone) == null) {
+      _showErrorSnackBar('Emergency contact must be $emergencyRequiredLength digits for $selectedEmergencyCountryCode');
+      return false;
+    }
+    // For Indian numbers, check if starts with 6-9
+    if (selectedEmergencyCountryCode == '+91' && !RegExp(r'^[6-9]').hasMatch(emergencyPhone)) {
+      _showErrorSnackBar('Indian emergency contact must start with 6, 7, 8, or 9');
       return false;
     }
     // Aadhar validation
@@ -178,10 +232,16 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       }
     }
     // Primary doctor phone validation (optional but if provided must be valid)
+    // Note: Database constraint only supports Indian format (10 digits, starts with 6-9)
     if (primaryDoctorPhoneController.text.trim().isNotEmpty) {
       final phone = primaryDoctorPhoneController.text.trim();
       if (phone.length != 10 || int.tryParse(phone) == null) {
-        _showErrorSnackBar('Primary doctor phone must be 10 digits');
+        _showErrorSnackBar('Primary doctor phone must be exactly 10 digits');
+        return false;
+      }
+      // Must start with 6-9 (Indian mobile format) due to database constraint
+      if (!RegExp(r'^[6-9]').hasMatch(phone)) {
+        _showErrorSnackBar('Primary doctor phone must start with 6, 7, 8, or 9');
         return false;
       }
     }
@@ -328,7 +388,33 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         Navigator.of(context).pushReplacementNamed('/appointments');
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar('Failed to submit appointment: $e');
+      if (mounted) {
+        String errorMessage = 'Failed to submit appointment. Please try again.';
+        
+        // Handle specific database constraint errors
+        if (e.toString().contains('chk_primary_doctor_phone_format')) {
+          errorMessage = 'Primary doctor phone number must be 10 digits starting with 6, 7, 8, or 9';
+        } else if (e.toString().contains('chk_aadhar_format')) {
+          errorMessage = 'Aadhar number must be 12 digits and cannot start with 0 or 1';
+        } else if (e.toString().contains('PostgrestException')) {
+          // Extract user-friendly message from PostgrestException
+          final match = RegExp(r'"message":"([^"]+)"').firstMatch(e.toString());
+          if (match != null) {
+            final dbMessage = match.group(1);
+            if (dbMessage != null) {
+              if (dbMessage.contains('chk_primary_doctor_phone_format')) {
+                errorMessage = 'Primary doctor phone number format is invalid. Please enter a 10-digit number starting with 6, 7, 8, or 9';
+              } else if (dbMessage.contains('chk_aadhar_format')) {
+                errorMessage = 'Aadhar number format is invalid. Please enter a valid 12-digit Aadhar number';
+              } else {
+                errorMessage = 'Please check your information and try again';
+              }
+            }
+          }
+        }
+        
+        _showErrorSnackBar(errorMessage);
+      }
     } finally {
       if (mounted) setState(() => isSubmitting = false);
     }
@@ -598,11 +684,15 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 16),
           buildTextField('Age', controller: ageController, keyboardType: TextInputType.number),
           const SizedBox(height: 16),
-          buildTextField('Phone Number', controller: phoneController, keyboardType: TextInputType.phone),
+          buildPhoneField('Phone Number', phoneController, selectedCountryCode, (value) {
+            setState(() => selectedCountryCode = value!);
+          }),
           const SizedBox(height: 16),
           buildTextField('Address', controller: addressController, keyboardType: TextInputType.multiline),
           const SizedBox(height: 16),
-          buildTextField('Emergency Contact', controller: emergencyContactController, keyboardType: TextInputType.phone),
+          buildPhoneField('Emergency Contact', emergencyContactController, selectedEmergencyCountryCode, (value) {
+            setState(() => selectedEmergencyCountryCode = value!);
+          }),
           const SizedBox(height: 16),
 
           // Aadhar Number with formatting
@@ -630,7 +720,14 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 12),
           buildTextField('Doctor Name', controller: primaryDoctorNameController),
           const SizedBox(height: 16),
-          buildTextField('Doctor Phone Number', controller: primaryDoctorPhoneController, keyboardType: TextInputType.phone),
+          buildTextField('Doctor Phone Number (India only)', 
+            controller: primaryDoctorPhoneController, 
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
+          ),
           const SizedBox(height: 16),
           buildTextField('Clinic Location (Area, City)', controller: primaryDoctorLocationController),
           const SizedBox(height: 24),
@@ -804,10 +901,11 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   }
 
   // Reusable text field
-  Widget buildTextField(String hint, {TextEditingController? controller, TextInputType keyboardType = TextInputType.text}) {
+  Widget buildTextField(String hint, {TextEditingController? controller, TextInputType keyboardType = TextInputType.text, List<TextInputFormatter>? inputFormatters}) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
@@ -817,6 +915,66 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           borderSide: BorderSide.none,
         ),
       ),
+    );
+  }
+
+  // Phone field with country code dropdown
+  Widget buildPhoneField(String label, TextEditingController controller, String selectedCode, Function(String?) onCountryChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            // Country Code Dropdown
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDEFFF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButton<String>(
+                value: selectedCode,
+                underline: const SizedBox(),
+                items: countryCodes.map((code) {
+                  return DropdownMenuItem<String>(
+                    value: code['code'] as String,
+                    child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                  );
+                }).toList(),
+                onChanged: onCountryChanged,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Phone Number Field
+            Expanded(
+              child: TextField(
+                key: ValueKey(selectedCode), // Rebuild when country changes
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                autocorrect: false,
+                enableSuggestions: false,
+                enableInteractiveSelection: true,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(getPhoneNumberLength(selectedCode)),
+                ],
+                decoration: InputDecoration(
+                  hintText: getPhonePlaceholder(selectedCode),
+                  filled: true,
+                  fillColor: const Color(0xFFEDEFFF),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

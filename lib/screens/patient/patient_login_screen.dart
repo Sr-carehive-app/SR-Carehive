@@ -272,6 +272,36 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         return;
                       }
                       
+                      // Check if user exists before sending OTP to avoid showing success for non-existing users
+                      try {
+                        final supabase = Supabase.instance.client;
+                        final existing = await supabase
+                            .from('patients')
+                            .select('email')
+                            .eq('email', email)
+                            .maybeSingle();
+                        if (existing == null) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('User does not exist. Please register to continue.'),
+                              action: SnackBarAction(
+                                label: 'Register',
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const PatientSignUpScreen()),
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                          return; // Stop here; do not call OTP API
+                        }
+                      } catch (_) {
+                        // If the pre-check fails for any reason, continue with cautious behavior below
+                      }
+                      
                       setState(() => isLoading = true);
                       
                       try {

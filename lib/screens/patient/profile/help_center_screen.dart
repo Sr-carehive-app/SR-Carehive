@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HelpCenterScreen extends StatefulWidget {
@@ -20,10 +21,37 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
   final TextEditingController messageController = TextEditingController();
   bool isSubmitting = false;
 
+  // Country code for phone validation
+  String selectedCountryCode = '+91';
+  
+  // Country codes list with phone number lengths
+  final List<Map<String, dynamic>> countryCodes = [
+    {'code': '+91', 'country': 'India', 'length': 10},
+    {'code': '+1', 'country': 'USA', 'length': 10},
+    {'code': '+44', 'country': 'UK', 'length': 10},
+    {'code': '+971', 'country': 'UAE', 'length': 9},
+    {'code': '+61', 'country': 'Australia', 'length': 9},
+    {'code': '+65', 'country': 'Singapore', 'length': 8},
+  ];
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  // Helper methods for dynamic phone validation
+  int getPhoneNumberLength() {
+    final country = countryCodes.firstWhere(
+      (c) => c['code'] == selectedCountryCode,
+      orElse: () => {'code': '+91', 'country': 'India', 'length': 10},
+    );
+    return country['length'] as int;
+  }
+
+  String getPhonePlaceholder() {
+    final length = getPhoneNumberLength();
+    return '9' * length; // e.g., "9999999999" for 10 digits
   }
 
   @override
@@ -39,6 +67,26 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
 
   void _submitContactForm() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate phone number if provided
+    if (phoneController.text.trim().isNotEmpty) {
+      final phone = phoneController.text.trim();
+      final requiredLength = getPhoneNumberLength();
+      if (phone.length != requiredLength || int.tryParse(phone) == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Phone number must be $requiredLength digits for $selectedCountryCode')),
+        );
+        return;
+      }
+      // For Indian numbers, check if starts with 6-9
+      if (selectedCountryCode == '+91' && !RegExp(r'^[6-9]').hasMatch(phone)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Indian phone number must start with 6, 7, 8, or 9')),
+        );
+        return;
+      }
+    }
+    
     setState(() => isSubmitting = true);
 
     try {
@@ -254,13 +302,59 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     },
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.phone,
+                  // Phone Number with Country Code
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Phone Number (optional)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          // Country Code Dropdown
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButton<String>(
+                              value: selectedCountryCode,
+                              underline: const SizedBox(),
+                              items: countryCodes.map((code) {
+                                return DropdownMenuItem<String>(
+                                  value: code['code'] as String,
+                                  child: Text('${code['code']} ${code['country']}', style: const TextStyle(fontSize: 14)),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() => selectedCountryCode = value!);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Phone Number Field
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey(selectedCountryCode), // Rebuild when country changes
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              enableInteractiveSelection: true,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(getPhoneNumberLength()),
+                              ],
+                              decoration: InputDecoration(
+                                hintText: getPhonePlaceholder(),
+                                border: const OutlineInputBorder(),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
