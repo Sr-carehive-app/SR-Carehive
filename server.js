@@ -520,7 +520,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>` : ''}
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/nurse-admin" 
+            <a href="carehive://nurse-admin"
                style="display: inline-block; background: #ff6b6b; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
               Manage Appointments
             </a>
@@ -1415,7 +1415,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View My Appointments
             </a>
@@ -1447,7 +1447,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
             <strong>Next Action:</strong> Please contact the patient and set the total service amount in the healthcare provider dashboard.
           </p>
         </div>
-        <a href="${FRONTEND_URL}/nurse/manage-appointments" 
+  <a href="carehive://nurse/manage-appointments" 
            style="display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
           Manage Appointments
         </a>
@@ -1572,7 +1572,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #9c27b0; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
               Pay Now (₹${preAmount})
             </a>
@@ -1703,7 +1703,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #3f51b5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Appointment Details
             </a>
@@ -1888,7 +1888,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #009688; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Appointment History
             </a>
@@ -2055,7 +2055,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #4caf50; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
               Pay Final Amount (₹${finalAmount})
             </a>
@@ -2110,7 +2110,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
   }
 });
 
-// 6. Feedback Submission Notification
+
 app.post('/api/notify-feedback-submitted', async (req, res) => {
   try {
     const {
@@ -2158,7 +2158,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/patient/appointments" 
+            <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Your Appointments
             </a>
