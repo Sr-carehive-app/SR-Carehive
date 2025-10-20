@@ -1,9 +1,9 @@
 // Defer route registration until after Express app is initialized
 function registerNurseOtpRoutes(app) {
   // Send OTP for healthcare provider login
-  app.post('/api/nurse/send-otp', async (req, res) => {
+  async function handleSendOtp(req, res, resend = false) {
     try {
-      const { email, resend = false } = req.body;
+      const { email } = req.body;
       if (!email || !email.trim()) {
         return res.status(400).json({ error: 'Email is required' });
       }
@@ -48,6 +48,10 @@ function registerNurseOtpRoutes(app) {
     } catch (e) {
       return res.status(500).json({ error: 'Internal error' });
     }
+  }
+
+  app.post('/api/nurse/send-otp', async (req, res) => {
+    return handleSendOtp(req, res, false);
   });
 
   // Verify OTP for healthcare provider login
@@ -84,9 +88,11 @@ function registerNurseOtpRoutes(app) {
 // Resend OTP for healthcare provider login (enforces 2 min cooldown)
 function registerNurseResendOtpRoute(app){
   app.post('/api/nurse/resend-otp', async (req, res) => {
-    req.body.resend = true;
-    // Delegate to send-otp route
-    return app._router.handle(req, res, () => {}, 'post', '/api/nurse/send-otp');
+    return app._router.stack.find(r => r.route && r.route.path === '/api/nurse/send-otp')
+      ? req.body.email
+        ? await app._router.stack.find(r => r.route && r.route.path === '/api/nurse/send-otp').route.stack[0].handle(req, res, true)
+        : res.status(400).json({ error: 'Email is required' })
+      : res.status(500).json({ error: 'Send OTP route not found' });
   });
 }
 // --- healthcare provider OTP Login State ---
