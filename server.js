@@ -54,7 +54,7 @@ function registerNurseOtpRoutes(app) {
   app.post('/api/nurse/verify-otp', (req, res) => {
     try {
       const { email, otp } = req.body;
-      if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
+      if (!email || !otp) return res.status(400).json({ error: 'OTP required' });
       const normalizedEmail = email.toLowerCase().trim();
       const otpData = nurseLoginOTPs.get(normalizedEmail);
       if (!otpData) return res.status(400).json({ error: 'No OTP sent or OTP expired.' });
