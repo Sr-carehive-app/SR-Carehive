@@ -71,8 +71,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         _showOtpScreen = true;
         _otpError = null;
       });
-      await NurseApiService.sendOtp(email: emailController.text.trim());
       _startResendCooldown();
+      await NurseApiService.sendOtp(email: emailController.text.trim());
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login failed! Please check credentials')),
