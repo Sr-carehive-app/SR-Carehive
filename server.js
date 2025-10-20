@@ -473,39 +473,39 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Full Name:</strong></td>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.full_name || 'N/A'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.full_name || '-'}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Age:</strong></td>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.age || 'N/A'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.age || '-'}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Gender:</strong></td>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.gender || 'N/A'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.gender || '-'}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Healthcare seeker Type:</strong></td>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.patient_type || 'N/A'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.patient_type || '-'}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Aadhar Number:</strong></td>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.aadhar_number || 'N/A'}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.aadhar_number || '-'}</td>
               </tr>
             </table>
           </div>
 
           <div style="background: #fce4ec; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #c2185b;">Contact Details</h3>
-            <p style="margin: 8px 0;"><strong>Phone:</strong> <a href="tel:${appointment?.phone}">${appointment?.phone || 'N/A'}</a></p>
-            <p style="margin: 8px 0;"><strong>Email:</strong> <a href="mailto:${appointment?.patient_email}">${appointment?.patient_email || 'N/A'}</a></p>
-            <p style="margin: 8px 0;"><strong>Address:</strong> ${appointment?.address || 'N/A'}</p>
-            <p style="margin: 8px 0;"><strong>Emergency Contact:</strong> ${appointment?.emergency_contact || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Phone:</strong> <a href="tel:${appointment?.phone}">${appointment?.phone || '-'}</a></p>
+            <p style="margin: 8px 0;"><strong>Email:</strong> <a href="mailto:${appointment?.patient_email}">${appointment?.patient_email || '-'}</a></p>
+            <p style="margin: 8px 0;"><strong>Address:</strong> ${appointment?.address || '-'}</p>
+            <p style="margin: 8px 0;"><strong>Emergency Contact:</strong> ${appointment?.emergency_contact || '-'}</p>
           </div>
 
           <div style="background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #7b1fa2;">Medical Information</h3>
             <p style="margin: 8px 0;"><strong>Problem/Symptoms:</strong></p>
-            <p style="background: white; padding: 12px; border-radius: 6px; margin: 8px 0;">${appointment?.problem || 'N/A'}</p>
+            <p style="background: white; padding: 12px; border-radius: 6px; margin: 8px 0;">${appointment?.problem || '-'}</p>
             ${appointment?.primary_doctor_name ? `
             <p style="margin: 8px 0;"><strong>Primary Doctor:</strong> ${appointment.primary_doctor_name}</p>
             ${appointment?.primary_doctor_phone ? `<p style="margin: 8px 0;"><strong>Doctor Phone:</strong> ${appointment.primary_doctor_phone}</p>` : ''}
@@ -515,9 +515,9 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
 
           <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #3f51b5;">Appointment Schedule</h3>
-            <p style="margin: 8px 0;"><strong>Date:</strong> ${appointment?.date || 'N/A'}</p>
-            <p style="margin: 8px 0;"><strong>Time:</strong> ${appointment?.time || 'N/A'}</p>
-            <p style="margin: 8px 0;"><strong>Appointment ID:</strong> #${appointment?.id || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Date:</strong> ${appointment?.date || '-'}</p>
+            <p style="margin: 8px 0;"><strong>Time:</strong> ${appointment?.time || '-'}</p>
+            <p style="margin: 8px 0;"><strong>Appointment ID:</strong> #${appointment?.id || '-'}</p>
             <p style="margin: 8px 0;"><strong>Status:</strong> <span style="background: #ffeb3b; padding: 4px 10px; border-radius: 4px; font-weight: bold;">${appointment?.status || 'Pending'}</span></p>
           </div>
 
@@ -525,8 +525,8 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           <div style="background: #e0f2f1; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #00796b;">Assigned Healthcare provider</h3>
             <p style="margin: 8px 0;"><strong>Name:</strong> ${appointment.nurse_name}</p>
-            <p style="margin: 8px 0;"><strong>Phone:</strong> ${appointment.nurse_phone || 'N/A'}</p>
-            <p style="margin: 8px 0;"><strong>Branch:</strong> ${appointment.nurse_branch || 'N/A'}</p>
+            <p style="margin: 8px 0;"><strong>Phone:</strong> ${appointment.nurse_phone || '-'}</p>
+            <p style="margin: 8px 0;"><strong>Branch:</strong> ${appointment.nurse_branch || '-'}</p>
           </div>` : ''}
 
           <div style="text-align: center; margin: 30px 0;">
@@ -942,131 +942,6 @@ app.post('/api/notify-new-appointment', async (req, res) => {
   }
 });
 
-// Archive past appointments into appointments_history table (manual trigger). Protected.
-app.post('/api/nurse/appointments/archive-past', async (req, res) => {
-  try {
-    if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
-    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
-    // We treat 'past' strictly by date+optional time in IST; logic implemented in app already.
-    // For server side: archive appointments whose date < today (IST) OR date = today and time earlier than now.
-    // Supabase SQL function would be more precise; here we pull limited batch to avoid heavy operations.
-    const { data: all, error: listErr } = await supabase.from('appointments').select('*').order('date', { ascending: true }).limit(5000);
-    if (listErr) return res.status(500).json({ error: listErr.message });
-    const nowUtc = new Date();
-    const nowIst = new Date(nowUtc.getTime() + (5.5 * 60 * 60 * 1000));
-    const todayIstStr = nowIst.toISOString().slice(0,10);
-    const toArchive = [];
-    for (const a of (all || [])) {
-      if (!a.date) continue;
-      try {
-        // Compare strictly in IST by string/date components to avoid TZ drift
-        const dateStr = String(a.date).slice(0,10);
-        if (dateStr < todayIstStr) { toArchive.push(a); continue; }
-        if (dateStr === todayIstStr) {
-          // Parse time like '6:00 PM' as 24h local values
-          let hour = 0, minute = 0;
-          const m = String(a.time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-          if (m) {
-            hour = parseInt(m[1], 10);
-            minute = parseInt(m[2], 10);
-            const ap = m[3].toUpperCase();
-            if (ap === 'PM' && hour < 12) hour += 12;
-            if (ap === 'AM' && hour === 12) hour = 0;
-          }
-          const nowHour = nowIst.getUTCHours() + 5; // 5h from UTC to IST hours; adjust minutes below
-          const nowMinute = nowIst.getUTCMinutes() + 30; // +30 mins
-          const adjHour = (nowHour + Math.floor(nowMinute / 60)) % 24;
-          const adjMinute = nowMinute % 60;
-          if (hour < adjHour || (hour === adjHour && minute < adjMinute)) {
-            toArchive.push(a);
-          }
-        }
-      } catch {}
-    }
-    if (!toArchive.length) return res.json({ archived: 0 });
-    // Insert into history table then delete original (soft archival)
-    // ✅ COMPLETE FIELD MAPPING - ALL NEW FIELDS INCLUDED
-    const rows = toArchive.map(a => ({
-      original_appointment_id: a.id,
-      full_name: a.full_name,
-      patient_email: a.patient_email,
-      phone: a.phone,
-      gender: a.gender,
-      age: a.age,
-      patient_type: a.patient_type,
-      date: a.date,
-      time: a.time,
-      duration_hours: a.duration_hours,
-      amount_rupees: a.amount_rupees,
-      status: a.status,
-      order_id: a.order_id,
-      payment_id: a.payment_id,
-      
-      // ✅ NEW PATIENT FIELDS
-      aadhar_number: a.aadhar_number,
-      address: a.address,
-      emergency_contact: a.emergency_contact,
-      problem: a.problem,
-      
-      // ✅ PRIMARY DOCTOR FIELDS
-      primary_doctor_name: a.primary_doctor_name,
-      primary_doctor_phone: a.primary_doctor_phone,
-      primary_doctor_location: a.primary_doctor_location,
-      
-      // ✅ 3-TIER PAYMENT SYSTEM
-      // Registration Payment
-      registration_payment_id: a.registration_payment_id,
-      registration_receipt_id: a.registration_receipt_id,
-      registration_paid: a.registration_paid,
-      registration_paid_at: a.registration_paid_at,
-      
-      // Pre-visit Payment (50%)
-      total_amount: a.total_amount,
-      nurse_remarks: a.nurse_remarks,
-      pre_payment_id: a.pre_payment_id,
-      pre_receipt_id: a.pre_receipt_id,
-      pre_paid: a.pre_paid,
-      pre_paid_at: a.pre_paid_at,
-      
-      // Final Payment (50%)
-      final_payment_id: a.final_payment_id,
-      final_receipt_id: a.final_receipt_id,
-      final_paid: a.final_paid,
-      final_paid_at: a.final_paid_at,
-      
-      // ✅ healthcare provider ASSIGNMENT
-      nurse_name: a.nurse_name,
-      nurse_phone: a.nurse_phone,
-      nurse_branch: a.nurse_branch,
-      nurse_comments: a.nurse_comments,
-      nurse_available: a.nurse_available,
-      
-      // ✅ CONSULTATION/DOCTOR RECOMMENDATION FIELDS
-      consulted_doctor_name: a.consulted_doctor_name,
-      consulted_doctor_phone: a.consulted_doctor_phone,
-      consulted_doctor_specialization: a.consulted_doctor_specialization,
-      consulted_doctor_clinic_address: a.consulted_doctor_clinic_address,
-      post_visit_remarks: a.post_visit_remarks,
-      visit_completed_at: a.visit_completed_at,
-      
-      // ✅ STATUS TRACKING
-      rejection_reason: a.rejection_reason,
-      created_at: a.created_at,
-      approved_at: a.approved_at,
-      rejected_at: a.rejected_at,
-      archived_at: new Date().toISOString(),
-    }));
-    const { error: insErr } = await supabase.from('appointments_history').insert(rows);
-    if (insErr) return res.status(500).json({ error: insErr.message });
-    // Delete originals in small batches
-    for (const a of toArchive) {
-      await supabase.from('appointments').delete().eq('id', a.id);
-    }
-    res.json({ archived: toArchive.length });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // Query history with optional status filter. Protected.
 app.get('/api/nurse/appointments/history', async (req, res) => {
@@ -1365,26 +1240,34 @@ app.post('/api/send-otp-sms', async (req, res) => {
 // 1. Registration Payment Notification (₹100)
 app.post('/api/notify-registration-payment', async (req, res) => {
   try {
-    const { 
-      appointmentId, 
-      patientEmail, 
-      patientName, 
-      patientPhone,
-      nurseEmail,
-      nurseName,
-      paymentId, 
-      receiptId, 
-      amount,
-      date,
-      time
-    } = req.body;
-
-    if (!appointmentId || !patientEmail || !paymentId) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const { appointmentId, nurseEmail, nurseName } = req.body;
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'Missing appointmentId' });
     }
-
-    console.log(`[INFO] Sending registration payment notification for appointment #${appointmentId}`);
-
+    // Fetch full appointment details from DB
+    let appointment = null;
+    try {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      appointment = data;
+    } catch (err) {
+      console.error('[ERROR] Could not fetch appointment:', err.message);
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+    const patientEmail = appointment.patient_email;
+    const patientName = appointment.full_name;
+    const patientPhone = appointment.phone;
+    const paymentId = appointment.registration_payment_id || appointment.payment_id;
+    const receiptId = appointment.registration_receipt_id;
+    const amount = appointment.amount_rupees || 100;
+    const date = appointment.date;
+    const time = appointment.time;
     // Email to healthcare seeker
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -1445,12 +1328,12 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         <h2 style="color: #2260FF;">New Registration Payment Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'} (${patientPhone || 'N/A'})</p>
+          <p><strong>Healthcare seeker:</strong> ${patientName || '-'} (${patientPhone || '-'})</p>
           <p><strong>Email:</strong> ${patientEmail}</p>
           <p><strong>Amount Paid:</strong> ₹${amount || 100}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
-          <p><strong>Date:</strong> ${date || 'N/A'}</p>
-          <p><strong>Time:</strong> ${time || 'N/A'}</p>
+          <p><strong>Date:</strong> ${date || '-'}</p>
+          <p><strong>Time:</strong> ${time || '-'}</p>
         </div>
         <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 0; color: #856404;">
@@ -1472,7 +1355,6 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         html: patientHtml 
       })
     ];
-
     if (nurseEmail) {
       emailPromises.push(
         sendEmail({ 
@@ -1488,7 +1370,6 @@ app.post('/api/notify-registration-payment', async (req, res) => {
       try {
         let phone = patientPhone.trim();
         if (!phone.startsWith('+')) phone = `+91${phone}`;
-        
         await twilioClient.messages.create({
           body: `CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
           from: TWILIO_PHONE_NUMBER,

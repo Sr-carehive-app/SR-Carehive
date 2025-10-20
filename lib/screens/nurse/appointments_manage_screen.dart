@@ -18,13 +18,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _items = [];
-  List<Map<String, dynamic>> _historyItems = [];
   String _statusFilter = 'All';
-  String _historySub = 'All';
-  bool _historyLoading = false;
-  String? _historyError;
-  bool _historyEverLoaded = false;
-
   @override
   void initState() { super.initState(); _load(); }
 
@@ -32,27 +26,6 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     setState(() { _loading = true; _error = null; });
     try { _items = await NurseApiService.listAppointments(); } catch (e) { _error = e.toString(); }
     if (mounted) setState(() { _loading = false; });
-  }
-
-  Future<void> _loadHistory({bool force=false}) async {
-    if (_historyLoading) return; // prevent overlap
-    if (!force && _historyEverLoaded) {
-      // Still refetch if sub-filter changed (we cleared list before calling)
-      if (_historyItems.isNotEmpty) return;
-    }
-    setState(() { _historyLoading = true; _historyError = null; });
-    try {
-      debugPrint('[History] Fetch start (status=$_historySub, force=$force)');
-      final status = _historySub == 'All' ? null : _historySub.toLowerCase();
-      final items = await NurseApiService.listHistory(status: status);
-      debugPrint('[History] Fetched ${items.length} rows');
-      _historyItems = items;
-      _historyEverLoaded = true;
-    } catch (e) {
-      _historyError = e.toString();
-      debugPrint('[History] Error: $_historyError');
-    }
-    if (mounted) setState(() { _historyLoading = false; });
   }
 
   Future<void> _approveDialog(Map<String, dynamic> appt) async {
@@ -760,7 +733,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
   // Combine stored date ('yyyy-MM-dd') and time ('h:mm a') as local time.
   // Avoid UTC conversion to prevent shifting to previous day, which incorrectly
-  // classifies upcoming appointments as history.
+  // classifies appointments as past or upcoming.
   DateTime? _parseIst(Map a) {
     final dateStr = (a['date'] ?? '').toString();
     if (dateStr.isEmpty) return null;
@@ -799,10 +772,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         title: const Text('Manage Appointments'),
         actions:[
           IconButton(
-            onPressed: () {
-              if (_statusFilter == 'History') { _historyItems.clear(); _loadHistory(force:true); }
-              else { _load(); }
-            },
+            onPressed: _load,
             icon: const Icon(Icons.refresh))
         ],
         backgroundColor: const Color(0xFF2260FF),
@@ -820,15 +790,10 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     if(i==0){
                       return Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                         _filtersBar(),
-                        if(_statusFilter=='History')...[
-                          const SizedBox(height:8), _historyFiltersBar(),
-                          if(_historyLoading) const Padding(padding: EdgeInsets.only(top:12), child: LinearProgressIndicator(minHeight:3)),
-                          if(_historyError!=null) Padding(padding: const EdgeInsets.only(top:12), child: Text(_historyError!, style: const TextStyle(color: Colors.red))),
-                        ],
                         const SizedBox(height:12),
                         if(listFiltered.isEmpty) Padding(
                           padding: const EdgeInsets.symmetric(vertical:24),
-                          child: Center(child: Text(_statusFilter=='History' ? 'No history records' : 'No appointments to show')),
+                          child: Center(child: Text('No appointments to show')),
                         ),
                       ]);
                     }
@@ -836,14 +801,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     final date = DateTime.tryParse(a['date'] ?? '');
                     final time = a['time'] ?? '';
                     final status = (a['status'] ?? 'pending') as String;
-                    Widget? header;
-                    if(_statusFilter=='History'){
-                      final curDt=_parseIst(a); final curLabel= curDt!=null? DateFormat('EEE, MMM dd yyyy').format(curDt):'Unknown Date';
-                      String? prevLabel; if(i-2>=0){ final prev=listFiltered[i-2]; final prevDt=_parseIst(prev); prevLabel = prevDt!=null? DateFormat('EEE, MMM dd yyyy').format(prevDt):'Unknown Date'; }
-                      if(prevLabel==null || prevLabel!=curLabel){
-                        header = Padding(padding: const EdgeInsets.only(bottom:6, top:4), child: Row(children:[Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:6), decoration: BoxDecoration(color: const Color(0xFF2260FF).withOpacity(0.08), borderRadius: BorderRadius.circular(8)), child: Text(curLabel, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2260FF)))))]));
-                      }
-                    }
+                    // History header logic removed
                     final card = Card(margin: const EdgeInsets.only(bottom:16), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
                         Text(a['full_name'] ?? 'Unknown', style: const TextStyle(fontSize:16, fontWeight: FontWeight.bold)),
@@ -975,7 +933,6 @@ IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const
                         ]),
                       ]
                     ])));
-                    if(header!=null) return Column(crossAxisAlignment: CrossAxisAlignment.start, children:[header!, card]);
                     return card;
                   },
                 ),
@@ -984,44 +941,26 @@ IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const
   }
 
   List<Map<String, dynamic>> _filtered(){
-    // Build past/upcoming only if we have any current appointments; history shouldn't depend on this
-    final past=<Map<String,dynamic>>[]; final upcoming=<Map<String,dynamic>>[];
-    for(final a in _items){ (_isPast(a) ? past : upcoming).add(a); }
-
-    if(_statusFilter=='History'){
-      List<Map<String,dynamic>> base = _historyItems.isNotEmpty
-          ? List<Map<String,dynamic>>.from(_historyItems)
-          : past; // fallback to locally derived past if server history empty or not fetched
-      if(_historySub!='All'){
-        final want=_historySub.toLowerCase();
-        base = base.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
-      }
-      // Safety filter: ensure only truly past items appear in History
-      base = base.where((e) => _isPast(e)).toList();
-      base.sort((a,b){
-        DateTime? ad=_parseIst(a); DateTime? bd=_parseIst(b);
-        ad ??= DateTime.tryParse(a['date']??'') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        bd ??= DateTime.tryParse(b['date']??'') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bd.compareTo(ad);
-      });
-      return base;
-    }
-
-    // For All, Pending, Approved, Rejected tabs, only show upcoming appointments
-    if(_statusFilter=='All') return upcoming;
-    final want=_statusFilter.toLowerCase();
-    return upcoming.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
+  if(_statusFilter=='All') return _items;
+  final want=_statusFilter.toLowerCase();
+  return _items.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
   }
 
   Widget _filtersBar(){
-    final options=['All','Pending','Approved','Rejected','History'];
-    return Wrap(spacing:8, runSpacing:8, children: options.map((o){ final sel=_statusFilter==o; return ChoiceChip(label: Text(o), selected: sel, onSelected:(_)=> setState((){ _statusFilter=o; if(_statusFilter!='History') _historySub='All'; })); }).toList());
+  final options=['All','Pending','Approved','Rejected'];
+  return Wrap(
+    spacing:8,
+    runSpacing:8,
+    children: options.map((o) => ChoiceChip(
+      label: Text(o),
+      selected: _statusFilter==o,
+      onSelected: (selected) {
+        if(selected) setState(() { _statusFilter = o; });
+      },
+    )).toList(),
+  );
   }
 
-  Widget _historyFiltersBar(){
-    final sub=['All','Pending','Approved','Rejected'];
-    return Wrap(spacing:8, children: sub.map((s){ final sel=_historySub==s; return ChoiceChip(label: Text(s), selected: sel, onSelected:(_)=> setState((){ _historySub=s; _historyItems.clear(); _loadHistory(force:true); })); }).toList());
-  }
 
   Widget _kv(String k, String v){
     return Padding(padding: const EdgeInsets.only(bottom:6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children:[ SizedBox(width:140, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))), Expanded(child: Text(v)) ]));
