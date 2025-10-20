@@ -1,96 +1,97 @@
-// --- Nurse OTP Login State ---
-const nurseLoginOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt, verified }
+// Defer route registration until after Express app is initialized
+function registerNurseOtpRoutes(app) {
+  // Send OTP for nurse login
+  app.post('/api/nurse/send-otp', async (req, res) => {
+    try {
+      const { email, resend = false } = req.body;
+      if (!email || !email.trim()) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+      const normalizedEmail = email.toLowerCase().trim();
+      // Validate email format
+      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+      if (!emailRegex.test(normalizedEmail)) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+      let otpData = nurseLoginOTPs.get(normalizedEmail);
+      const now = Date.now();
+      if (otpData && !resend && now < (otpData.lastSentAt + 2 * 60 * 1000)) {
+        // Prevent spamming OTP
+        const wait = Math.ceil((otpData.lastSentAt + 2 * 60 * 1000 - now) / 1000);
+        return res.status(429).json({ error: `Please wait ${wait} seconds before resending OTP.` });
+      }
+      // Generate new OTP
+      const otp = generateOTP();
+      const expiresAt = now + 5 * 60 * 1000; // 5 min expiry
+      nurseLoginOTPs.set(normalizedEmail, {
+        otp,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: now,
+        verified: false
+      });
+      // Send OTP email
+      if (!mailer) {
+        return res.status(500).json({ error: 'Email service not configured' });
+      }
+      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Nurse Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
+      try {
+        await sendEmail({
+          to: normalizedEmail,
+          subject: 'SR CareHive Nurse Login OTP',
+          html: otpEmailHtml
+        });
+        return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
+      } catch (e) {
+        return res.status(500).json({ error: 'Failed to send OTP email.' });
+      }
+    } catch (e) {
+      return res.status(500).json({ error: 'Internal error' });
+    }
+  });
 
-function generateOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Verify OTP for nurse login
+  app.post('/api/nurse/verify-otp', (req, res) => {
+    try {
+      const { email, otp } = req.body;
+      if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
+      const normalizedEmail = email.toLowerCase().trim();
+      const otpData = nurseLoginOTPs.get(normalizedEmail);
+      if (!otpData) return res.status(400).json({ error: 'No OTP sent or OTP expired.' });
+      if (Date.now() > otpData.expiresAt) {
+        nurseLoginOTPs.delete(normalizedEmail);
+        return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+      }
+      if (otpData.attempts >= 5) {
+        nurseLoginOTPs.delete(normalizedEmail);
+        return res.status(429).json({ error: 'Too many failed attempts. Please request a new OTP.' });
+      }
+      if (otp !== otpData.otp) {
+        otpData.attempts += 1;
+        nurseLoginOTPs.set(normalizedEmail, otpData);
+        return res.status(400).json({ error: `Invalid OTP. ${5 - otpData.attempts} attempt(s) remaining.` });
+      }
+      otpData.verified = true;
+      nurseLoginOTPs.set(normalizedEmail, otpData);
+      // Success: return a session token (or flag)
+      return res.json({ success: true, message: 'OTP verified.' });
+    } catch (e) {
+      return res.status(500).json({ error: 'Internal error' });
+    }
+  });
 }
 
-// Send OTP for nurse login
-app.post('/api/nurse/send-otp', async (req, res) => {
-  try {
-    const { email, resend = false } = req.body;
-    if (!email || !email.trim()) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-    const normalizedEmail = email.toLowerCase().trim();
-    // Validate email format
-    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-    let otpData = nurseLoginOTPs.get(normalizedEmail);
-    const now = Date.now();
-    if (otpData && !resend && now < (otpData.lastSentAt + 2 * 60 * 1000)) {
-      // Prevent spamming OTP
-      const wait = Math.ceil((otpData.lastSentAt + 2 * 60 * 1000 - now) / 1000);
-      return res.status(429).json({ error: `Please wait ${wait} seconds before resending OTP.` });
-    }
-    // Generate new OTP
-    const otp = generateOTP();
-    const expiresAt = now + 5 * 60 * 1000; // 5 min expiry
-    nurseLoginOTPs.set(normalizedEmail, {
-      otp,
-      expiresAt,
-      attempts: 0,
-      lastSentAt: now,
-      verified: false
-    });
-    // Send OTP email
-    if (!mailer) {
-      return res.status(500).json({ error: 'Email service not configured' });
-    }
-    const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Nurse Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
-    try {
-      await sendEmail({
-        to: normalizedEmail,
-        subject: 'SR CareHive Nurse Login OTP',
-        html: otpEmailHtml
-      });
-      return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
-    } catch (e) {
-      return res.status(500).json({ error: 'Failed to send OTP email.' });
-    }
-  } catch (e) {
-    return res.status(500).json({ error: 'Internal error' });
-  }
-});
-
-// Verify OTP for nurse login
-app.post('/api/nurse/verify-otp', (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
-    const normalizedEmail = email.toLowerCase().trim();
-    const otpData = nurseLoginOTPs.get(normalizedEmail);
-    if (!otpData) return res.status(400).json({ error: 'No OTP sent or OTP expired.' });
-    if (Date.now() > otpData.expiresAt) {
-      nurseLoginOTPs.delete(normalizedEmail);
-      return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
-    }
-    if (otpData.attempts >= 5) {
-      nurseLoginOTPs.delete(normalizedEmail);
-      return res.status(429).json({ error: 'Too many failed attempts. Please request a new OTP.' });
-    }
-    if (otp !== otpData.otp) {
-      otpData.attempts += 1;
-      nurseLoginOTPs.set(normalizedEmail, otpData);
-      return res.status(400).json({ error: `Invalid OTP. ${5 - otpData.attempts} attempt(s) remaining.` });
-    }
-    otpData.verified = true;
-    nurseLoginOTPs.set(normalizedEmail, otpData);
-    // Success: return a session token (or flag)
-    return res.json({ success: true, message: 'OTP verified.' });
-  } catch (e) {
-    return res.status(500).json({ error: 'Internal error' });
-  }
-});
-
 // Resend OTP for nurse login (enforces 2 min cooldown)
-app.post('/api/nurse/resend-otp', async (req, res) => {
-  req.body.resend = true;
-  // Just call send-otp with resend=true
-  app._router.handle(req, res, () => {}, 'post', '/api/nurse/send-otp');
-});
+function registerNurseResendOtpRoute(app){
+  app.post('/api/nurse/resend-otp', async (req, res) => {
+    req.body.resend = true;
+    // Delegate to send-otp route
+    return app._router.handle(req, res, () => {}, 'post', '/api/nurse/send-otp');
+  });
+}
+// --- Nurse OTP Login State ---
+const nurseLoginOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt, verified }
+// Place nurse OTP endpoints after app is initialized
 // Minimal Express server to integrate Razorpay order + signature verification flow.
 // NOTE: Keep key_secret ONLY on server. Do NOT expose to Flutter app.
 // Start: npm install && npm start (runs on http://localhost:9090 by default)
@@ -141,6 +142,10 @@ if (RAZORPAY_KEY_ID) {
 }
 
 const razorpay = new Razorpay({ key_id: RAZORPAY_KEY_ID || 'rzp_test_xxx', key_secret: RAZORPAY_KEY_SECRET || 'test_secret' });
+
+// Register deferred nurse OTP routes now that 'app' exists
+registerNurseOtpRoutes(app);
+registerNurseResendOtpRoute(app);
 
 // Supabase client
 // Prefer service role for server-side inserts (bypasses RLS); fallback to anon for dev read-only/testing.
