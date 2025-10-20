@@ -156,7 +156,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
                           const SizedBox(height: 6),
                           _buildInfoRow(
                             icon: Icons.phone_in_talk,
-                            text: 'Our care provider will contact you soon',
+                            text: 'Our healthcare provider will contact you soon',
                           ),
                           const SizedBox(height: 6),
                           _buildInfoRow(

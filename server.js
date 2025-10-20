@@ -1294,7 +1294,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0;">
             <h4 style="margin-top: 0; color: #856404;">What Happens Next?</h4>
             <ol style="color: #856404; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
-              <li>Our care provider will contact you shortly to confirm appointment details</li>
+              <li>Our healthcare provider will contact you shortly to confirm appointment details</li>
               <li>They will assess your needs and set the total service amount</li>
               <li>You'll be notified when the total amount is ready</li>
               <li>Payment will be split: 50% before visit, 50% after successful completion</li>
@@ -1371,7 +1371,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         let phone = patientPhone.trim();
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         await twilioClient.messages.create({
-          body: `CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
+          body: `SR CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -1425,7 +1425,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
-            Our care provider has assessed your requirements and set the total service amount for your appointment.
+            Our healthcare provider has assessed your requirements and set the total service amount for your appointment.
           </p>
 
           <div style="background: #f3e5f5; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #9c27b0; text-align: center;">
@@ -1478,7 +1478,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            Need clarification on the service charges? Please contact your care provider.
+            Need clarification on the service charges? Please contact your healthcare provider.
             <br>Serechi By SR CareHive | srcarehive@gmail.com
           </p>
         </div>
@@ -1579,7 +1579,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
 
           <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
             <h4 style="margin-top: 0; color: #155724;">You're All Set!</h4>
-            <p style="color: #155724; margin: 10px 0;">Your appointment is confirmed. Our care provider will visit you as scheduled.</p>
+            <p style="color: #155724; margin: 10px 0;">Your appointment is confirmed. Our healthcare provider will visit you as scheduled.</p>
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
               <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
               <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
@@ -2082,7 +2082,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
     // Admin notification email
     const adminHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #ffa726;">⭐ New Feedback Received</h2>
+        <h2 style="color: #ffa726;">New Feedback Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
