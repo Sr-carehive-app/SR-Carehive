@@ -30,7 +30,7 @@ class NurseApiService {
     final resp = await http.post(
       Uri.parse('$_base/api/nurse/resend-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
+      body: jsonEncode({'email': email, 'resend': true}),
     );
     if (resp.statusCode == 200) return true;
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
