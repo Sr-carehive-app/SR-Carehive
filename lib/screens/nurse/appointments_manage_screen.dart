@@ -916,7 +916,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             child: OutlinedButton.icon(
                               icon: const Icon(Icons.close, color: Colors.red),
                               label: const Text('Reject', style: TextStyle(color:Colors.red)),
-                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='rejected' || status.toLowerCase()=='amount_set') ? null : () => _rejectDialog(a),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='rejected' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid') ? null : () => _rejectDialog(a),
                             ),
                           ),
                           const SizedBox(width:8),
@@ -925,7 +925,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                               icon: const Icon(Icons.check_circle, color: Colors.white),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                               label: const Text('Approve', style: TextStyle(color:Colors.white)),
-                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='approved' || status.toLowerCase()=='amount_set') ? null : () => _approveDialog(a),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='approved' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid') ? null : () => _approveDialog(a),
                             ),
                           ),
                           const SizedBox(width:8),
@@ -948,6 +948,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
   Widget _filtersBar(){
   final options=['All','Pending','Approved','Rejected'];
+  final options=['All','Pending','Approved','Rejected','Completed'];
   return Wrap(
     spacing:8,
     runSpacing:8,

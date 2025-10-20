@@ -1474,7 +1474,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
             <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
             <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
             <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
-            ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
+            ${nurseName ? `<p style="margin: 5px 0;"><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
@@ -1583,7 +1583,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
               <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
               <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
-              ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
+              ${nurseName ? `<p style="margin: 5px 0;"><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
             </div>
           </div>
 
@@ -1926,7 +1926,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
           <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
             <h3 style="margin-top: 0; color: #2e7d32;">📋 Visit Summary</h3>
             ${postVisitRemarks ? `<p style="margin: 5px 0;"><strong>Healthcare provider Remarks:</strong><br/>${postVisitRemarks}</p>` : ''}
-            ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
+            ${nurseName ? `<p style="margin: 5px 0;"><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
             ${doctorName ? `
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #c8e6c9;">
                 <p style="margin: 5px 0; color: #2e7d32; font-weight: bold;">Recommended Doctor:</p>
