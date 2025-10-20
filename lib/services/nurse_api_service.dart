@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class NurseApiService {
-  // Send OTP for nurse login
+  // Send OTP for healthcare provider login
   static Future<bool> sendOtp({required String email}) async {
     final resp = await http.post(
       Uri.parse('$_base/api/nurse/send-otp'),
@@ -14,7 +14,7 @@ class NurseApiService {
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
   }
 
-  // Verify OTP for nurse login
+  // Verify OTP for healthcare provider login
   static Future<dynamic> verifyOtp({required String email, required String otp}) async {
     final resp = await http.post(
       Uri.parse('$_base/api/nurse/verify-otp'),
@@ -25,7 +25,7 @@ class NurseApiService {
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
   }
 
-  // Resend OTP for nurse login
+  // Resend OTP for healthcare provider login
   static Future<bool> resendOtp({required String email}) async {
     final resp = await http.post(
       Uri.parse('$_base/api/nurse/resend-otp'),

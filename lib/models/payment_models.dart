@@ -12,7 +12,7 @@ class AppointmentStatus {
   static const String approved = 'approved';
   static const String rejected = 'rejected';
   static const String booked = 'booked'; // After ₹100 paid
-  static const String amountSet = 'amount_set'; // After nurse sets total amount
+  static const String amountSet = 'amount_set'; // After healthcare provider sets total amount
   static const String prePaid = 'pre_paid'; // After 50% pre-payment
   static const String completed = 'completed'; // After 100% payment
   static const String cancelled = 'cancelled';

@@ -184,9 +184,9 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                 
                 const SizedBox(height: 24),
                 
-                // Nurse Services Section
+                // Healthcare provider Services Section
                 _buildFAQSection(
-                  'Nurse Services & Scheduling',
+                  'Healthcare provider Services & Scheduling',
                   [
                     FAQItem(
                       question: 'How do I schedule a nurse?',
@@ -194,11 +194,11 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     ),
                     FAQItem(
                       question: 'What information do I need to provide when scheduling?',
-                      answer: 'You\'ll need to provide the patient\'s full name, age, gender, and a detailed description of the health problem or care requirements. This helps us assign the most suitable nurse for your needs.',
+                      answer: 'You\'ll need to provide the patient\'s full name, age, gender, and a detailed description of the health problem or care requirements. This helps us assign the most suitable healthcare providers for your needs.',
                     ),
                     FAQItem(
                       question: 'What are the available time slots?',
-                      answer: 'Nurse services are available from 9:00 AM to 6:00 PM, with appointments scheduled in 1-hour intervals. You can select any available time slot that works best for you.',
+                      answer: 'Healthcare provider services are available from 9:00 AM to 6:00 PM, with appointments scheduled in 1-hour intervals. You can select any available time slot that works best for you.',
                     ),
                     FAQItem(
                       question: 'Can I schedule for someone else?',

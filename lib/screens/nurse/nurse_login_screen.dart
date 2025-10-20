@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'dart:async';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'appointments_manage_screen.dart';
@@ -17,20 +17,23 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   bool _isOtpLoading = false;
   String? _otpError;
   int _resendCooldown = 0;
-  late final Ticker _ticker;
+  Timer? _resendTimer;
 
   @override
   void initState() {
     super.initState();
-    _ticker = Ticker(_onTick);
   }
 
-  void _onTick(Duration elapsed) {
-    if (_resendCooldown > 0) {
-      setState(() => _resendCooldown--);
-    } else {
-      _ticker.stop();
-    }
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = 120);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCooldown > 0) {
+        setState(() => _resendCooldown--);
+      } else {
+        timer.cancel();
+      }
+    });
   }
 
   final TextEditingController emailController = TextEditingController();
@@ -41,7 +44,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
   @override
   void dispose() {
-    _ticker.dispose();
+    _resendTimer?.cancel();
     _otpController.dispose();
     emailController.dispose();
     passwordController.dispose();
@@ -66,11 +69,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       // Request OTP
       setState(() {
         _showOtpScreen = true;
-        _resendCooldown = 120;
         _otpError = null;
       });
       await NurseApiService.sendOtp(email: emailController.text.trim());
-      _ticker.start();
+      _startResendCooldown();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login failed! Please check credentials')),
@@ -240,9 +242,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final ok = await NurseApiService.resendOtp(email: emailController.text.trim());
     setState(() {
       _isOtpLoading = false;
-      _resendCooldown = 120;
     });
-    _ticker.start();
+    _startResendCooldown();
     if (ok != true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok is String ? ok.toString() : 'Failed to resend OTP')),

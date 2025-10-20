@@ -471,7 +471,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                           ),
                                           if (appointment['post_visit_remarks'] != null) ...[
                                             const SizedBox(height: 12),
-                                            const Text('Nurse Remarks:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const Text('Healthcare provider Remarks:', style: TextStyle(fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 4),
                                             Text(appointment['post_visit_remarks']),
                                           ],
@@ -496,7 +496,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                     ),
                                   ],
                                   
-                                  // Nurse assignment details (shown when approved)
+                                  // healthcare provider assignment details (shown when approved)
                                   if ((appointment['status'] ?? '').toString().toLowerCase() == 'approved') ...[
                                     const Divider(height: 24),
                                     const Text(
@@ -717,7 +717,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Nurse will enable final payment after completing your visit',
+                        'Healthcare provider will enable final payment after completing your visit',
                         style: TextStyle(
                           color: Colors.blue.shade900,
                           fontSize: 13,
@@ -1232,8 +1232,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 }),
                 const Divider(height: 24),
                 
-                // Nurse Professionalism
-                _buildRatingRow('Nurse Professionalism', nurseProfessionalismRating, (rating) {
+                // Healthcare provider Professionalism
+                _buildRatingRow('Healthcare provider Professionalism', nurseProfessionalismRating, (rating) {
                   setState(() => nurseProfessionalismRating = rating);
                 }),
                 const Divider(height: 24),

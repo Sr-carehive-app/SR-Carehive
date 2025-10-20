@@ -69,8 +69,8 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nurse name')),
-              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Nurse phone')),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Healthcare provider name')),
+              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Healthcare provider phone')),
               TextField(controller: branchCtrl, decoration: const InputDecoration(labelText: 'Branch/Office')),
               TextField(controller: commentsCtrl, decoration: const InputDecoration(labelText: 'Comments'), maxLines: 3),
               const SizedBox(height: 8),
@@ -677,7 +677,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                   _kv('Final Payment', '✅ Paid (50%)'),
               ],
               
-              // Assigned Nurse Info
+              // Assigned healthcare provider Info
               if (a['status']?.toString().toLowerCase() == 'approved') ...[
                 const Divider(height: 24),
                 const Text('👩‍⚕️ Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -692,7 +692,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Rejection Info
               if (a['status']?.toString().toLowerCase() == 'rejected') ...[
                 const Divider(height: 24),
-                const Text('❌ Rejection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+                const Text('Rejection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
                 const SizedBox(height: 8),
                 _kv('Reason', fmtVal(a['rejection_reason'])),
               ],
@@ -700,10 +700,10 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Post-Visit Consultation Details (NEW)
               if (a['post_visit_remarks'] != null || a['consulted_doctor_name'] != null) ...[
                 const Divider(height: 24),
-                const Text('📋 Post-Visit Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
+                const Text('Post-Visit Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
                 const SizedBox(height: 8),
                 if (a['post_visit_remarks'] != null && (a['post_visit_remarks'] as String).isNotEmpty)
-                  _kv('Nurse Remarks', fmtVal(a['post_visit_remarks'])),
+                  _kv('Healthcare provider Remarks', fmtVal(a['post_visit_remarks'])),
                 if (a['visit_completed_at'] != null) ...[
                   (() {
                     try {

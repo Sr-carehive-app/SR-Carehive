@@ -1,6 +1,6 @@
 // Defer route registration until after Express app is initialized
 function registerNurseOtpRoutes(app) {
-  // Send OTP for nurse login
+  // Send OTP for healthcare provider login
   app.post('/api/nurse/send-otp', async (req, res) => {
     try {
       const { email, resend = false } = req.body;
@@ -34,11 +34,11 @@ function registerNurseOtpRoutes(app) {
       if (!mailer) {
         return res.status(500).json({ error: 'Email service not configured' });
       }
-      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Nurse Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
+      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive healthcare provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
       try {
         await sendEmail({
           to: normalizedEmail,
-          subject: 'SR CareHive Nurse Login OTP',
+          subject: 'SR CareHive healthcare provider Login OTP',
           html: otpEmailHtml
         });
         return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
@@ -50,7 +50,7 @@ function registerNurseOtpRoutes(app) {
     }
   });
 
-  // Verify OTP for nurse login
+  // Verify OTP for healthcare provider login
   app.post('/api/nurse/verify-otp', (req, res) => {
     try {
       const { email, otp } = req.body;
@@ -81,7 +81,7 @@ function registerNurseOtpRoutes(app) {
   });
 }
 
-// Resend OTP for nurse login (enforces 2 min cooldown)
+// Resend OTP for healthcare provider login (enforces 2 min cooldown)
 function registerNurseResendOtpRoute(app){
   app.post('/api/nurse/resend-otp', async (req, res) => {
     req.body.resend = true;
@@ -89,12 +89,9 @@ function registerNurseResendOtpRoute(app){
     return app._router.handle(req, res, () => {}, 'post', '/api/nurse/send-otp');
   });
 }
-// --- Nurse OTP Login State ---
+// --- healthcare provider OTP Login State ---
 const nurseLoginOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt, verified }
-// Place nurse OTP endpoints after app is initialized
-// Minimal Express server to integrate Razorpay order + signature verification flow.
-// NOTE: Keep key_secret ONLY on server. Do NOT expose to Flutter app.
-// Start: npm install && npm start (runs on http://localhost:9090 by default)
+
 
 import express from 'express';
 import cors from 'cors';
@@ -143,7 +140,7 @@ if (RAZORPAY_KEY_ID) {
 
 const razorpay = new Razorpay({ key_id: RAZORPAY_KEY_ID || 'rzp_test_xxx', key_secret: RAZORPAY_KEY_SECRET || 'test_secret' });
 
-// Register deferred nurse OTP routes now that 'app' exists
+// Register deferred healthcare provider OTP routes now that 'app' exists
 registerNurseOtpRoutes(app);
 registerNurseResendOtpRoute(app);
 
@@ -176,7 +173,7 @@ const SMTP_SECURE = (process.env.SMTP_SECURE || '').toLowerCase() === 'true';
 const SENDER_EMAIL = (process.env.SENDER_EMAIL || 'srcarehive@gmail.com').trim();
 const SENDER_NAME = (process.env.SENDER_NAME || 'SR CareHive').trim();
 
-// Admin/Nurse emails that receive all notifications
+// Admin/healthcare provider emails that receive all notifications
 const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
 
 // Frontend URL for email links (used when users don't have app installed)
@@ -298,13 +295,13 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
     
     const info = await mailer.sendMail({ from, to, subject, html, attachments });
     
-    console.log(`[EMAIL] ✅ Email sent successfully!`);
+    console.log(`[EMAIL]  Email sent successfully!`);
     console.log(`[EMAIL] Message ID: ${info.messageId}`);
     console.log(`[EMAIL] Response: ${info.response}`);
     
     return info;
   } catch (error) {
-    console.error(`[EMAIL] ❌ Failed to send email to ${to}`);
+    console.error(`[EMAIL]  Failed to send email to ${to}`);
     console.error(`[EMAIL] Error: ${error.message}`);
     console.error(`[EMAIL] Full error:`, error);
     throw error; // Re-throw to handle it in calling function
@@ -337,7 +334,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
           <li><b>Duration:</b> ${appointment?.duration_hours ?? '-'} hr</li>
         </ul>
         <p>Receipt attached.</p>
-        <p>— SR CareHive</p>
+        <p>— Serechi By SR CareHive</p>
       </div>`;
 
     if (patientEmail) await sendEmail({ to: patientEmail, subject, html, attachments: attach });
@@ -378,8 +375,8 @@ async function sendApprovalEmail(appointment) {
     const html = `
       <div>
         <p>Hi ${appointment.full_name || 'Patient'},</p>
-        <p>Your nurse request has been <b>approved</b>.</p>
-        <p><b>Assigned Nurse Details</b></p>
+        <p>Your healthcare provider request has been <b>approved</b>.</p>
+        <p><b>Assigned Healthcare provider Details</b></p>
         <ul>
           <li><b>Name:</b> ${appointment.nurse_name || '-'}</li>
           <li><b>Phone:</b> ${appointment.nurse_phone || '-'}</li>
@@ -388,9 +385,9 @@ async function sendApprovalEmail(appointment) {
           <li><b>Available:</b> ${appointment.nurse_available ? 'Yes' : 'No'}</li>
         </ul>
         <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} • ${appointment.duration_hours ?? '-'} hr</p>
-        <p>— SR CareHive</p>
+        <p>— Serechi By SR CareHive</p>
       </div>`;
-    await sendEmail({ to, subject: 'Your nurse appointment is approved', html, attachments });
+    await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
   } catch (e) {
     console.error('[EMAIL] approve email failed', e.message);
   }
@@ -417,11 +414,11 @@ async function sendRejectionEmail(appointment) {
     const html = `
       <div>
         <p>Hi ${appointment.full_name || 'Patient'},</p>
-        <p>We’re sorry to inform you that your nurse request was <b>rejected</b> at this time.</p>
+        <p>We’re sorry to inform you that your healthcare provider request was <b>rejected</b> at this time.</p>
         <p><b>Reason:</b> ${appointment.rejection_reason || '-'}</p>
         <p>— Serechi By SR CareHive</p>
       </div>`;
-    await sendEmail({ to, subject: 'Your nurse appointment was rejected', html, attachments });
+    await sendEmail({ to, subject: 'Your healthcare provider appointment was rejected', html, attachments });
   } catch (e) {
     console.error('[EMAIL] reject email failed', e.message);
   }
@@ -434,21 +431,21 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
         <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
           <h1 style="color: white; margin: 0; font-size: 26px;">
-            ${type === 'NEW_APPOINTMENT' ? '📋 New Appointment Request' : 
-              type === 'REGISTRATION_PAYMENT' ? '💳 Registration Payment Received (₹100)' :
-              type === 'PRE_VISIT_PAYMENT' ? '💰 Pre-Visit Payment Received (50%)' :
-              type === 'FINAL_PAYMENT' ? '✅ Final Payment Received (50%)' : '📬 Admin Notification'}
+            ${type === 'NEW_APPOINTMENT' ? 'New Appointment Request' : 
+              type === 'REGISTRATION_PAYMENT' ? 'Registration Payment Received (₹100)' :
+              type === 'PRE_VISIT_PAYMENT' ? 'Pre-Visit Payment Received (50%)' :
+              type === 'FINAL_PAYMENT' ? 'Final Payment Received (50%)' : 'Admin Notification'}
           </h1>
         </div>
         
         <div style="background: white; padding: 25px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
             <p style="margin: 0; color: #856404; font-size: 16px; font-weight: bold;">
-              ${type === 'NEW_APPOINTMENT' ? '⚡ Action Required: Review and assign nurse' :
-                type === 'REGISTRATION_PAYMENT' ? '✅ Patient paid registration fee - Review appointment' :
-                type === 'PRE_VISIT_PAYMENT' ? '✅ Patient ready for appointment - Proceed with visit' :
-                type === 'FINAL_PAYMENT' ? '🎉 Service completed - All payments received!' :
-                type === 'VISIT_COMPLETED' ? '✅ Visit completed - Final payment enabled for patient' : ''}
+              ${type === 'NEW_APPOINTMENT' ? 'Action Required: Review and assign nurse' :
+                type === 'REGISTRATION_PAYMENT' ? 'Patient paid registration fee - Review appointment' :
+                type === 'PRE_VISIT_PAYMENT' ? 'Patient ready for appointment - Proceed with visit' :
+                type === 'FINAL_PAYMENT' ? 'Service completed - All payments received!' :
+                type === 'VISIT_COMPLETED' ? 'Visit completed - Final payment enabled for patient' : ''}
             </p>
           </div>
 
@@ -462,7 +459,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>` : ''}
 
           <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #1976d2;">👤 Patient Information</h3>
+            <h3 style="margin-top: 0; color: #1976d2;">Patient Information</h3>
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Full Name:</strong></td>
@@ -488,7 +485,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>
 
           <div style="background: #fce4ec; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #c2185b;">📞 Contact Details</h3>
+            <h3 style="margin-top: 0; color: #c2185b;">Contact Details</h3>
             <p style="margin: 8px 0;"><strong>Phone:</strong> <a href="tel:${appointment?.phone}">${appointment?.phone || 'N/A'}</a></p>
             <p style="margin: 8px 0;"><strong>Email:</strong> <a href="mailto:${appointment?.patient_email}">${appointment?.patient_email || 'N/A'}</a></p>
             <p style="margin: 8px 0;"><strong>Address:</strong> ${appointment?.address || 'N/A'}</p>
@@ -496,7 +493,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>
 
           <div style="background: #f3e5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #7b1fa2;">🏥 Medical Information</h3>
+            <h3 style="margin-top: 0; color: #7b1fa2;">Medical Information</h3>
             <p style="margin: 8px 0;"><strong>Problem/Symptoms:</strong></p>
             <p style="background: white; padding: 12px; border-radius: 6px; margin: 8px 0;">${appointment?.problem || 'N/A'}</p>
             ${appointment?.primary_doctor_name ? `
@@ -507,7 +504,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>
 
           <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #3f51b5;">📅 Appointment Schedule</h3>
+            <h3 style="margin-top: 0; color: #3f51b5;">Appointment Schedule</h3>
             <p style="margin: 8px 0;"><strong>Date:</strong> ${appointment?.date || 'N/A'}</p>
             <p style="margin: 8px 0;"><strong>Time:</strong> ${appointment?.time || 'N/A'}</p>
             <p style="margin: 8px 0;"><strong>Appointment ID:</strong> #${appointment?.id || 'N/A'}</p>
@@ -516,7 +513,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
 
           ${appointment?.nurse_name ? `
           <div style="background: #e0f2f1; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #00796b;">👩‍⚕️ Assigned Nurse</h3>
+            <h3 style="margin-top: 0; color: #00796b;">Assigned Healthcare provider</h3>
             <p style="margin: 8px 0;"><strong>Name:</strong> ${appointment.nurse_name}</p>
             <p style="margin: 8px 0;"><strong>Phone:</strong> ${appointment.nurse_phone || 'N/A'}</p>
             <p style="margin: 8px 0;"><strong>Branch:</strong> ${appointment.nurse_branch || 'N/A'}</p>
@@ -525,7 +522,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           <div style="text-align: center; margin: 30px 0;">
             <a href="${FRONTEND_URL}/nurse-admin" 
                style="display: inline-block; background: #ff6b6b; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-              📋 Manage Appointments
+              Manage Appointments
             </a>
           </div>
 
@@ -538,11 +535,11 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
     `;
 
     // Send to all admin emails
-    let subjectPrefix = '📬 NOTIFICATION';
-    if (type === 'NEW_APPOINTMENT') subjectPrefix = '📋 NEW';
-    else if (type === 'REGISTRATION_PAYMENT') subjectPrefix = '💳 REGISTRATION';
-    else if (type === 'PRE_VISIT_PAYMENT') subjectPrefix = '💰 PRE-VISIT';
-    else if (type === 'FINAL_PAYMENT') subjectPrefix = '✅ FINAL';
+    let subjectPrefix = 'NOTIFICATION';
+    if (type === 'NEW_APPOINTMENT') subjectPrefix = 'NEW';
+    else if (type === 'REGISTRATION_PAYMENT') subjectPrefix = 'REGISTRATION';
+    else if (type === 'PRE_VISIT_PAYMENT') subjectPrefix = 'PRE-VISIT';
+    else if (type === 'FINAL_PAYMENT') subjectPrefix = 'FINAL';
     
     const emailPromises = ADMIN_EMAILS.map(adminEmail => 
       sendEmail({ 
@@ -559,7 +556,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
   }
 }
 
-// --- Nurse admin auth (env-based) ---
+// --- healthcare provider admin auth (env-based) ---
 // We issue a short-lived bearer token kept in memory. No credentials leaked to client code.
 const nurseSessions = new Map(); // token -> { createdAt }
 const NURSE_EMAIL = (process.env.NURSE_ADMIN_EMAIL || '').trim().toLowerCase();
@@ -589,7 +586,7 @@ app.post('/api/nurse/login', (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    if (!NURSE_EMAIL || !NURSE_PASSWORD) return res.status(500).json({ error: 'Server nurse creds not configured' });
+    if (!NURSE_EMAIL || !NURSE_PASSWORD) return res.status(500).json({ error: 'Server healthcare provider creds not configured' });
     if (email.toLowerCase() === NURSE_EMAIL && password === NURSE_PASSWORD) {
       const token = createSession();
       return res.json({ success: true, token });
@@ -1027,7 +1024,7 @@ app.post('/api/nurse/appointments/archive-past', async (req, res) => {
       final_paid: a.final_paid,
       final_paid_at: a.final_paid_at,
       
-      // ✅ NURSE ASSIGNMENT
+      // ✅ healthcare provider ASSIGNMENT
       nurse_name: a.nurse_name,
       nurse_phone: a.nurse_phone,
       nurse_branch: a.nurse_branch,
@@ -1382,7 +1379,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4acc 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Registration Successful!</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Registration Successful!</h1>
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
@@ -1402,7 +1399,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           </div>
 
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <h4 style="margin-top: 0; color: #856404;">🔔 What Happens Next?</h4>
+            <h4 style="margin-top: 0; color: #856404;">What Happens Next?</h4>
             <ol style="color: #856404; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
               <li>Our care provider will contact you shortly to confirm appointment details</li>
               <li>They will assess your needs and set the total service amount</li>
@@ -1413,7 +1410,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
 
           <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745; margin: 20px 0;">
             <p style="margin: 0; color: #155724;">
-              <strong>✅ Your booking is now confirmed!</strong> We'll keep you updated via email and SMS.
+              <strong>Your booking is now confirmed!</strong> We'll keep you updated via email and SMS.
             </p>
           </div>
 
@@ -1435,7 +1432,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
     // Email to Nurse/Admin
     const nurseHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2260FF;">💰 New Registration Payment Received</h2>
+        <h2 style="color: #2260FF;">New Registration Payment Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Patient:</strong> ${patientName || 'N/A'} (${patientPhone || 'N/A'})</p>
@@ -1447,7 +1444,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         </div>
         <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 0; color: #856404;">
-            <strong>⏭️ Next Action:</strong> Please contact the patient and set the total service amount in the nurse dashboard.
+            <strong>Next Action:</strong> Please contact the patient and set the total service amount in the healthcare provider dashboard.
           </p>
         </div>
         <a href="${FRONTEND_URL}/nurse/manage-appointments" 
@@ -1461,7 +1458,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
     const emailPromises = [
       sendEmail({ 
         to: patientEmail, 
-        subject: `✅ Registration Payment Successful - Appointment #${appointmentId}`, 
+        subject: `Registration Payment Successful - Appointment #${appointmentId}`, 
         html: patientHtml 
       })
     ];
@@ -1470,7 +1467,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
       emailPromises.push(
         sendEmail({ 
           to: nurseEmail, 
-          subject: `💰 Registration Payment Received - Appointment #${appointmentId}`, 
+          subject: `Registration Payment Received - Appointment #${appointmentId}`, 
           html: nurseHtml 
         })
       );
@@ -1483,7 +1480,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our care provider will contact you soon. Check email for details.`,
+          body: `CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -1503,7 +1500,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
   }
 });
 
-// 2. Amount Set Notification (Nurse sets total amount)
+// 2. Amount Set Notification (healthcare provider sets total amount)
 app.post('/api/notify-amount-set', async (req, res) => {
   try {
     const { 
@@ -1530,7 +1527,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">💰 Service Amount Set</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Service Amount Set</h1>
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
@@ -1570,7 +1567,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
 
           <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2196f3;">
             <p style="margin: 0; color: #1565c0;">
-              <strong>ℹ️ Next Step:</strong> Please pay ₹${preAmount} before your scheduled appointment to confirm your booking.
+              <strong>Next Step:</strong> Please pay ₹${preAmount} before your scheduled appointment to confirm your booking.
             </p>
           </div>
 
@@ -1591,7 +1588,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
             Need clarification on the service charges? Please contact your care provider.
-            <br>SR CareHive | srcarehive@gmail.com
+            <br>Serechi By SR CareHive | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -1599,7 +1596,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
 
     await sendEmail({ 
       to: patientEmail, 
-      subject: `💰 Service Amount Set - ₹${totalAmount} | Appointment #${appointmentId}`, 
+      subject: `Service Amount Set - ₹${totalAmount} | Appointment #${appointmentId}`, 
       html: patientHtml 
     });
 
@@ -1610,7 +1607,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `CareHive: Service amount set ₹${totalAmount} for appointment #${appointmentId}. Pay ₹${preAmount} (50%) before visit. Login to pay now.`,
+          body: `SR CareHive: Service amount set ₹${totalAmount} for appointment #${appointmentId}. Pay ₹${preAmount} (50%) before visit. Login to pay now.`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -1671,18 +1668,18 @@ app.post('/api/notify-pre-payment', async (req, res) => {
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #3f51b5 0%, #303f9f 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Pre-Visit Payment Successful!</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Pre-Visit Payment Successful!</h1>
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
-            Your pre-visit payment of <strong style="color: #3f51b5; font-size: 18px;">₹${amount}</strong> has been received successfully! 🎉
+            Your pre-visit payment of <strong style="color: #3f51b5; font-size: 18px;">₹${amount}</strong> has been received successfully! 
           </p>
 
           <div style="background: #e8eaf6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3f51b5;">
-            <h3 style="margin-top: 0; color: #3f51b5;">💳 Payment Details</h3>
+            <h3 style="margin-top: 0; color: #3f51b5;">Payment Details</h3>
             <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentId}</p>
             ${receiptId ? `<p style="margin: 5px 0;"><strong>Receipt ID:</strong> ${receiptId}</p>` : ''}
             <p style="margin: 5px 0;"><strong>Amount Paid:</strong> ₹${amount}</p>
@@ -1690,18 +1687,18 @@ app.post('/api/notify-pre-payment', async (req, res) => {
           </div>
 
           <div style="background: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
-            <h4 style="margin-top: 0; color: #155724;">🎯 You're All Set!</h4>
+            <h4 style="margin-top: 0; color: #155724;">You're All Set!</h4>
             <p style="color: #155724; margin: 10px 0;">Your appointment is confirmed. Our care provider will visit you as scheduled.</p>
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
-              <p style="margin: 5px 0;"><strong>📅 Date:</strong> ${date || 'To be confirmed'}</p>
-              <p style="margin: 5px 0;"><strong>🕐 Time:</strong> ${time || 'To be confirmed'}</p>
-              ${nurseName ? `<p style="margin: 5px 0;"><strong>👨‍⚕️ Care Provider:</strong> ${nurseName}</p>` : ''}
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
+              <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
+              ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
             </div>
           </div>
 
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
             <p style="margin: 0; color: #856404;">
-              <strong>💡 Remember:</strong> The remaining ₹${finalAmount} is payable after successful completion of your service.
+              <strong>Remember:</strong> The remaining ₹${finalAmount} is payable after successful completion of your service.
             </p>
           </div>
 
@@ -1713,7 +1710,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            SR CareHive | srcarehive@gmail.com
+            Serechi By SR CareHive | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -1721,7 +1718,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
 
     const nurseHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #3f51b5;">✅ Pre-Visit Payment Received</h2>
+        <h2 style="color: #3f51b5;">Pre-Visit Payment Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
@@ -1731,7 +1728,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
         </div>
         <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
           <p style="margin: 0; color: #155724;">
-            <strong>✅ Patient is ready for appointment.</strong> Please proceed with the scheduled visit.
+            <strong>Patient is ready for appointment.</strong> Please proceed with the scheduled visit.
           </p>
         </div>
       </div>
@@ -1740,7 +1737,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
     const emailPromises = [
       sendEmail({ 
         to: patientEmail, 
-        subject: `✅ Pre-Visit Payment Successful - Appointment #${appointmentId}`, 
+        subject: `Pre-Visit Payment Successful - Appointment #${appointmentId}`, 
         html: patientHtml 
       })
     ];
@@ -1749,7 +1746,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
       emailPromises.push(
         sendEmail({ 
           to: nurseEmail, 
-          subject: `✅ Pre-Payment Received - Appointment #${appointmentId}`, 
+          subject: `Pre-Payment Received - Appointment #${appointmentId}`, 
           html: nurseHtml 
         })
       );
@@ -1762,7 +1759,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `CareHive: Pre-visit payment ₹${amount} received! Appointment #${appointmentId} confirmed for ${date || 'scheduled date'}. Remaining ₹${finalAmount} after visit.`,
+          body: `SR CareHive: Pre-visit payment ₹${amount} received! Appointment #${appointmentId} confirmed for ${date || 'scheduled date'}. Remaining ₹${finalAmount} after visit.`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -1848,7 +1845,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
           </p>
 
           <div style="background: #e0f2f1; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #009688; text-align: center;">
-            <h3 style="margin: 0 0 15px 0; color: #009688;">💰 Payment Summary</h3>
+            <h3 style="margin: 0 0 15px 0; color: #009688;">Payment Summary</h3>
             <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">REGISTRATION</p>
@@ -1878,7 +1875,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
           </div>
 
           <div style="background: #fff9c4; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
-            <h3 style="margin: 0 0 10px 0; color: #f57f17;">⭐ Rate Your Experience</h3>
+            <h3 style="margin: 0 0 10px 0; color: #f57f17;">Rate Your Experience</h3>
             <p style="color: #666; margin: 0;">We'd love to hear your feedback about our service!</p>
           </div>
 
@@ -1899,7 +1896,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
             Need assistance? Contact us at srcarehive@gmail.com
-            <br>SR CareHive - Quality Home Care Services
+            <br>Serechi By SR CareHive - Quality Home Care Services
           </p>
         </div>
       </div>
@@ -1917,7 +1914,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         </div>
         <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
           <p style="margin: 0; color: #155724;">
-            <strong>✅ Service completed!</strong> All payments received. Great job!
+            <strong>Service completed!</strong> All payments received. Great job!
           </p>
         </div>
       </div>
@@ -1935,7 +1932,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
       emailPromises.push(
         sendEmail({ 
           to: nurseEmail, 
-          subject: `✅ Final Payment Received - Appointment #${appointmentId}`, 
+          subject: `Final Payment Received - Appointment #${appointmentId}`, 
           html: nurseHtml 
         })
       );
@@ -1948,7 +1945,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `CareHive: Final payment ₹${amount} received! Total paid ₹${totalPaid || (100 + amount * 2)}. Service complete. Thank you for choosing SR CareHive! 🎉`,
+          body: `SR CareHive: Final payment ₹${amount} received! Total paid ₹${totalPaid || (100 + amount * 2)}. Service complete. Thank you for choosing SR CareHive! `,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -2025,23 +2022,23 @@ app.post('/api/notify-visit-completed', async (req, res) => {
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Visit Completed!</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Visit Completed!</h1>
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
-            Your nurse has completed the visit and submitted the post-visit consultation summary.
+            Your healthcare provider has completed the visit and submitted the post-visit consultation summary.
           </p>
 
           <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
             <h3 style="margin-top: 0; color: #2e7d32;">📋 Visit Summary</h3>
-            ${postVisitRemarks ? `<p style="margin: 5px 0;"><strong>Nurse Remarks:</strong><br/>${postVisitRemarks}</p>` : ''}
+            ${postVisitRemarks ? `<p style="margin: 5px 0;"><strong>Healthcare provider Remarks:</strong><br/>${postVisitRemarks}</p>` : ''}
             ${nurseName ? `<p style="margin: 5px 0;"><strong>Care Provider:</strong> ${nurseName}</p>` : ''}
             ${doctorName ? `
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #c8e6c9;">
-                <p style="margin: 5px 0; color: #2e7d32; font-weight: bold;">👨‍⚕️ Recommended Doctor:</p>
+                <p style="margin: 5px 0; color: #2e7d32; font-weight: bold;">Recommended Doctor:</p>
                 <p style="margin: 5px 0;"><strong>Name:</strong> ${doctorName}</p>
                 ${doctorPhone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${doctorPhone}</p>` : ''}
                 ${doctorSpecialization ? `<p style="margin: 5px 0;"><strong>Specialization:</strong> ${doctorSpecialization}</p>` : ''}
@@ -2051,7 +2048,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
           </div>
 
           <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
-            <h4 style="margin-top: 0; color: #e65100;">💳 Final Payment Now Available</h4>
+            <h4 style="margin-top: 0; color: #e65100;">Final Payment Now Available</h4>
             <p style="color: #e65100; margin: 10px 0;">
               You can now complete your final payment of <strong>₹${finalAmount}</strong> to complete this appointment.
             </p>
@@ -2065,7 +2062,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            SR CareHive | srcarehive@gmail.com
+           Serechi By SR CareHive | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -2074,7 +2071,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
     // Send email to patient
     await sendEmail({ 
       to: patientEmail, 
-      subject: `✅ Visit Completed - Final Payment Available - Appointment #${appointmentId}`, 
+      subject: `Visit Completed - Final Payment Available - Appointment #${appointmentId}`, 
       html: patientHtml 
     });
 
@@ -2085,7 +2082,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `CareHive: Visit completed! You can now pay the final amount ₹${finalAmount} to complete your appointment #${appointmentId}. Thank you for choosing us!`,
+          body: `SR CareHive: Visit completed! You can now pay the final amount ₹${finalAmount} to complete your appointment #${appointmentId}. Thank you for choosing us!`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -2134,14 +2131,14 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 28px;">⭐ Thank You for Your Feedback!</h1>
+          <h1 style="color: white; margin: 0; font-size: 28px;">Thank You for Your Feedback!</h1>
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Valued Customer'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
-            We sincerely appreciate you taking the time to share your feedback about our service! 🙏
+            We sincerely appreciate you taking the time to share your feedback about our service! 
           </p>
 
           <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border-left: 4px solid #ffa726;">
@@ -2154,7 +2151,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
           </div>
 
           <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
-            <h4 style="margin-top: 0; color: #2e7d32;">💚 Your feedback helps us improve!</h4>
+            <h4 style="margin-top: 0; color: #2e7d32;">Your feedback helps us improve!</h4>
             <p style="color: #2e7d32; margin: 10px 0; line-height: 1.6;">
               At SR CareHive, we're committed to providing the best possible care. Your honest feedback allows us to continuously improve our services and better serve you.
             </p>
@@ -2168,7 +2165,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-            SR CareHive | srcarehive@gmail.com | Thank you for choosing us!
+           Serechi By SR CareHive | srcarehive@gmail.com | Thank you for choosing us!
           </p>
         </div>
       </div>
@@ -2190,14 +2187,14 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
     // Send emails
     await sendEmail({
       to: patientEmail,
-      subject: `⭐ Thank You for Your Feedback - Appointment #${appointmentId}`,
+      subject: `Thank You for Your Feedback - Appointment #${appointmentId}`,
       html: patientHtml
     });
 
     // Send to admin emails
     await sendEmail({
       to: ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'],
-      subject: `⭐ New Feedback - Appointment #${appointmentId}`,
+      subject: `New Feedback - Appointment #${appointmentId}`,
       html: adminHtml
     });
 
@@ -2279,7 +2276,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     console.log(`[OTP-RESET] Query result - Error:`, patientError);
 
     if (patientError || !patient) {
-      console.log(`[OTP-RESET] ❌ User not found: ${normalizedEmail}`);
+      console.log(`[OTP-RESET] User not found: ${normalizedEmail}`);
       console.log(`[OTP-RESET] Error details:`, patientError?.message, patientError?.code);
       
       // For debugging: Try case-insensitive search
@@ -2292,7 +2289,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
       console.log(`[OTP-RESET] Case-insensitive result:`, altPatient);
       
       if (altPatient && altPatient.length > 0) {
-        console.log(`[OTP-RESET] ⚠️ Found user with case-insensitive match: ${altPatient[0].email}`);
+        console.log(`[OTP-RESET] Found user with case-insensitive match: ${altPatient[0].email}`);
         console.log(`[OTP-RESET] Database has: "${altPatient[0].email}"`);
         console.log(`[OTP-RESET] Frontend sent: "${normalizedEmail}"`);
       }
@@ -2339,7 +2336,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
                 <!-- Header -->
                 <tr>
                   <td style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 40px 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">🔐 Reset Your Password</h1>
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Reset Your Password</h1>
                   </td>
                 </tr>
                 
@@ -2397,7 +2394,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
                 <tr>
                   <td style="text-align: center; padding: 20px;">
                     <p style="font-size: 11px; color: #999; margin: 0;">
-                      🔒 For security reasons, never share your OTP or password with anyone.<br/>
+                      For security reasons, never share your OTP or password with anyone.<br/>
                       SR CareHive will never ask for your OTP via phone or chat.
                     </p>
                   </td>
@@ -2421,7 +2418,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     try {
       const emailResult = await sendEmail({
         to: normalizedEmail,
-        subject: '🔐 Your Password Reset OTP - SR CareHive',
+        subject: 'Your Password Reset OTP - SR CareHive',
         html: otpEmailHtml
       });
 
@@ -2430,7 +2427,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
         return res.status(500).json({ error: 'Email service not available' });
       }
 
-      console.log(`[SUCCESS] ✅ OTP email sent successfully to: ${normalizedEmail}`);
+      console.log(`[SUCCESS] OTP email sent successfully to: ${normalizedEmail}`);
 
       res.json({ 
         success: true, 
@@ -2514,7 +2511,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`[OTP-VERIFY] ✅ OTP verified successfully for: ${normalizedEmail}`);
+    console.log(`[OTP-VERIFY] OTP verified successfully for: ${normalizedEmail}`);
 
     // OTP verified - mark as verified but don't delete yet
     otpData.verified = true;
