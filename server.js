@@ -108,15 +108,15 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-// Configurable CORS: specify comma-separated origins in ALLOWED_ORIGINS
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*')
-  .split(',')
-  .map(o => o.trim())
-  .filter(o => o.length > 0);
-
+// Configurable CORS: allow localhost:5173, Vercel, and production frontend
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://srcarehive.com',
+  'https://sr-carehive.vercel.app'
+];
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error('CORS blocked: ' + origin));
   },
   credentials: false

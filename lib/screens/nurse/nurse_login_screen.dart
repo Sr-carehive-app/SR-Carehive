@@ -239,19 +239,26 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
   Future<void> _handleResendOtp() async {
     setState(() => _isOtpLoading = true);
-    final ok = await NurseApiService.resendOtp(email: emailController.text.trim());
-    setState(() {
-      _isOtpLoading = false;
-    });
-    _startResendCooldown();
-    if (ok == true) {
+    try {
+      final ok = await NurseApiService.resendOtp(email: emailController.text.trim());
+      _startResendCooldown();
+      if (ok == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OTP resent successfully')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok is String ? ok.toString() : 'Failed to resend OTP')),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP resent successfully')),
+        SnackBar(content: Text('Failed to resend OTP: $e')),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok is String ? ok.toString() : 'Failed to resend OTP')),
-      );
+    } finally {
+      setState(() {
+        _isOtpLoading = false;
+      });
     }
   }
 }
