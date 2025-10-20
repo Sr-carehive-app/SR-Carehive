@@ -7,8 +7,9 @@ import 'package:care12/screens/patient/profile/settings_screen.dart';
 
 class PatientDashboardScreen extends StatefulWidget {
   final String? userName;
+  final int initialIndex;
 
-  const PatientDashboardScreen({Key? key, this.userName}) : super(key: key);
+  const PatientDashboardScreen({Key? key, this.userName, this.initialIndex = 0}) : super(key: key);
 
   @override
   State<PatientDashboardScreen> createState() => _PatientDashboardScreenState();
@@ -23,6 +24,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _loadProfileData();
   }
 
@@ -222,10 +224,9 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                   subtitle: 'Professional home care',
                   image: 'assets/images/nurse.png',
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ScheduleNurseScreen()),
-                    );
+                    setState(() {
+                      _currentIndex = 2; // Switch to Schedule tab within dashboard
+                    });
                   },
                 ),
                 const SizedBox(height: 12),
@@ -235,10 +236,9 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                   subtitle: 'View your scheduled appointments',
                   image: 'assets/images/logo.png',
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AppointmentsScreen()),
-                    );
+                    setState(() {
+                      _currentIndex = 1; // Switch to Appointments tab within dashboard
+                    });
                   },
                 ),
               ],

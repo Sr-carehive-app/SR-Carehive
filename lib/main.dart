@@ -204,6 +204,7 @@ class _MyAppState extends State<MyApp> {
       ),
       routes: {
         '/home': (_) => const PatientDashboardScreen(),
+        // Keep legacy route but prefer using /home with initialIndex
         '/appointments': (_) => const patient_pages.AppointmentsScreen(),
         '/schedule': (_) => const ScheduleNurseScreen(),
         '/profile': (_) => const ProfileScreen(),

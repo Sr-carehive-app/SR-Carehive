@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:care12/screens/patient/patient_dashboard_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
@@ -384,8 +385,11 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       if (mounted) {
         _showSuccessSnackBar('Appointment request submitted successfully! Admin will review shortly.');
         _clearForm();
-        // Navigate to appointments page
-        Navigator.of(context).pushReplacementNamed('/appointments');
+        // Navigate to dashboard with Appointments tab selected to preserve navbar/back stack
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const PatientDashboardScreen(initialIndex: 1)),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {

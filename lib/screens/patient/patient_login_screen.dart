@@ -283,17 +283,9 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         if (existing == null) {
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('User does not exist. Please register to continue.'),
-                              action: SnackBarAction(
-                                label: 'Register',
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const PatientSignUpScreen()),
-                                  );
-                                },
-                              ),
+                            const SnackBar(
+                              content: Text('User does not exist. Please register to continue.'),
+                              duration: Duration(seconds: 4),
                             ),
                           );
                           return; // Stop here; do not call OTP API
