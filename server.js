@@ -1247,7 +1247,7 @@ app.post('/api/send-otp-email', async (req, res) => {
     const { email, otp } = req.body;
     
     if (!email || !otp) {
-      return res.status(400).json({ error: 'Email and OTP are required' });
+      return res.status(400).json({ error: 'OTP is required' });
     }
 
     if (!mailer) {
@@ -2462,7 +2462,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
     const { email, otp } = req.body;
     
     if (!email || !otp) {
-      return res.status(400).json({ error: 'Email and OTP are required' });
+      return res.status(400).json({ error: 'OTP required' });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
