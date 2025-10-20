@@ -168,7 +168,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'Patient paid ₹100 registration fee. Set the total service amount based on requirements.',
+                        'Healthcare seeker paid ₹100 registration fee. Set the total service amount based on requirements.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -320,7 +320,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           'status': 'amount_set',
         }).eq('id', appt['id']);
         
-        // Send email/SMS notification to patient
+        // Send email/SMS notification to healthcare seeker
         try {
           final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
           final notifyUri = Uri.parse('$apiBase/api/notify-amount-set');
@@ -415,7 +415,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                 controller: postVisitRemarksCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Post-Visit Remarks *',
-                  hintText: 'Describe the service provided, patient condition, etc.',
+                  hintText: 'Describe the service provided, healthcare seeker condition, etc.',
                   border: OutlineInputBorder(),
                   helperText: 'Required: Summary of your visit',
                 ),
@@ -477,7 +477,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
-                        'This will enable final payment for the patient',
+                        'This will enable final payment for the healthcare seeker',
                         style: TextStyle(fontSize: 13),
                       ),
                     ),
@@ -555,7 +555,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           'visit_completion_enabled': true, // Enable final payment
         }).eq('id', appt['id']);
         
-        // Send email/SMS notification to patient
+        // Send email/SMS notification to healthcare seeker
         try {
           final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
           final notifyUri = Uri.parse('$apiBase/api/notify-visit-completed');
@@ -585,7 +585,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Visit completed! Final payment enabled for patient.'),
+            content: Text('✅ Visit completed! Final payment enabled for healthcare seeker.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -617,14 +617,14 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Basic Appointment Info
-              const Text('📅 Appointment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('Appointment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               _kv('Date', fmtDate()),
               _kv('Time', fmtVal(a['time'])),
               
               // Patient Information
               const Divider(height: 24),
-              const Text('👤 Patient Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('Healthcare seeker Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               _kv('Full Name', fmtVal(a['full_name'])),
               _kv('Age', fmtVal(a['age'])),
@@ -633,7 +633,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               
               // Contact Details
               const Divider(height: 24),
-              const Text('📞 Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               _kv('Email', fmtVal(a['patient_email'])),
               _kv('Phone', fmtVal(a['phone'])),
@@ -642,7 +642,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               
               // Medical Information
               const Divider(height: 24),
-              const Text('🏥 Medical Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('Medical Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               if (a['problem'] != null && (a['problem'] as String).isNotEmpty) 
                 _kv('Problem', a['problem']),
@@ -652,7 +652,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Primary Doctor Details
               if (a['primary_doctor_name'] != null || a['primary_doctor_phone'] != null || a['primary_doctor_location'] != null) ...[
                 const Divider(height: 24),
-                const Text('👨‍⚕️ Primary Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Primary Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 if (a['primary_doctor_name'] != null && (a['primary_doctor_name'] as String).isNotEmpty)
                   _kv('Doctor Name', fmtVal(a['primary_doctor_name'])),
@@ -665,7 +665,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Payment Status (if applicable)
               if (a['total_amount'] != null || a['registration_paid'] == true) ...[
                 const Divider(height: 24),
-                const Text('💳 Payment Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Payment Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 if (a['registration_paid'] == true)
                   _kv('Registration', '✅ Paid (₹1)'),
@@ -680,7 +680,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Assigned healthcare provider Info
               if (a['status']?.toString().toLowerCase() == 'approved') ...[
                 const Divider(height: 24),
-                const Text('👩‍⚕️ Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 _kv('Name', fmtVal(a['nurse_name'])),
                 _kv('Phone', fmtVal(a['nurse_phone'])),

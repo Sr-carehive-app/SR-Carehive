@@ -159,7 +159,7 @@ if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || proces
 
 // In-memory pending appointment store: orderId -> appointment payload (for dev only)
 const pendingAppointments = new Map();
-// appointmentId -> patientEmail (to email on approve/reject even if DB lacks column)
+// appointmentId -> healthcare seeker Email (to email on approve/reject even if DB lacks column)
 const appointmentEmailById = new Map();
 // orderId -> appointmentId mapping when we create draft rows at order creation
 const orderToAppointmentId = new Map();
@@ -255,7 +255,7 @@ function generateReceiptPdfBuffer({
       doc.text(`Amount: ₹${amountRupees != null ? amountRupees : '-'}`);
       doc.moveDown();
 
-      doc.fontSize(12).text('Patient / Appointment Details', { underline: true });
+      doc.fontSize(12).text('Healthcare seeker / Appointment Details', { underline: true });
       const lines = [
         ['Name', appointment.full_name],
         ['Email', appointment.patient_email],
@@ -324,7 +324,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
     const subject = 'Your Serechi payment confirmation';
     const html = `
       <div>
-        <p>Hi ${appointment?.full_name || 'Patient'},</p>
+        <p>Hi ${appointment?.full_name || 'Healthcare seeker'},</p>
         <p>We received your payment and scheduled request. Your appointment is now pending assignment.</p>
         <ul>
           <li><b>Order ID:</b> ${orderId}</li>
@@ -374,7 +374,7 @@ async function sendApprovalEmail(appointment) {
     }
     const html = `
       <div>
-        <p>Hi ${appointment.full_name || 'Patient'},</p>
+        <p>Hi ${appointment.full_name || 'Healthcare seeker'},</p>
         <p>Your healthcare provider request has been <b>approved</b>.</p>
         <p><b>Assigned Healthcare provider Details</b></p>
         <ul>
@@ -413,7 +413,7 @@ async function sendRejectionEmail(appointment) {
     }
     const html = `
       <div>
-        <p>Hi ${appointment.full_name || 'Patient'},</p>
+        <p>Hi ${appointment.full_name || 'Healthcare seeker'},</p>
         <p>We’re sorry to inform you that your healthcare provider request was <b>rejected</b> at this time.</p>
         <p><b>Reason:</b> ${appointment.rejection_reason || '-'}</p>
         <p>— Serechi By SR CareHive</p>
@@ -424,7 +424,7 @@ async function sendRejectionEmail(appointment) {
   }
 }
 
-// Comprehensive admin notification with ALL patient details
+// Comprehensive admin notification with ALL healthcare seeker details
 async function sendAdminNotification({ appointment, type, paymentDetails = null }) {
   try {
     const adminHtml = `
@@ -442,10 +442,10 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
             <p style="margin: 0; color: #856404; font-size: 16px; font-weight: bold;">
               ${type === 'NEW_APPOINTMENT' ? 'Action Required: Review and assign nurse' :
-                type === 'REGISTRATION_PAYMENT' ? 'Patient paid registration fee - Review appointment' :
-                type === 'PRE_VISIT_PAYMENT' ? 'Patient ready for appointment - Proceed with visit' :
+                type === 'REGISTRATION_PAYMENT' ? 'Healthcare seeker paid registration fee - Review appointment' :
+                type === 'PRE_VISIT_PAYMENT' ? 'Healthcare seeker ready for appointment - Proceed with visit' :
                 type === 'FINAL_PAYMENT' ? 'Service completed - All payments received!' :
-                type === 'VISIT_COMPLETED' ? 'Visit completed - Final payment enabled for patient' : ''}
+                type === 'VISIT_COMPLETED' ? 'Visit completed - Final payment enabled for healthcare seeker' : ''}
             </p>
           </div>
 
@@ -459,7 +459,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
           </div>` : ''}
 
           <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #1976d2;">Patient Information</h3>
+            <h3 style="margin-top: 0; color: #1976d2;">Healthcare seeker Information</h3>
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Full Name:</strong></td>
@@ -474,7 +474,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.gender || 'N/A'}</td>
               </tr>
               <tr>
-                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Patient Type:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Healthcare seeker Type:</strong></td>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.patient_type || 'N/A'}</td>
               </tr>
               <tr>
@@ -678,7 +678,7 @@ app.post('/api/nurse/appointments/:id/reject', async (req, res) => {
       .select()
       .maybeSingle();
     if (error) return res.status(500).json({ error: error.message });
-    // Email patient about rejection
+    // Email healthcare seeker about rejection
     try {
       const enriched = { ...(data || {}), patient_email: data?.patient_email || appointmentEmailById.get(id) || null };
       await sendRejectionEmail(enriched);
@@ -846,7 +846,7 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
         }
       }
     }
-    // Fallback: if no in-memory appointment (server restart), at least upsert a minimal record so patient sees it
+    // Fallback: if no in-memory appointment (server restart), at least upsert a minimal record so healthcare seeker sees it
     else if (supabase) {
       try {
         const { data: d4 } = await supabase.from('appointments').insert({
@@ -1085,7 +1085,7 @@ app.get('/api/email/test', async (req, res) => {
     const info = await sendEmail({
       to,
       subject: 'Serechi By SR CareHive email test',
-      html: '<p>This is a test email from Serechi By SR CareHive server. SMTP is working ✅</p>'
+      html: '<p>This is a test email from Serechi By SR CareHive server. SMTP is working</p>'
     });
     res.json({ ok: true, to, messageId: info?.messageId || null });
   } catch (e) {
@@ -1375,7 +1375,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
 
     console.log(`[INFO] Sending registration payment notification for appointment #${appointmentId}`);
 
-    // Email to Patient
+    // Email to healthcare seeker
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4acc 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
@@ -1383,7 +1383,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
             Your registration payment of <strong style="color: #2260FF; font-size: 18px;">₹${amount || 100}</strong> has been received successfully! 🎉
@@ -1435,7 +1435,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         <h2 style="color: #2260FF;">New Registration Payment Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Patient:</strong> ${patientName || 'N/A'} (${patientPhone || 'N/A'})</p>
+          <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'} (${patientPhone || 'N/A'})</p>
           <p><strong>Email:</strong> ${patientEmail}</p>
           <p><strong>Amount Paid:</strong> ₹${amount || 100}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
@@ -1444,7 +1444,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         </div>
         <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 0; color: #856404;">
-            <strong>Next Action:</strong> Please contact the patient and set the total service amount in the healthcare provider dashboard.
+            <strong>Next Action:</strong> Please contact the healthcare seeker and set the total service amount in the healthcare provider dashboard.
           </p>
         </div>
   <a href="carehive://nurse/manage-appointments" 
@@ -1473,7 +1473,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
       );
     }
 
-    // Send SMS to patient
+    // Send SMS to healthcare seeker
     if (twilioClient && patientPhone) {
       try {
         let phone = patientPhone.trim();
@@ -1531,7 +1531,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
             Our care provider has assessed your requirements and set the total service amount for your appointment.
@@ -1672,7 +1672,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
             Your pre-visit payment of <strong style="color: #3f51b5; font-size: 18px;">₹${amount}</strong> has been received successfully! 
@@ -1721,14 +1721,14 @@ app.post('/api/notify-pre-payment', async (req, res) => {
         <h2 style="color: #3f51b5;">Pre-Visit Payment Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Pre-Payment:</strong> ₹${amount} (50%)</p>
           <p><strong>Remaining:</strong> ₹${finalAmount} (payable after visit)</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
         </div>
         <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
           <p style="margin: 0; color: #155724;">
-            <strong>Patient is ready for appointment.</strong> Please proceed with the scheduled visit.
+            <strong>Healthcare seeker is ready for appointment.</strong> Please proceed with the scheduled visit.
           </p>
         </div>
       </div>
@@ -1838,7 +1838,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
             Your final payment of <strong style="color: #009688; font-size: 18px;">₹${amount}</strong> has been received successfully! All payments are now complete. 🎊
@@ -1907,7 +1907,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         <h2 style="color: #009688;">🎉 Final Payment Received - Service Complete</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Final Payment:</strong> ₹${amount}</p>
           <p><strong>Total Paid:</strong> ₹${totalPaid || (100 + amount * 2)}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
@@ -2018,7 +2018,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
     const totalAmount = fullAppointment?.total_amount || 0;
     const finalAmount = (totalAmount / 2).toFixed(2);
 
-    // Patient email
+    // healthcare seeker email
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
@@ -2026,7 +2026,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
         </div>
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Patient'}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
             Your healthcare provider has completed the visit and submitted the post-visit consultation summary.
@@ -2068,7 +2068,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
       </div>
     `;
 
-    // Send email to patient
+    // Send email to healthcare seeker
     await sendEmail({ 
       to: patientEmail, 
       subject: `Visit Completed - Final Payment Available - Appointment #${appointmentId}`, 
@@ -2127,7 +2127,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
 
     console.log(`[INFO] Sending feedback thank you email for appointment #${appointmentId}`);
 
-    // Patient thank you email
+    // healthcare seeker thank you email
     const patientHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
         <div style="background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
@@ -2177,7 +2177,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
         <h2 style="color: #ffa726;">⭐ New Feedback Received</h2>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Patient:</strong> ${patientName || 'N/A'}</p>
+          <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Overall Rating:</strong> ${'⭐'.repeat(overallRating || 0)} (${overallRating || 0}/5)</p>
           ${feedbackText ? `<p><strong>Feedback:</strong><br/>${feedbackText}</p>` : ''}
         </div>

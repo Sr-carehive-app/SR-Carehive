@@ -75,7 +75,7 @@ class _MyAppState extends State<MyApp> {
     final user = supabase.auth.currentUser;
     
     if (user != null) {
-      // User is already logged in, check if they have a patient record
+      // User is already logged in, check if they have a healthcare seeker record
       try {
         final patient = await supabase
             .from('patients')
@@ -89,7 +89,7 @@ class _MyAppState extends State<MyApp> {
           });
         }
       } catch (e) {
-        print('Error checking patient record: $e');
+        print('Error checking healthcare seeker record: $e');
       }
     }
   }
@@ -112,23 +112,23 @@ class _MyAppState extends State<MyApp> {
   Future<void> _handleIncomingLink(Uri uri) async {
     final supabase = Supabase.instance.client;
     
-    print('🔗 Deep link received: $uri');
+    print('Deep link received: $uri');
     
     // Handle OAuth callback - Manually process the OAuth code
     if (uri.host == 'login-callback' && uri.queryParameters.containsKey('code')) {
       try {
-        print('📲 OAuth callback detected with code');
+        print('OAuth callback detected with code');
         
         // Manually handle the OAuth callback with the full URL
         await supabase.auth.getSessionFromUrl(uri);
         
-        print('✅ Session established from URL');
+        print(' Session established from URL');
         
         final session = supabase.auth.currentSession;
         final user = supabase.auth.currentUser;
         
-        print('👤 Current user: ${user?.email}');
-        print('🔐 Session exists: ${session != null}');
+        print('Current user: ${user?.email}');
+        print('Session exists: ${session != null}');
         
         if (user != null) {
           // Check if patient record exists
@@ -138,11 +138,11 @@ class _MyAppState extends State<MyApp> {
               .eq('user_id', user.id)
               .maybeSingle();
           
-          print('📋 Patient record: ${patient != null ? "Found" : "Not found"}');
+          print('healthcare seeker record: ${patient != null ? "Found" : "Not found"}');
           
           if (patient != null) {
             // Existing user - go to dashboard
-            print('🚀 Navigating to dashboard');
+            print('Navigating to dashboard');
             if (mounted) {
               navigatorKey.currentState?.pushAndRemoveUntil(
                 MaterialPageRoute(

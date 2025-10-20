@@ -54,13 +54,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
       if (patient == null) {
         setState(() {
-          errorMessage = 'Patient profile not found';
+          errorMessage = 'Healthcare seeker profile not found';
           isLoading = false;
         });
         return;
       }
 
-    // Fetch appointments for this patient (all statuses)
+    // Fetch appointments for this healthcare seeker(all statuses)
       final response = await supabase
           .from('appointments')
           .select('*')
@@ -310,7 +310,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                   ],
                                   const SizedBox(height: 12),
                                   
-                                  // Patient Details Section
+                                  // healthcare seeker Details Section
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
@@ -322,7 +322,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         const Text(
-                                          '👤 Patient Details',
+                                          'Healthcare seeker Details',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 14,
@@ -403,7 +403,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           const Text(
-                                            '🩺 Primary Doctor',
+                                            'Primary Doctor',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 14,
@@ -464,7 +464,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                               Icon(Icons.medical_services, color: Colors.green.shade700),
                                               const SizedBox(width: 8),
                                               const Text(
-                                                '📋 Post-Visit Summary',
+                                                'Post-Visit Summary',
                                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                               ),
                                             ],
@@ -478,7 +478,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                           if (appointment['consulted_doctor_name'] != null) ...[
                                             const SizedBox(height: 12),
                                             const Divider(),
-                                            const Text('🩺 Recommended Doctor', style: TextStyle(fontWeight: FontWeight.bold)),
+                                            const Text('Recommended Doctor', style: TextStyle(fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 8),
                                             if (appointment['consulted_doctor_name'] != null)
                                               Text('Name: ${appointment['consulted_doctor_name']}'),
@@ -500,7 +500,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                   if ((appointment['status'] ?? '').toString().toLowerCase() == 'approved') ...[
                                     const Divider(height: 24),
                                     const Text(
-                                      'Assigned Care Provider',
+                                      'Assigned Healthcare Provider',
                                       style: TextStyle(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 6),
@@ -607,7 +607,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              '💡 Our care provider will contact you after payment',
+              'Our healthcare provider will contact you after payment',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -627,7 +627,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'Waiting for care provider to set the total service amount',
+                      'Waiting for healthcare provider to set the total service amount',
                       style: TextStyle(fontSize: 13, color: Colors.black87),
                     ),
                   ),
@@ -1176,7 +1176,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ You have already submitted feedback for this appointment'),
+              content: Text('You have already submitted feedback for this appointment'),
               backgroundColor: Colors.blue,
             ),
           );
@@ -1335,7 +1335,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         final supabase = Supabase.instance.client;
         final user = supabase.auth.currentUser;
         
-        // Get patient ID
+        // Get healthcare seeker ID
         String? patientId;
         if (user != null) {
           try {

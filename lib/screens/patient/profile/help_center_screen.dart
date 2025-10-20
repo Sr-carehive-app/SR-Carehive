@@ -190,11 +190,11 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   [
                     FAQItem(
                       question: 'How do I schedule a nurse?',
-                      answer: 'Go to the Schedule section in your dashboard, select your preferred date and time slot, fill in the patient details (yourself or another person), and describe your health requirements. Complete the payment to confirm your appointment.',
+                      answer: 'Go to the Schedule section in your dashboard, select your preferred date and time slot, fill in the healthcare seekers details (yourself or another person), and describe your health requirements. Complete the payment to confirm your appointment.',
                     ),
                     FAQItem(
                       question: 'What information do I need to provide when scheduling?',
-                      answer: 'You\'ll need to provide the patient\'s full name, age, gender, and a detailed description of the health problem or care requirements. This helps us assign the most suitable healthcare providers for your needs.',
+                      answer: 'You\'ll need to provide the healthcare seeker\'s full name, age, gender, and a detailed description of the health problem or care requirements. This helps us assign the most suitable healthcare providers for your needs.',
                     ),
                     FAQItem(
                       question: 'What are the available time slots?',
@@ -202,7 +202,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     ),
                     FAQItem(
                       question: 'Can I schedule for someone else?',
-                      answer: 'Yes, you can schedule appointments for yourself or another person. Simply select "Another Person" when filling out the patient details form.',
+                      answer: 'Yes, you can schedule appointments for yourself or another person. Simply select "Another Person" when filling out the healthcare seekers details form.',
                     ),
                   ],
                 ),
@@ -240,7 +240,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   [
                     FAQItem(
                       question: 'What is SERECHI?',
-                      answer: 'SERECHI is a healthcare platform by SR CareHive Pvt. Ltd. that connects patients with professional nurses and healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
+                      answer: 'SERECHI is a healthcare platform by SR CareHive Pvt. Ltd. that connects healthcare seekers with professional healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
                     ),
                     FAQItem(
                       question: 'How do I contact support?',
@@ -252,7 +252,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     ),
                     FAQItem(
                       question: 'Are the nurses qualified and verified?',
-                      answer: 'Yes, all our nurses are professionally qualified, licensed, and thoroughly verified. We conduct background checks and ensure they meet our high standards for patient care.',
+                      answer: 'Yes, all our nurses are professionally qualified, licensed, and thoroughly verified. We conduct background checks and ensure they meet our high standards healthcare seeker care.',
                     ),
                   ],
                 ),

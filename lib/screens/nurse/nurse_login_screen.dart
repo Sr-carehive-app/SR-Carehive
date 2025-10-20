@@ -244,7 +244,11 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       _isOtpLoading = false;
     });
     _startResendCooldown();
-    if (ok != true) {
+    if (ok == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP resent successfully')),
+      );
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ok is String ? ok.toString() : 'Failed to resend OTP')),
       );
