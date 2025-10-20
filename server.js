@@ -2009,7 +2009,12 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
       patientEmail,
       patientName,
       overallRating,
-      feedbackText
+      feedbackText,
+      serviceType,
+      visitDate,
+      visitTime,
+      nurseName,
+      additionalComments
     } = req.body;
 
     if (!appointmentId || !patientEmail) {
@@ -2024,14 +2029,11 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
         <div style="background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
           <h1 style="color: white; margin: 0; font-size: 28px;">Thank You for Your Feedback!</h1>
         </div>
-        
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Valued Customer'}</strong>,</p>
-          
           <p style="color: #555; line-height: 1.6;">
-            We sincerely appreciate you taking the time to share your feedback about our service! 
+            We sincerely appreciate you taking the time to share your feedback about our service!
           </p>
-
           <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border-left: 4px solid #ffa726;">
             <div style="font-size: 48px; margin-bottom: 10px;">
               ${'⭐'.repeat(overallRating || 5)}
@@ -2039,22 +2041,29 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
             <p style="margin: 0; color: #e65100; font-size: 18px; font-weight: bold;">
               Your Rating: ${overallRating || 'N/A'} / 5
             </p>
+            ${feedbackText ? `<p style='margin: 10px 0 0 0; color: #333;'><strong>Your Feedback:</strong><br/>${feedbackText}</p>` : ''}
           </div>
-
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h4 style="margin-top: 0;">Feedback Details</h4>
+            <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
+            ${serviceType ? `<p style='margin: 5px 0;'><strong>Service Type:</strong> ${serviceType}</p>` : ''}
+            ${visitDate ? `<p style='margin: 5px 0;'><strong>Date:</strong> ${visitDate}</p>` : ''}
+            ${visitTime ? `<p style='margin: 5px 0;'><strong>Time:</strong> ${visitTime}</p>` : ''}
+            ${nurseName ? `<p style='margin: 5px 0;'><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
+            ${additionalComments ? `<p style='margin: 5px 0;'><strong>Additional Comments:</strong> ${additionalComments}</p>` : ''}
+          </div>
           <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
             <h4 style="margin-top: 0; color: #2e7d32;">Your feedback helps us improve!</h4>
             <p style="color: #2e7d32; margin: 10px 0; line-height: 1.6;">
               At SR CareHive, we're committed to providing the best possible care. Your honest feedback allows us to continuously improve our services and better serve you.
             </p>
           </div>
-
           <div style="text-align: center; margin: 30px 0;">
             <a href="carehive://patient/appointments" 
                style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               View Your Appointments
             </a>
           </div>
-
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
            Serechi By SR CareHive | srcarehive@gmail.com | Thank you for choosing us!
           </p>
@@ -2071,6 +2080,11 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
           <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Overall Rating:</strong> ${'⭐'.repeat(overallRating || 0)} (${overallRating || 0}/5)</p>
           ${feedbackText ? `<p><strong>Feedback:</strong><br/>${feedbackText}</p>` : ''}
+          ${serviceType ? `<p><strong>Service Type:</strong> ${serviceType}</p>` : ''}
+          ${visitDate ? `<p><strong>Date:</strong> ${visitDate}</p>` : ''}
+          ${visitTime ? `<p><strong>Time:</strong> ${visitTime}</p>` : ''}
+          ${nurseName ? `<p><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
+          ${additionalComments ? `<p><strong>Additional Comments:</strong> ${additionalComments}</p>` : ''}
         </div>
       </div>
     `;

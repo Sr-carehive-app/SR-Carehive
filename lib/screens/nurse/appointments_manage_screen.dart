@@ -942,12 +942,22 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
   List<Map<String, dynamic>> _filtered(){
   if(_statusFilter=='All') return _items;
-  final want=_statusFilter.toLowerCase();
+  // Map display tab to status value in DB
+  final statusMap = {
+    'Pending': 'pending',
+    'Approved': 'approved',
+    'Rejected': 'rejected',
+    'Completed': 'completed',
+    'Booked': 'booked',
+    'Amount Set': 'amount_set',
+    'Pre Paid': 'pre_paid',
+  };
+  final want = statusMap[_statusFilter] ?? _statusFilter.toLowerCase();
   return _items.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
   }
 
   Widget _filtersBar(){
-  final options=['All','Pending','Approved','Rejected','Completed'];
+  final options=['All','Pending','Approved','Rejected','Completed','Booked','Amount Set','Pre Paid'];
   return Wrap(
     spacing:8,
     runSpacing:8,
