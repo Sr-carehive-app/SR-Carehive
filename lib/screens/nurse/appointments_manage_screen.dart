@@ -64,7 +64,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Approve & Assign Nurse'),
+        title: const Text('Approve & Assign Healthcare Provider'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -917,7 +917,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                         ),
                       ],
                       
-                      if(a['nurse_name']!=null)...[ const Divider(), Text('Assigned Care Provider: ${a['nurse_name']}'), if(a['nurse_phone']!=null) Text('Phone: ${a['nurse_phone']}'), if(a['nurse_branch']!=null) Text('Branch: ${a['nurse_branch']}'), if(a['nurse_comments']!=null) Text('Comments: ${a['nurse_comments']}') ],
+                      if(a['nurse_name']!=null)...[ const Divider(), Text('Assigned Healthcare Provider: ${a['nurse_name']}'), if(a['nurse_phone']!=null) Text('Phone: ${a['nurse_phone']}'), if(a['nurse_branch']!=null) Text('Branch: ${a['nurse_branch']}'), if(a['nurse_comments']!=null) Text('Comments: ${a['nurse_comments']}') ],
                       const SizedBox(height:12),
                       
                       // Action buttons - conditional based on status
@@ -954,11 +954,24 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                       ] else ...[
                         // Original approve/reject buttons for pending
                         Row(children:[
-                          Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.close, color: Colors.red), label: const Text('Reject', style: TextStyle(color:Colors.red)), onPressed: status.toLowerCase()=='rejected'? null : () => _rejectDialog(a))),
-                          const SizedBox(width:8),
-                          Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.check_circle, color: Colors.white), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), label: const Text('Approve', style: TextStyle(color:Colors.white)), onPressed: status.toLowerCase()=='approved'? null : () => _approveDialog(a))),
-                          const SizedBox(width:8),
-                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                          Expanded(
+  child: OutlinedButton.icon(
+    icon: const Icon(Icons.close, color: Colors.red),
+    label: const Text('Reject', style: TextStyle(color:Colors.red)),
+    onPressed: status.toLowerCase()=='completed' ? null : (status.toLowerCase()=='rejected' ? null : () => _rejectDialog(a)),
+  ),
+),
+const SizedBox(width:8),
+Expanded(
+  child: ElevatedButton.icon(
+    icon: const Icon(Icons.check_circle, color: Colors.white),
+    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+    label: const Text('Approve', style: TextStyle(color:Colors.white)),
+    onPressed: status.toLowerCase()=='completed' ? null : (status.toLowerCase()=='approved' ? null : () => _approveDialog(a)),
+  ),
+),
+const SizedBox(width:8),
+IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
                       ]
                     ])));
@@ -994,6 +1007,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
       return base;
     }
 
+    // For All, Pending, Approved, Rejected tabs, only show upcoming appointments
     if(_statusFilter=='All') return upcoming;
     final want=_statusFilter.toLowerCase();
     return upcoming.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
