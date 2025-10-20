@@ -391,6 +391,10 @@ async function sendApprovalEmail(appointment) {
           <li><b>Available:</b> ${appointment.nurse_available ? 'Yes' : 'No'}</li>
         </ul>
         <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} •</p>
+        <hr>
+        <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹100 to confirm your booking.</p>
+        <p>You can pay and view your appointment in the app by clicking the button below:</p>
+        <a href="https://srcarehive.com/appointments?aid=${appointment.id}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
         <p>— Serechi By SR CareHive</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
