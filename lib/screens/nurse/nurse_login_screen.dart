@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'appointments_manage_screen.dart';
@@ -32,12 +33,6 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _ticker.dispose();
-    _otpController.dispose();
-    super.dispose();
-  }
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
@@ -46,6 +41,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
   @override
   void dispose() {
+    _ticker.dispose();
+    _otpController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -248,9 +245,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     _ticker.start();
     if (ok != true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok is String ? ok : 'Failed to resend OTP')),
+        SnackBar(content: Text(ok is String ? ok.toString() : 'Failed to resend OTP')),
       );
     }
-  }
   }
 }
