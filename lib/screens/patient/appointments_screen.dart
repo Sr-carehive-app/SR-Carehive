@@ -817,7 +817,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                         color: feedbackExists ? Colors.grey : Colors.amber,
                       ),
                       label: Text(
-                        feedbackExists ? '✅ Feedback Submitted' : 'Share Your Feedback',
+                        feedbackExists ? 'Feedback Submitted' : 'Share Your Feedback',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
