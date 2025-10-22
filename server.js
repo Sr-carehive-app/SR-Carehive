@@ -1069,6 +1069,28 @@ app.get('/api/pg/razorpay/debug-cred-check', (req, res) => {
   });
 });
 
+// Delete user account (admin operation)
+app.post('/api/admin/delete-user', async (req, res) => {
+  try {
+    const { user_id } = req.body || {};
+    if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+
+    // Delete user from Supabase Auth using service role
+    const { error } = await supabase.auth.admin.deleteUser(user_id);
+    
+    if (error) {
+      console.error('Error deleting user:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, message: 'User deleted successfully' });
+  } catch (e) {
+    console.error('Error in delete-user endpoint:', e);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Support: payment query submission (refund/issue). Stores in Supabase and emails admin.
 app.post('/api/support/payment-query', async (req, res) => {
   try {
