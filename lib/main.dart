@@ -98,7 +98,6 @@ class _MyAppState extends State<MyApp> {
     
     print('🔄 _handlePostAuthRedirect called for user: ${user.email}');
     print('🔍 User metadata: ${user.userMetadata}');
-    print('🔍 Raw user metadata: ${user.rawUserMetaData}');
     
     try {
       // Check if patient record exists
@@ -148,7 +147,7 @@ class _MyAppState extends State<MyApp> {
                 }
               })(),
             'gender': user.userMetadata?['gender'] ?? '',
-            'google_avatar_url': user.userMetadata?['picture'] ?? user.rawUserMetaData?['picture'] ?? '', // Store Google avatar URL from picture field
+            'google_avatar_url': user.userMetadata?['picture'] ?? '', // Store Google avatar URL from picture field
           };
           
           setState(() {
