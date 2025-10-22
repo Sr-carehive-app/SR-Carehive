@@ -200,7 +200,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
       
-      final fileExtension = image.path.split('.').last.split('?').first; // Clean extension
+      // Fix file extension extraction for web (avoid blob URLs)
+      String fileExtension = 'jpg'; // Default to jpg
+      if (kIsWeb) {
+        // For web, try to get extension from image name or default to jpg
+        final imageName = image.name;
+        if (imageName.contains('.')) {
+          fileExtension = imageName.split('.').last.toLowerCase();
+        }
+      } else {
+        // For mobile, use path
+        fileExtension = image.path.split('.').last.split('?').first;
+      }
+      
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final cleanUserId = user.id.replaceAll('-', '').substring(0, 12); // Shorten UUID
       final fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
