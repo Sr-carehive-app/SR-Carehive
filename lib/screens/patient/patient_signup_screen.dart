@@ -593,6 +593,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
         if (user != null) {
           // Get Google avatar URL from prefill data
           final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
+          print('🖼️ Google avatar URL from prefill: $googleAvatarUrl');
           
           await supabase.from('patients').insert({
             'user_id': user.id,
@@ -615,7 +616,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             'pincode': pincodeController.text.trim(),
             'gender': selectedGender,
             'phone_verified': true, // OAuth users are pre-verified
-            'avatar_url': googleAvatarUrl.isNotEmpty ? googleAvatarUrl : null, // Store Google avatar
+            'profile_image_url': googleAvatarUrl.isNotEmpty ? googleAvatarUrl : null, // Store Google avatar
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
