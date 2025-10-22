@@ -115,9 +115,11 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 // Configurable CORS: allow localhost:5173, Vercel, and production frontend
-const allowedOrigins = [
+// Allowed origins: prefer values passed in via ALLOWED_ORIGINS env var, otherwise default to common dev/prod origins
+const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = allowedOriginsEnv.length > 0 ? allowedOriginsEnv : [
   'http://localhost:5173',
-  'https://srcarehive.com',
+  (process.env.FRONTEND_URL || 'https://srcarehive.com'),
   'https://sr-carehive.vercel.app'
 ];
 app.use(cors({
@@ -350,7 +352,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
       appointment,
       type: 'REGISTRATION_PAYMENT',
       paymentDetails: {
-        amount: amountRupees || 100,
+        amount: amountRupees || 10,
         paymentId: paymentId,
         orderId: orderId
       }
@@ -392,9 +394,11 @@ async function sendApprovalEmail(appointment) {
         </ul>
         <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} •</p>
         <hr>
-        <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹100 to confirm your booking.</p>
+        <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹10 to confirm your booking.</p>
         <p>You can pay and view your appointment in the app by clicking the button below:</p>
-        <a href="https://srcarehive.com/appointments?aid=${appointment.id}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
+  // Prefer app deep-link (opens native app if installed). If you explicitly set WEB_FRONTEND_URL in env,
+  // use that as a web fallback.
+  <a href="${(process.env.WEB_FRONTEND_URL || `carehive://appointments?aid=${appointment.id}`)}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
         <p>— Serechi By SR CareHive</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
@@ -442,7 +446,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
         <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
           <h1 style="color: white; margin: 0; font-size: 26px;">
             ${type === 'NEW_APPOINTMENT' ? 'New Appointment Request' : 
-              type === 'REGISTRATION_PAYMENT' ? 'Registration Payment Received (₹100)' :
+              type === 'REGISTRATION_PAYMENT' ? 'Registration Payment Received (₹10)' :
               type === 'PRE_VISIT_PAYMENT' ? 'Pre-Visit Payment Received (50%)' :
               type === 'FINAL_PAYMENT' ? 'Final Payment Received (50%)' : 'Admin Notification'}
           </h1>
@@ -461,7 +465,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
 
           ${paymentDetails ? `
           <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
-            <h3 style="margin-top: 0; color: #2e7d32;">💳 Payment Information</h3>
+            <h3 style="margin-top: 0; color: #2e7d32;">Payment Information</h3>
             <p style="margin: 5px 0;"><strong>Amount:</strong> ₹${paymentDetails.amount}</p>
             <p style="margin: 5px 0;"><strong>Payment ID:</strong> ${paymentDetails.paymentId || 'N/A'}</p>
             <p style="margin: 5px 0;"><strong>Order ID:</strong> ${paymentDetails.orderId || 'N/A'}</p>
@@ -1143,7 +1147,7 @@ app.post('/api/send-otp-email', async (req, res) => {
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #2260FF; padding: 20px; text-align: center;">
-          <h1 style="color: white; margin: 0;">SERECHI</h1>
+          <h1 style="color: white; margin: 0;">Serechi</h1>
           <p style="color: white; margin: 5px 0;">by SR CareHive Pvt. Ltd.</p>
         </div>
         <div style="padding: 30px; background: #f9f9f9;">
@@ -1166,7 +1170,7 @@ app.post('/api/send-otp-email', async (req, res) => {
     
     await sendEmail({
       to: email,
-      subject: 'SERECHI - Your Verification Code',
+      subject: 'Serechi - Your Verification Code',
       html
     });
 
@@ -1208,7 +1212,7 @@ app.post('/api/send-otp-sms', async (req, res) => {
       return res.status(400).json({ error: 'Invalid phone number format' });
     }
 
-    const message = `SERECHI Verification: Your OTP is ${otp}. Valid for 2 minutes. DO NOT share this code with anyone.`;
+    const message = `Serechi Verification: Your OTP is ${otp}. Valid for 2 minutes. DO NOT share this code with anyone.`;
 
     console.log(`[INFO] Sending SMS OTP to: ${formattedPhone.slice(0,6)}***${formattedPhone.slice(-4)}`);
     
@@ -1237,7 +1241,7 @@ app.post('/api/send-otp-sms', async (req, res) => {
 // PAYMENT NOTIFICATION ENDPOINTS (3-Tier System)
 // ============================================
 
-// 1. Registration Payment Notification (₹100)
+// 1. Registration Payment Notification (₹10)
 app.post('/api/notify-registration-payment', async (req, res) => {
   try {
     const { appointmentId, nurseEmail, nurseName } = req.body;
@@ -1265,7 +1269,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
     const patientPhone = appointment.phone;
     const paymentId = appointment.registration_payment_id || appointment.payment_id;
     const receiptId = appointment.registration_receipt_id;
-    const amount = appointment.amount_rupees || 100;
+    const amount = appointment.amount_rupees || 10;
     const date = appointment.date;
     const time = appointment.time;
     // Email to healthcare seeker
@@ -1279,7 +1283,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           <p style="font-size: 16px; color: #333;">Dear <strong>${patientName || 'Healthcare seeker'}</strong>,</p>
           
           <p style="color: #555; line-height: 1.6;">
-            Your registration payment of <strong style="color: #2260FF; font-size: 18px;">₹${amount || 100}</strong> has been received successfully! 🎉
+            Your registration payment of <strong style="color: #2260FF; font-size: 18px;">₹${amount || 10}</strong> has been received successfully! 🎉
           </p>
 
           <div style="background: #e8f4ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2260FF;">
@@ -1330,7 +1334,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Healthcare seeker:</strong> ${patientName || '-'} (${patientPhone || '-'})</p>
           <p><strong>Email:</strong> ${patientEmail}</p>
-          <p><strong>Amount Paid:</strong> ₹${amount || 100}</p>
+          <p><strong>Amount Paid:</strong> ₹${amount || 10}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
           <p><strong>Date:</strong> ${date || '-'}</p>
           <p><strong>Time:</strong> ${time || '-'}</p>
@@ -1371,7 +1375,7 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         let phone = patientPhone.trim();
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         await twilioClient.messages.create({
-          body: `SR CareHive: Registration payment ₹${amount || 100} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
+          body: `SR CareHive: Registration payment ₹${amount || 10} received! Appointment #${appointmentId}. Our healthcare provider provider will contact you soon. Check email for details.`,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });
@@ -1431,18 +1435,18 @@ app.post('/api/notify-amount-set', async (req, res) => {
           <div style="background: #f3e5f5; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #9c27b0; text-align: center;">
             <h3 style="margin: 0 0 10px 0; color: #9c27b0;">Total Service Amount</h3>
             <p style="font-size: 36px; font-weight: bold; color: #7b1fa2; margin: 0;">₹${totalAmount}</p>
-            <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;">(Registration ₹100 already paid)</p>
+            <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;">(Registration ₹10 already paid)</p>
           </div>
 
           ${nurseRemarks ? `
           <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
-            <h4 style="margin-top: 0; color: #2e7d32;">📝 Service Breakdown</h4>
+            <h4 style="margin-top: 0; color: #2e7d32;">Service Breakdown</h4>
             <p style="color: #2e7d32; margin: 0; white-space: pre-wrap;">${nurseRemarks}</p>
           </div>
           ` : ''}
 
           <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
-            <h4 style="margin-top: 0; color: #856404;">💳 Payment Schedule</h4>
+            <h4 style="margin-top: 0; color: #856404;">Payment Schedule</h4>
             <div style="display: flex; justify-content: space-between; margin: 15px 0; padding: 15px; background: white; border-radius: 6px;">
               <div style="text-align: center; flex: 1;">
                 <p style="color: #666; margin: 0; font-size: 12px;">BEFORE VISIT (50%)</p>
@@ -1740,11 +1744,11 @@ app.post('/api/notify-final-payment', async (req, res) => {
             <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">REGISTRATION</p>
-                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹100</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹10</p>
               </div>
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">PRE-VISIT (50%)</p>
-                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${((totalPaid - 100 - amount) || 0).toFixed(0)}</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${((totalPaid - 10 - amount) || 0).toFixed(0)}</p>
               </div>
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">FINAL (50%)</p>
@@ -1753,7 +1757,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
             </div>
             <div style="border-top: 2px solid #00796b; margin: 15px 0; padding-top: 15px;">
               <p style="color: #666; margin: 0; font-size: 14px;">TOTAL PAID</p>
-              <p style="font-size: 32px; font-weight: bold; color: #00796b; margin: 5px 0;">₹${totalPaid || (100 + amount * 2)}</p>
+              <p style="font-size: 32px; font-weight: bold; color: #00796b; margin: 5px 0;">₹${totalPaid || (10 + amount * 2)}</p>
             </div>
           </div>
 
@@ -1800,7 +1804,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
           <p><strong>Final Payment:</strong> ₹${amount}</p>
-          <p><strong>Total Paid:</strong> ₹${totalPaid || (100 + amount * 2)}</p>
+          <p><strong>Total Paid:</strong> ₹${totalPaid || (10 + amount * 2)}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
         </div>
         <div style="background: #d4edda; padding: 15px; border-radius: 8px;">
@@ -1836,7 +1840,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         if (!phone.startsWith('+')) phone = `+91${phone}`;
         
         await twilioClient.messages.create({
-          body: `SR CareHive: Final payment ₹${amount} received! Total paid ₹${totalPaid || (100 + amount * 2)}. Service complete. Thank you for choosing SR CareHive! `,
+          body: `SR CareHive: Final payment ₹${amount} received! Total paid ₹${totalPaid || (10 + amount * 2)}. Service complete. Thank you for choosing SR CareHive! `,
           from: TWILIO_PHONE_NUMBER,
           to: phone
         });

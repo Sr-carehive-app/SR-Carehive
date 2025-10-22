@@ -19,7 +19,7 @@ class PaymentService {
   static const String FINAL_PAYMENT = 'final_payment';
   
   // Fixed registration amount - Production value
-  static const double REGISTRATION_AMOUNT = 100.0;  // Registration fee: ₹100
+  static const double REGISTRATION_AMOUNT = 10.0;  // Registration fee: ₹10
 
   // High-level API: create Razorpay order, open checkout, verify signature.
   static Future<Map<String, dynamic>> payWithRazorpay({
@@ -82,7 +82,7 @@ class PaymentService {
     throw Exception('verify failed: ${verifyResp.statusCode} ${body.isNotEmpty ? body : ''}');
   }
 
-  /// Pay Registration Fee (₹100)
+  /// Pay Registration Fee (₹10)
   static Future<Map<String, dynamic>> payRegistrationFee({
     required String appointmentId,  // Changed from int to String (UUID)
     required String email,

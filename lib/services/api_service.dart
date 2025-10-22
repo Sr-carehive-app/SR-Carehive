@@ -1,8 +1,19 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://srcarehive.com'; // change if needed
+  // Prefer explicit API base from environment (set API_BASE_URL),
+  // otherwise default to the current app origin (works well for web dev) or fall back to historical srcarehive.com.
+  static String get baseUrl {
+    final env = dotenv.env['API_BASE_URL']?.trim();
+    if (env != null && env.isNotEmpty) return env;
+    try {
+      return Uri.base.origin; // runtime origin (http://localhost:5173 for local web)
+    } catch (_) {
+      return 'https://srcarehive.com';
+    }
+  }
 
   /// Register user (already sends JSON, keep as-is)
   static Future<bool> registerUser({
@@ -10,7 +21,7 @@ class ApiService {
     required String email,
     required String password,
     required String phone,
-    required String dob,
+    int? age,
   }) async {
     try {
       print('➡️ Sending registration request to $baseUrl/signup.php');
@@ -22,7 +33,8 @@ class ApiService {
           'password': password,
           'email': email,
           'mobile_number': phone,
-          'date_of_birth': dob,
+          // send 'age' instead of legacy 'date_of_birth'
+          if (age != null) 'age': age,
         }),
       );
       print('✅ Registration response status: ${response.statusCode}');

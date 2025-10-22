@@ -19,7 +19,7 @@ class RegisterScreen extends StatelessWidget {
                 Image.asset('assets/images/logo.png', width: 100, height: 100),
                 const SizedBox(height: 20),
                 const Text(
-                  'SERECHI',
+                  'Serechi',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 30,
@@ -28,7 +28,7 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Welcome To SERECHI',
+                  'Welcome To Serechi',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 16,
@@ -63,7 +63,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do You Need\nHealthcare?',
+                      'Do You Need\nHealthcare ?',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -92,7 +92,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do You Work For Us?',
+                      'Do You Wish to Work for Us ?',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF2260FF),

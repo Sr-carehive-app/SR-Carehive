@@ -74,7 +74,7 @@ class OTPService {
         body: {
           'From': twilioNumber,
           'To': phoneNumber,
-          'Body': 'Your SERECHI verification code is: $otp. Valid for 2 minutes.',
+          'Body': 'Your Serechi verification code is: $otp. Valid for 2 minutes.',
         },
       );
 

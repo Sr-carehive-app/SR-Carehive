@@ -8,7 +8,7 @@ class AboutScreen extends StatelessWidget {
     const primary = Color(0xFF2260FF);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('About SERECHI', style: TextStyle(color: Colors.black)),
+        title: const Text('About Serechi', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         centerTitle: true,
@@ -34,7 +34,7 @@ class AboutScreen extends StatelessWidget {
                           Image.asset('assets/images/logo.png', width: 80, height: 80),
                           const SizedBox(height: 12),
                           const Text(
-                            'SERECHI',
+                            'Serechi',
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
@@ -56,21 +56,21 @@ class AboutScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     
                     // Welcome Section
-                    _h('Welcome to SERECHI – Your Trusted Healthcare Companion by SR CareHive'),
+                    _h('Welcome to Serechi – Your Trusted Healthcare Companion by SR CareHive'),
                     const SizedBox(height: 12),
-                    _p('SERECHI is an innovative digital platform by SR CareHive Pvt. Ltd., designed to seamlessly connect healthcare seekers and healthcare providers across communities. Rooted in the philosophy "Through the people, for the people, and by the people," SERECHI brings compassionate, professional, and reliable care to your doorstep.'),
+                    _p('Serechi is an innovative digital platform by SR CareHive Pvt. Ltd., designed to seamlessly connect healthcare seekers and healthcare providers across communities. Rooted in the philosophy "Through the people, for the people, and by the people," Serechi brings compassionate, professional, and reliable care to your doorstep.'),
                     const SizedBox(height: 20),
                     
                     // For Care Seekers
                     _h('For Care Seekers'),
                     const SizedBox(height: 8),
-                    _p('SERECHI offers a simple, secure, and transparent way to find, choose, order, and manage healthcare services — from home nursing and elderly care to physiotherapy, post-surgical support, and chronic disease management. Users can view verified profiles, book trusted professionals, track appointments, make secure payments, and share feedback — all in one place.'),
+                    _p('Serechi offers a simple, secure, and transparent way to find, choose, order, and manage healthcare services — from home nursing and elderly care to physiotherapy, post-surgical support, and chronic disease management. Users can view verified profiles, book trusted professionals, track appointments, make secure payments, and share feedback — all in one place.'),
                     const SizedBox(height: 20),
                     
                     // For Healthcare Providers
                     _h('For Healthcare Providers'),
                     const SizedBox(height: 8),
-                    _p('Including nurses, paramedical professionals, physiotherapists, and allied health workers, SERECHI offers a gateway to professional growth and service engagement. Registered providers can apply, onboard, and receive assignments directly through the app, ensuring flexible work opportunities, fair remuneration, and visibility within a trusted care network.'),
+                    _p('Including nurses, paramedical professionals, physiotherapists, and allied health workers, Serechi offers a gateway to professional growth and service engagement. Registered providers can apply, onboard, and receive assignments directly through the app, ensuring flexible work opportunities, fair remuneration, and visibility within a trusted care network.'),
                     const SizedBox(height: 20),
                     
                     // Key Features
@@ -87,7 +87,7 @@ class AboutScreen extends StatelessWidget {
                     // Closing Statement
                     _h('Our Vision'),
                     const SizedBox(height: 8),
-                    _p('SERECHI is more than a service app — it is a healthcare ecosystem uniting people who care and those who need care. Whether you seek support or wish to serve, SERECHI by SR CareHive is your trusted bridge to a connected, ethical, and human-centered healthcare future.'),
+                    _p('Serechi is more than a service app — it is a healthcare ecosystem uniting people who care and those who need care. Whether you seek support or wish to serve, Serechi by SR CareHive is your trusted bridge to a connected, ethical, and human-centered healthcare future.'),
                     const SizedBox(height: 20),
                     
                     // Tagline
@@ -99,7 +99,7 @@ class AboutScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'Download SERECHI today — where care meets connection.',
+                          'Download Serechi today — where care meets connection.',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,

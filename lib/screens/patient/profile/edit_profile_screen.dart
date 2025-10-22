@@ -37,6 +37,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // Other controllers
   final TextEditingController emailController = TextEditingController();
   final TextEditingController dobController = TextEditingController();
+  // New age controller - we will show Age instead of DOB
+  final TextEditingController ageController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
   
   String? selectedGender;
@@ -159,7 +161,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     stateController.dispose();
     pincodeController.dispose();
     emailController.dispose();
-    dobController.dispose();
+  dobController.dispose();
+  ageController.dispose();
     aadharController.dispose();
     super.dispose();
   }
@@ -197,9 +200,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           aadharLinkedPhoneController.text = patient['aadhar_linked_phone'] ?? patient['phone'] ?? '';
           alternativePhoneController.text = patient['alternative_phone'] ?? '';
           
-          // Load address fields
+          // Load address fields (street removed from visible form)
           houseNumberController.text = patient['house_number'] ?? '';
-          streetController.text = patient['street'] ?? '';
+          // keep streetController for backward compatibility but do not populate it from DB to avoid schema issues
           townController.text = patient['town'] ?? '';
           cityController.text = patient['city'] ?? '';
           stateController.text = patient['state'] ?? '';
@@ -207,7 +210,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           
           // Load other fields
           emailController.text = patient['email'] ?? '';
-          dobController.text = patient['dob'] != null ? patient['dob'] : '';
+          // Load age if available (new preferred field).
+          ageController.text = patient['age'] != null ? patient['age'].toString() : '';
           aadharController.text = patient['aadhar_number'] ?? '';
           selectedGender = patient['gender'];
           profileImageUrl = patient['profile_image_url'];
@@ -401,19 +405,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 6570)), // 18 years ago
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        dobController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
-    }
-  }
+  // Date picker removed - we collect numeric Age only in the UI.
 
   Future<void> _updateProfile() async {
     // Validate required fields
@@ -503,14 +495,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               
               // Address fields
               'house_number': houseNumberController.text.trim(),
-              'street': streetController.text.trim(),
+              // 'street' removed from form by design; keep column unchanged if present
               'town': townController.text.trim(),
               'city': cityController.text.trim(),
               'state': stateController.text.trim(),
               'pincode': pincodeController.text.trim(),
               
-              // Other fields
-              'dob': dobController.text.isNotEmpty ? dobController.text.trim() : null,
+              // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
+              'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
               'aadhar_number': aadharController.text.trim(),
               'gender': selectedGender,
             })
@@ -724,8 +716,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 20),
           
-          // Date of Birth
-          buildDateField('Date Of Birth', 'Select your date of birth', dobController),
+          // Age (replaces Date of Birth input)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Age', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ageController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                decoration: InputDecoration(
+                  hintText: 'Enter your age',
+                  filled: true,
+                  fillColor: const Color(0xFFEDEFFF),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
           
           // Aadhar Number with Validation
           Column(
@@ -788,7 +798,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const Text('Address Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           buildTextField('House/Flat Number', 'Enter house/flat number', houseNumberController),
-          buildTextField('Street/Road', 'Enter street/road name', streetController),
           buildTextField('Town/Village', 'Enter town/village', townController),
           buildTextField('City', 'Enter city', cityController),
           buildTextField('State', 'Enter state', stateController),
@@ -850,28 +859,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget buildDateField(String label, String hint, TextEditingController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          readOnly: true,
-          onTap: _selectDate,
-          decoration: InputDecoration(
-            hintText: hint,
-            filled: true,
-            fillColor: const Color(0xFFEDEFFF),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            suffixIcon: const Icon(Icons.calendar_today),
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
+  // buildDateField removed; DOB input replaced by numeric Age field.
 
   Widget buildGenderField() {
     return Column(

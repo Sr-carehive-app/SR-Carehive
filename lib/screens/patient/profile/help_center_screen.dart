@@ -165,7 +165,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   [
                     FAQItem(
                       question: 'How do I create an account?',
-                      answer: 'To create an account, go to the sign-up page and fill in your details including full name, email, password, phone number, date of birth, Aadhar number, permanent address, and gender. You can also sign up using your Google account for faster registration.',
+                      answer: 'To create an account, go to the sign-up page and fill in your details including full name, email, password, phone number, age, Aadhar number, permanent address, and gender. You can also sign up using your Google account for faster registration.',
                     ),
                     FAQItem(
                       question: 'Why do I need to verify my email?',
@@ -223,7 +223,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     ),
                     FAQItem(
                       question: 'What personal information is stored?',
-                      answer: 'We store your name, email, phone number, date of birth, Aadhar number, permanent address, gender, and profile photo. This information is used to provide personalized care services and maintain your health records.',
+                      answer: 'We store your name, email, phone number, age, Aadhar number, permanent address, gender, and profile photo. This information is used to provide personalized care services and maintain your health records.',
                     ),
                     FAQItem(
                       question: 'Is my personal information secure?',
@@ -239,8 +239,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   'General App Usage',
                   [
                     FAQItem(
-                      question: 'What is SERECHI?',
-                      answer: 'SERECHI is a healthcare platform by SR CareHive Pvt. Ltd. that connects healthcare seekers with professional healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
+                      question: 'What is Serechi?',
+                      answer: 'Serechi is a healthcare platform by SR CareHive Pvt. Ltd. that connects healthcare seekers with professional healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
                     ),
                     FAQItem(
                       question: 'How do I contact support?',

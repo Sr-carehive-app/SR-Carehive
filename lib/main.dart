@@ -10,6 +10,8 @@ import 'screens/patient/schedule_nurse_screen.dart';
 import 'screens/patient/profile/profile_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'dart:html' as html; // web-only diagnostics (used behind kIsWeb guard)
 import 'config/api_config.dart';
 
 class ErrorScreen extends StatelessWidget {
@@ -68,11 +70,116 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     _initDeepLink();
     _checkAuthState();
+    _listenToAuthChanges();
+  }
+
+  void _listenToAuthChanges() {
+    final supabase = Supabase.instance.client;
+    supabase.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      
+      print('🔄 Auth state changed: $event');
+      
+      if (event == AuthChangeEvent.signedOut) {
+        print('👤 User signed out, returning to splash screen');
+        setState(() {
+          _homeWidget = const SplashScreen();
+        });
+      } else if (event == AuthChangeEvent.signedIn && session?.user != null) {
+        print('✅ User signed in: ${session?.user.email}');
+        _handlePostAuthRedirect(session!.user);
+      }
+    });
+  }
+
+  Future<void> _handlePostAuthRedirect(User user) async {
+    final supabase = Supabase.instance.client;
+    
+    print('🔄 _handlePostAuthRedirect called for user: ${user.email}');
+    
+    try {
+      // Check if patient record exists
+      final patient = await supabase
+          .from('patients')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
+      
+      print('Patient record: ${patient != null ? "Found" : "Not found"}');
+      
+      if (patient != null) {
+        // Existing user - go to dashboard
+        print('🔄 Navigating to dashboard for existing user');
+        if (mounted) {
+          setState(() {
+            _homeWidget = PatientDashboardScreen(userName: patient['name'] ?? '');
+          });
+          
+          // Also try navigator push for immediate navigation
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => PatientDashboardScreen(userName: patient['name'] ?? ''),
+              ),
+              (route) => false,
+            );
+          });
+        }
+        } else {
+          // User is NOT registered in DB - redirect to register page with message
+          print('📝 User not registered - redirecting to register page');
+          print('📝 Setting _homeWidget to PatientSignUpScreen');
+          if (mounted) {
+          final prefillData = <String, String>{
+            'name': user.userMetadata?['full_name'] ?? '',
+            'email': user.email ?? '',
+            if (user.userMetadata?['birthdate'] != null && user.userMetadata?['birthdate'].isNotEmpty)
+              'age': (() {
+                try {
+                  final birth = DateTime.parse(user.userMetadata!['birthdate']);
+                  final now = DateTime.now();
+                  final years = now.year - birth.year - ((now.month < birth.month || (now.month == birth.month && now.day < birth.day)) ? 1 : 0);
+                  return years.toString();
+                } catch (_) {
+                  return '';
+                }
+              })(),
+            'gender': user.userMetadata?['gender'] ?? '',
+            'google_avatar_url': user.userMetadata?['avatar_url'] ?? '', // Store Google avatar URL
+          };
+          
+          setState(() {
+            _homeWidget = PatientSignUpScreen(
+              prefillData: prefillData,
+              showRegistrationMessage: true, // Show "Please register your account to continue" message
+            );
+          });
+          
+          // Also try navigator push for immediate navigation
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (_) => PatientSignUpScreen(
+                  prefillData: prefillData,
+                  showRegistrationMessage: true,
+                ),
+              ),
+              (route) => false,
+            );
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Error handling post-auth redirect: $e');
+    }
   }
 
   Future<void> _checkAuthState() async {
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
+    
+    print('🔍 Checking auth state for user: ${user?.email}');
     
     if (user != null) {
       // User is already logged in, check if they have a healthcare seeker record
@@ -83,14 +190,21 @@ class _MyAppState extends State<MyApp> {
             .eq('user_id', user.id)
             .maybeSingle();
         
+        print('Patient record found: ${patient != null}');
+        
         if (patient != null) {
+          print('🔄 Setting home widget to dashboard');
           setState(() {
             _homeWidget = PatientDashboardScreen(userName: patient['name'] ?? '');
           });
+        } else {
+          print('📝 No patient record found, staying on splash screen');
         }
       } catch (e) {
-        print('Error checking healthcare seeker record: $e');
+        print('❌ Error checking healthcare seeker record: $e');
       }
+    } else {
+      print('👤 No authenticated user found');
     }
   }
 
@@ -107,6 +221,22 @@ class _MyAppState extends State<MyApp> {
     if (initialUri != null) {
       await _handleIncomingLink(initialUri);
     }
+
+    // On web, AppLinks may not provide an initial URI, so check the browser URL directly
+    if (kIsWeb) {
+      final webUri = Uri.base;
+      print('🌐 Web URI: $webUri');
+      if (webUri.queryParameters.containsKey('code') || webUri.queryParameters.containsKey('access_token')) {
+        print('🔗 OAuth callback detected in initial URL');
+        await _handleIncomingLink(webUri);
+      }
+      
+      // Also check for Supabase hosted callback redirects
+      if (webUri.path.contains('/auth/v1/callback') || webUri.queryParameters.containsKey('code')) {
+        print('🔗 Supabase callback detected');
+        await _handleIncomingLink(webUri);
+      }
+    }
   }
 
   Future<void> _handleIncomingLink(Uri uri) async {
@@ -115,15 +245,82 @@ class _MyAppState extends State<MyApp> {
     print('Deep link received: $uri');
     
     // Handle OAuth callback - Manually process the OAuth code
-    if (uri.host == 'login-callback' && uri.queryParameters.containsKey('code')) {
+    // Accept Supabase /auth/v1/callback (e.g. http://localhost:5173/auth/v1/callback?code=...)
+    // or any incoming link that contains an OAuth code or access_token (may be in fragment)
+    // Merge query and fragment parameters (some providers put tokens in the URL fragment)
+    final Map<String, String> mergedParams = {};
+    mergedParams.addAll(uri.queryParameters);
+    if (uri.fragment.isNotEmpty) {
+      try {
+        mergedParams.addAll(Uri.splitQueryString(uri.fragment));
+      } catch (_) {
+        // ignore parse errors
+      }
+    }
+
+    if (mergedParams.containsKey('code') || mergedParams.containsKey('access_token')) {
       try {
         print('OAuth callback detected with code');
         
-        // Manually handle the OAuth callback with the full URL
-        await supabase.auth.getSessionFromUrl(uri);
+        // Check if user is already authenticated (from auth state change)
+        final currentUser = supabase.auth.currentUser;
+        if (currentUser != null) {
+          print('✅ User already authenticated: ${currentUser.email}');
+          // Skip session establishment and proceed with navigation
+          await _handlePostAuthRedirect(currentUser);
+          return;
+        }
         
-        print(' Session established from URL');
+        print('🔍 No authenticated user found, proceeding with session establishment');
         
+        // On web, use the current browser URL to ensure proper PKCE handling
+        final callbackUri = kIsWeb ? Uri.base : uri;
+        
+        if (kIsWeb) {
+          print('URI queryParameters: ${uri.queryParameters}');
+          print('URI fragment: ${uri.fragment}');
+          print('Merged params: $mergedParams');
+          print('Callback URI passed to getSessionFromUrl: $callbackUri');
+          
+          // Log localStorage for debugging
+          try {
+            final keys = html.window.localStorage.keys;
+            print('LocalStorage keys: $keys');
+          } catch (_) {}
+        }
+        
+        // Try to establish session from URL
+        try {
+          await supabase.auth.getSessionFromUrl(callbackUri);
+          print('✅ Session established from URL');
+        } on AuthException catch (err) {
+          print('❌ AuthException: ${err.message}');
+          
+          // If PKCE code_verifier missing, try alternative approaches
+          final msg = err.message?.toLowerCase() ?? '';
+          if (kIsWeb && msg.contains('code verifier') && msg.contains('could not be found')) {
+            print('Code verifier missing - attempting bypass strategy');
+            
+            // Bypass PKCE by using the auth state change event that already fired
+            // The user is already signed in (we saw AuthChangeEvent.signedIn)
+            // Just proceed with the current user
+            print('🔄 Bypassing PKCE - using existing auth state');
+            
+            // Check if user is already authenticated
+            final currentUser = supabase.auth.currentUser;
+            if (currentUser != null) {
+              print('✅ User already authenticated: ${currentUser.email}');
+              // Don't rethrow - proceed with the authenticated user
+            } else {
+              print('❌ No authenticated user found despite auth state change');
+              rethrow;
+            }
+          } else {
+            rethrow;
+          }
+        }
+        
+        // Get the current session and user
         final session = supabase.auth.currentSession;
         final user = supabase.auth.currentUser;
         
@@ -138,36 +335,60 @@ class _MyAppState extends State<MyApp> {
               .eq('user_id', user.id)
               .maybeSingle();
           
-          print('healthcare seeker record: ${patient != null ? "Found" : "Not found"}');
+          print('Patient record: ${patient != null ? "Found" : "Not found"}');
           
           if (patient != null) {
             // Existing user - go to dashboard
-            print('Navigating to dashboard');
+            print('🔄 Navigating to dashboard for existing user');
             if (mounted) {
-              navigatorKey.currentState?.pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => PatientDashboardScreen(userName: patient['name'] ?? ''),
-                ),
-                (route) => false,
-              );
+              setState(() {
+                _homeWidget = PatientDashboardScreen(userName: patient['name'] ?? '');
+              });
+              
+              // Also try navigator push for immediate navigation
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                navigatorKey.currentState?.pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => PatientDashboardScreen(userName: patient['name'] ?? ''),
+                  ),
+                  (route) => false,
+                );
+              });
             }
           } else {
             // New Google sign-up user - redirect to signup page with pre-filled data
-            print('📝 Navigating to signup');
+            print('📝 Navigating to signup for new user');
             if (mounted) {
-              navigatorKey.currentState?.pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => PatientSignUpScreen(
-                    prefillData: {
-                      'name': user.userMetadata?['full_name'] ?? '',
-                      'email': user.email ?? '',
-                      'dob': user.userMetadata?['birthdate'] ?? '',
-                      'gender': user.userMetadata?['gender'] ?? '',
-                    },
+              final prefillData = <String, String>{
+                'name': user.userMetadata?['full_name'] ?? '',
+                'email': user.email ?? '',
+                if (user.userMetadata?['birthdate'] != null && user.userMetadata?['birthdate'].isNotEmpty)
+                  'age': (() {
+                    try {
+                      final birth = DateTime.parse(user.userMetadata!['birthdate']);
+                      final now = DateTime.now();
+                      final years = now.year - birth.year - ((now.month < birth.month || (now.month == birth.month && now.day < birth.day)) ? 1 : 0);
+                      return years.toString();
+                    } catch (_) {
+                      return '';
+                    }
+                  })(),
+                'gender': user.userMetadata?['gender'] ?? '',
+              };
+              
+              setState(() {
+                _homeWidget = PatientSignUpScreen(prefillData: prefillData);
+              });
+              
+              // Also try navigator push for immediate navigation
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                navigatorKey.currentState?.pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => PatientSignUpScreen(prefillData: prefillData),
                   ),
-                ),
-                (route) => false,
-              );
+                  (route) => false,
+                );
+              });
             }
           }
         } else {

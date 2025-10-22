@@ -106,7 +106,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       if (user != null) {
         final patient = await supabase
             .from('patients')
-            .select('name, phone, permanent_address, aadhar_number')
+            .select('name, phone, permanent_address, aadhar_number, email, age')
             .eq('user_id', user.id)
             .maybeSingle();
         
@@ -116,6 +116,8 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             phoneController.text = patient['phone'] ?? '';
             addressController.text = patient['permanent_address'] ?? '';
             aadharController.text = patient['aadhar_number'] ?? '';
+            patientEmailController.text = (patient['email'] ?? user.email ?? '').toString();
+            ageController.text = patient['age'] != null ? patient['age'].toString() : ageController.text;
           });
         }
       }
@@ -699,8 +701,20 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 16),
           buildTextField('Age', controller: ageController, keyboardType: TextInputType.number),
           const SizedBox(height: 16),
-          // Patient Email (required)
-          buildTextField('Email', controller: patientEmailController, keyboardType: TextInputType.emailAddress),
+          // Patient Email (required) - populated from authenticated user and read-only
+          const SizedBox.shrink(),
+          TextField(
+            controller: patientEmailController,
+            readOnly: true,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: 'Email',
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+          ),
           const SizedBox(height: 16),
           buildPhoneField('Phone Number', phoneController, selectedCountryCode, (value) {
             setState(() => selectedCountryCode = value!);

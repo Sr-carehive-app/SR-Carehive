@@ -4,12 +4,12 @@
 -- This script safely handles existing views and constraints
 
 -- STEP 1: Drop dependent objects (views, functions)
-DROP VIEW IF EXISTS appointment_payment_summary CASCADE;
-DROP FUNCTION IF EXISTS get_pending_payment(INTEGER) CASCADE;
+-- DROP VIEW IF EXISTS appointment_payment_summary CASCADE;
+-- DROP FUNCTION IF EXISTS get_pending_payment(INTEGER) CASCADE;
 
 -- STEP 2: Drop old constraints
-ALTER TABLE appointments 
-DROP CONSTRAINT IF EXISTS chk_appointment_status;
+-- ALTER TABLE appointments 
+-- DROP CONSTRAINT IF EXISTS chk_appointment_status;
 
 -- STEP 3: Add new columns (IF NOT EXISTS handles re-runs)
 ALTER TABLE appointments 
@@ -48,9 +48,9 @@ CREATE INDEX IF NOT EXISTS idx_appointments_final_paid ON appointments(final_pai
 CREATE INDEX IF NOT EXISTS idx_appointments_payment_ids ON appointments(registration_payment_id, pre_payment_id, final_payment_id);
 
 -- STEP 7: Add column comments
-COMMENT ON COLUMN appointments.registration_payment_id IS 'Razorpay payment ID for ₹100 registration fee';
+COMMENT ON COLUMN appointments.registration_payment_id IS 'Razorpay payment ID for ₹10 registration fee';
 COMMENT ON COLUMN appointments.registration_receipt_id IS 'Razorpay receipt ID for registration payment';
-COMMENT ON COLUMN appointments.registration_paid IS 'Whether ₹100 registration fee is paid';
+COMMENT ON COLUMN appointments.registration_paid IS 'Whether ₹10 registration fee is paid';
 COMMENT ON COLUMN appointments.registration_paid_at IS 'Timestamp when registration payment was completed';
 
 COMMENT ON COLUMN appointments.total_amount IS 'Total service amount set by nurse (e.g., ₹1000)';
@@ -95,9 +95,9 @@ SELECT
   CASE WHEN total_amount IS NOT NULL THEN total_amount / 2 ELSE NULL END as final_amount,
   -- Total paid
   CASE 
-    WHEN final_paid THEN 100 + total_amount
-    WHEN pre_paid THEN 100 + (total_amount / 2)
-    WHEN registration_paid THEN 100
+    WHEN final_paid THEN 10 + total_amount
+    WHEN pre_paid THEN 10 + (total_amount / 2)
+    WHEN registration_paid THEN 10
     ELSE 0
   END as total_paid,
   -- Payment progress
@@ -138,7 +138,7 @@ BEGIN
   
   -- Add registration if not paid
   IF NOT v_registration_paid THEN
-    v_pending := v_pending + 100;
+    v_pending := v_pending + 10;
   END IF;
   
   -- Add pre-payment if not paid
@@ -155,7 +155,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION get_pending_payment IS 'Calculate total pending payment for an appointment (₹100 + pre + final)';
+COMMENT ON FUNCTION get_pending_payment IS 'Calculate total pending payment for an appointment (₹10 + pre + final)';
 
 -- ============================================
 -- MIGRATION COMPLETE! ✅

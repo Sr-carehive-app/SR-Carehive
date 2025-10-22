@@ -8,14 +8,17 @@ import 'patient_login_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/services/otp_service.dart';
 import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:async';
+import 'dart:html' as html;
 
 class PatientSignUpScreen extends StatefulWidget {
   final Map<String, String>? prefillData;
+  final bool showRegistrationMessage;
   
-  const PatientSignUpScreen({Key? key, this.prefillData}) : super(key: key);
+  const PatientSignUpScreen({Key? key, this.prefillData, this.showRegistrationMessage = false}) : super(key: key);
 
   @override
   State<PatientSignUpScreen> createState() => _PatientSignUpScreenState();
@@ -37,6 +40,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   
   DateTime? selectedDate;
   final TextEditingController dobController = TextEditingController();
+  // New age controller to replace DOB input
+  final TextEditingController ageController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
   
   // Address fields
@@ -90,14 +95,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       
       emailController.text = widget.prefillData!['email'] ?? '';
       
-      // Pre-fill DOB if available
-      if (widget.prefillData!['dob'] != null && widget.prefillData!['dob']!.isNotEmpty) {
-        dobController.text = widget.prefillData!['dob']!;
-        try {
-          selectedDate = DateFormat('yyyy-MM-dd').parse(widget.prefillData!['dob']!);
-        } catch (e) {
-          // Invalid date format, ignore
-        }
+      // Prefill age if available instead of DOB
+      if (widget.prefillData!['age'] != null && widget.prefillData!['age']!.isNotEmpty) {
+        ageController.text = widget.prefillData!['age']!;
       }
       
       // Pre-fill gender if available
@@ -387,7 +387,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     emailController.dispose();
     aadharLinkedPhoneController.dispose();
     alternativePhoneController.dispose();
-    dobController.dispose();
+  dobController.dispose();
+  ageController.dispose();
     aadharController.dispose();
     houseNumberController.dispose();
     streetController.dispose();
@@ -447,9 +448,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       }
     }
     
-    if (dobController.text.trim().isEmpty || selectedDate == null) {
+    if (ageController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select your date of birth')),
+        const SnackBar(content: Text('Please enter your age')),
       );
       return;
     }
@@ -468,12 +469,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
-    if (streetController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your street')),
-      );
-      return;
-    }
+    // Street removed from signup form (not required)
     
     if (townController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -540,15 +536,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
-    // Validate date format
-    try {
-      DateFormat('yyyy-MM-dd').parseStrict(dobController.text.trim());
-    } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a valid date of birth')),
-      );
-      return;
-    }
+    // We no longer use Date of Birth input; Age is required and already validated above.
 
     // For non-OAuth users, verify phone via OTP
     if (!_isGoogleUser && !_phoneVerified) {
@@ -603,6 +591,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
         // Google user - already authenticated, just create patient record
         final user = supabase.auth.currentUser;
         if (user != null) {
+          // Get Google avatar URL from prefill data
+          final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
+          
           await supabase.from('patients').insert({
             'user_id': user.id,
             'name': fullName,
@@ -615,16 +606,16 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
                 ? alternativePhoneController.text.trim() 
                 : null,
-            'dob': dobController.text.trim(),
+            'age': int.tryParse(ageController.text.trim()) ?? null,
             'aadhar_number': aadharController.text.trim(),
             'house_number': houseNumberController.text.trim(),
-            'street': streetController.text.trim(),
             'town': townController.text.trim(),
             'city': cityController.text.trim(),
             'state': stateController.text.trim(),
             'pincode': pincodeController.text.trim(),
             'gender': selectedGender,
             'phone_verified': true, // OAuth users are pre-verified
+            'avatar_url': googleAvatarUrl.isNotEmpty ? googleAvatarUrl : null, // Store Google avatar
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -668,10 +659,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
                   ? alternativePhoneController.text.trim() 
                   : null,
-              'dob': dobController.text.trim(),
+              'age': int.tryParse(ageController.text.trim()) ?? null,
               'aadhar_number': aadharController.text.trim(),
               'house_number': houseNumberController.text.trim(),
-              'street': streetController.text.trim(),
+              // street removed from signup form
               'town': townController.text.trim(),
               'city': cityController.text.trim(),
               'state': stateController.text.trim(),
@@ -685,10 +676,19 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('✅ Registration successful! Please login with your credentials.')),
               );
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => PatientLoginScreen()),
-              );
+                // Save signup prefills (age/aadhar/gender) for post-signup prompt if needed
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('signup_name', fullName);
+                await prefs.setString('signup_email', emailController.text.trim());
+                await prefs.setString('signup_phone', phoneWithCode);
+                await prefs.setString('signup_age', ageController.text.trim());
+                await prefs.setString('signup_aadhar', aadharController.text.trim());
+                await prefs.setString('signup_address', '${houseNumberController.text.trim()}, ${townController.text.trim()}, ${cityController.text.trim()}');
+                await prefs.setString('signup_gender', selectedGender ?? '');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => PatientLoginScreen()),
+                );
             }
           }
         } on AuthException catch (e) {
@@ -741,19 +741,32 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   Future<void> _handleGoogleSignIn() async {
     final supabase = Supabase.instance.client;
     try {
+      // For web, use localhost callback for development
+      final redirect = kIsWeb
+          ? '${Uri.base.origin}/auth/v1/callback'
+          : 'carehive://login-callback';
+
+      print('🔐 Starting Google OAuth with redirect: $redirect');
+      
+      // Don't clear localStorage - Supabase needs to store PKCE parameters
+      if (kIsWeb) {
+        print('🔐 Starting OAuth with existing localStorage state');
+      }
+      
       await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb
-            ? 'http://localhost:5173/auth/v1/callback'
-            : 'carehive://login-callback',  // ✅ Explicitly use deep link for Android
+        redirectTo: redirect,
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
       // The OAuth callback will be handled in main.dart
     } on AuthException catch (e) {
+      print('❌ AuthException during Google sign-in: ${e.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
     } catch (e) {
+      print('❌ Error during Google sign-in: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
@@ -815,32 +828,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     );
   }
 
-  Widget buildDateField() {
-    return GestureDetector(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: DateTime(2000, 1, 1),
-          firstDate: DateTime(1900),
-          lastDate: DateTime.now(),
-        );
-        if (picked != null) {
-          setState(() {
-            selectedDate = picked;
-            dobController.text = DateFormat('yyyy-MM-dd').format(picked);
-          });
-        }
-      },
-      child: AbsorbPointer(
-        child: buildTextField(
-          label: 'Date Of Birth',
-          hint: 'YYYY-MM-DD',
-          controller: dobController,
-          keyboardType: TextInputType.datetime,
-        ),
-      ),
-    );
-  }
+  // Date of birth input removed — we collect numeric Age instead.
 
   @override
   Widget build(BuildContext context) {
@@ -873,14 +861,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              'New Account',
+              'Register Your New Account Below',
               style: TextStyle(
                 fontSize: 24,
                 color: Color(0xFF2260FF),
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (_isGoogleUser) ...[
+            if (_isGoogleUser || widget.showRegistrationMessage) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -895,7 +883,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Please complete your profile details to continue',
+                        widget.showRegistrationMessage 
+                          ? 'Please register your account to continue'
+                          : 'Please complete your profile details to continue',
                         style: TextStyle(
                           color: const Color(0xFF2260FF),
                           fontWeight: FontWeight.w500,
@@ -933,7 +923,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             const SizedBox(height: 20),
             if (!_isGoogleUser) ...[
               buildTextField(
-                label: 'Password (Should be 6 characters)',
+                label: 'Password (Should be atleast 6 characters)',
                 hint: '******',
                 controller: passwordController,
                 obscure: _obscureText,
@@ -1076,7 +1066,29 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            buildDateField(),
+            // Age input (replaces Date of Birth)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Age', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ageController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                  decoration: InputDecoration(
+                    hintText: 'Enter your age',
+                    filled: true,
+                    fillColor: const Color(0xFFEDEFFF),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1135,12 +1147,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               label: 'House/Flat Number *',
               hint: '123 or A-45',
               controller: houseNumberController,
-            ),
-            const SizedBox(height: 20),
-            buildTextField(
-              label: 'Street *',
-              hint: 'MG Road',
-              controller: streetController,
             ),
             const SizedBox(height: 20),
             buildTextField(

@@ -1,5 +1,5 @@
 // Payment Models for 3-Tier Payment System
-// Registration (₹100) → Pre-Visit (50%) → Post-Visit (50%)
+// Registration (₹10) → Pre-Visit (50%) → Post-Visit (50%)
 
 class PaymentStage {
   static const String registration = 'registration';
@@ -11,7 +11,7 @@ class AppointmentStatus {
   static const String pending = 'pending';
   static const String approved = 'approved';
   static const String rejected = 'rejected';
-  static const String booked = 'booked'; // After ₹100 paid
+  static const String booked = 'booked'; // After ₹10 paid
   static const String amountSet = 'amount_set'; // After healthcare provider sets total amount
   static const String prePaid = 'pre_paid'; // After 50% pre-payment
   static const String completed = 'completed'; // After 100% payment
@@ -54,7 +54,7 @@ class AppointmentPaymentInfo {
   final int appointmentId;
   final String status;
   
-  // Registration payment (₹100)
+  // Registration payment (₹10)
   final bool registrationPaid;
   final String? registrationPaymentId;
   final String? registrationReceiptId;
@@ -96,13 +96,13 @@ class AppointmentPaymentInfo {
   });
 
   // Calculate amounts
-  double get registrationAmount => 100.0;
+  double get registrationAmount => 10.0;
   double? get preAmount => totalAmount != null ? totalAmount! / 2 : null;
   double? get finalAmount => totalAmount != null ? totalAmount! / 2 : null;
   
   double get totalPaid {
     double paid = 0;
-    if (registrationPaid) paid += 100;
+    if (registrationPaid) paid += 10;
     if (prePaid && totalAmount != null) paid += totalAmount! / 2;
     if (finalPaid && totalAmount != null) paid += totalAmount! / 2;
     return paid;
@@ -110,7 +110,7 @@ class AppointmentPaymentInfo {
   
   double get totalPending {
     double pending = 0;
-    if (!registrationPaid) pending += 100;
+    if (!registrationPaid) pending += 10;
     if (totalAmount != null) {
       if (!prePaid) pending += totalAmount! / 2;
       if (!finalPaid) pending += totalAmount! / 2;

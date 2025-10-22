@@ -39,7 +39,7 @@ class _SplashScreenState extends State<SplashScreen> {
             Image.asset('assets/images/logo.png', width: 100, height: 100),
             const SizedBox(height: 20),
             const Text(
-              'SERECHI',
+              'Serechi',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 30,

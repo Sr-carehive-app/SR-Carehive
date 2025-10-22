@@ -117,7 +117,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
                             ),
                           ),
                           const Text(
-                            '₹100',
+                            '₹10',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 30,
@@ -225,7 +225,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
                             const Icon(Icons.payment, color: Colors.white, size: 20),
                             const SizedBox(width: 8),
                             const Text(
-                              'Pay ₹100 Now',
+                              'Pay ₹10 Now',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

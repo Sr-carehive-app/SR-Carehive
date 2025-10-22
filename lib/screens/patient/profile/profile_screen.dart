@@ -317,7 +317,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 buildProfileOption(context, Icons.person, 'Profile', const EditProfileScreen()),
-                buildProfileOption(context, Icons.info_outline, 'About SERECHI', const AboutScreen()),
+                buildProfileOption(context, Icons.info_outline, 'About Serechi', const AboutScreen()),
                 buildProfileOption(context, Icons.assignment_return, 'Ask for Refund', const RefundRequestScreen()),
                 buildProfileOption(context, Icons.article, 'Terms & Conditions', const TermsConditionsScreen()),
                 buildProfileOption(context, Icons.privacy_tip, 'Privacy Policy', const PrivacyPolicyScreen()),

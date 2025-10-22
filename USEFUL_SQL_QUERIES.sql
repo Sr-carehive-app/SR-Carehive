@@ -223,9 +223,9 @@ ORDER BY a.final_paid_at DESC;
 -- ============================================
 SELECT 
   COUNT(*) as total_completed,
-  SUM(CASE WHEN registration_paid = true THEN 100 ELSE 0 END) as registration_revenue,
+  SUM(CASE WHEN registration_paid = true THEN 10 ELSE 0 END) as registration_revenue,
   SUM(CASE WHEN pre_paid = true THEN (total_amount / 2) ELSE 0 END) as pre_payment_revenue,
   SUM(CASE WHEN final_paid = true THEN (total_amount / 2) ELSE 0 END) as final_payment_revenue,
-  SUM(CASE WHEN final_paid = true THEN (100 + total_amount) ELSE 0 END) as total_revenue
+  SUM(CASE WHEN final_paid = true THEN (10 + total_amount) ELSE 0 END) as total_revenue
 FROM appointments
 WHERE created_at >= CURRENT_DATE - INTERVAL '30 days';

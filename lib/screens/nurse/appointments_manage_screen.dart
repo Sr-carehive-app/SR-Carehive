@@ -141,7 +141,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'Healthcare seeker paid ₹100 registration fee. Set the total service amount based on requirements.',
+                        'Healthcare seeker paid ₹10 registration fee. Set the total service amount based on requirements.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -828,7 +828,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                               const SizedBox(width: 8),
                               const Expanded(
                                 child: Text(
-                                  'Registration Fee Paid (₹100)',
+                                  'Registration Fee Paid (₹10)',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),

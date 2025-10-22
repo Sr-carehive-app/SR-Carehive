@@ -1,11 +1,11 @@
 {
-    "name": "SERECHI - Healthcare by SR CareHive",
-    "short_name": "SERECHI",
+    "name": "Serechi - Healthcare by SR CareHive",
+    "short_name": "Serechi",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#2260FF",
     "theme_color": "#2260FF",
-    "description": "SERECHI - Your Trusted Healthcare Companion. Connect with professional healthcare providers for home nursing, elderly care, physiotherapy, and more.",
+    "description": "Serechi - Your Trusted Healthcare Companion. Connect with professional healthcare providers for home nursing, elderly care, physiotherapy, and more.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

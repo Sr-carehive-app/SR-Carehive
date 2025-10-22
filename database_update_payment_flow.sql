@@ -1,13 +1,12 @@
 -- ============================================
 -- UPDATED BUSINESS MODEL: 3-TIER PAYMENT SYSTEM
 -- ============================================
--- Flow: pending → approved → booked (₹100) → amount_set → pre_paid → completed
--- Payments: Registration (₹100) → Pre-visit (50%) → Post-visit (50%)
+-- Flow: pending → approved → booked (₹10) → amount_set → pre_paid → completed
+-- Payments: Registration (₹10) → Pre-visit (50%) → Post-visit (50%)
 
--- Add new columns for 3-tier payment system
-ALTER TABLE appointments 
-ADD COLUMN IF NOT EXISTS registration_payment_id VARCHAR(255),
-ADD COLUMN IF NOT EXISTS registration_receipt_id VARCHAR(255),
+COMMENT ON COLUMN appointments.registration_payment_id IS 'Razorpay payment ID for ₹10 registration fee';
+COMMENT ON COLUMN appointments.registration_receipt_id IS 'Razorpay receipt ID for registration payment';
+COMMENT ON COLUMN appointments.registration_paid IS 'Whether ₹10 registration fee is paid';
 ADD COLUMN IF NOT EXISTS registration_paid BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS registration_paid_at TIMESTAMP,
 
@@ -25,9 +24,9 @@ ADD COLUMN IF NOT EXISTS final_paid BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS final_paid_at TIMESTAMP;
 
 -- Add comments for documentation
-COMMENT ON COLUMN appointments.registration_payment_id IS 'Razorpay payment ID for ₹100 registration fee';
+COMMENT ON COLUMN appointments.registration_payment_id IS 'Razorpay payment ID for ₹10 registration fee';
 COMMENT ON COLUMN appointments.registration_receipt_id IS 'Razorpay receipt ID for registration payment';
-COMMENT ON COLUMN appointments.registration_paid IS 'Whether ₹100 registration fee is paid';
+COMMENT ON COLUMN appointments.registration_paid IS 'Whether ₹10 registration fee is paid';
 COMMENT ON COLUMN appointments.registration_paid_at IS 'Timestamp when registration payment was completed';
 
 COMMENT ON COLUMN appointments.total_amount IS 'Total service amount set by nurse after consultation (e.g., ₹1000)';
@@ -96,9 +95,9 @@ SELECT
   CASE WHEN total_amount IS NOT NULL THEN total_amount / 2 ELSE NULL END as final_amount,
   -- Total paid
   CASE 
-    WHEN final_paid THEN 100 + total_amount
-    WHEN pre_paid THEN 100 + (total_amount / 2)
-    WHEN registration_paid THEN 100
+    WHEN final_paid THEN 10 + total_amount
+    WHEN pre_paid THEN 10 + (total_amount / 2)
+    WHEN registration_paid THEN 10
     ELSE 0
   END as total_paid,
   -- Payment progress
@@ -139,7 +138,7 @@ BEGIN
   
   -- Add registration if not paid
   IF NOT v_registration_paid THEN
-    v_pending := v_pending + 100;
+    v_pending := v_pending + 10;
   END IF;
   
   -- Add pre-payment if not paid

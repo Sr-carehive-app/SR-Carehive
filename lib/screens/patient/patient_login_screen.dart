@@ -6,10 +6,13 @@ import 'patient_signup_screen.dart';
 import 'forgot_password_otp_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
+import 'package:intl/intl.dart';
+import 'dart:html' as html;
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({Key? key}) : super(key: key);
@@ -64,6 +67,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               final nameController = TextEditingController();
               final phoneController = TextEditingController();
               final dobController = TextEditingController();
+              final ageController = TextEditingController();
               final aadharController = TextEditingController();
               final addressController = TextEditingController();
               String? selectedGender;
@@ -72,7 +76,8 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                 final prefs = await SharedPreferences.getInstance();
                 nameController.text = prefs.getString('signup_name') ?? '';
                 phoneController.text = prefs.getString('signup_phone') ?? '';
-                dobController.text = prefs.getString('signup_dob') ?? '';
+                // Prefill age if saved from signup flow
+                ageController.text = prefs.getString('signup_age') ?? '';
                 aadharController.text = prefs.getString('signup_aadhar') ?? '';
                 addressController.text = prefs.getString('signup_address') ?? '';
                 selectedGender = prefs.getString('signup_gender');
@@ -89,7 +94,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         children: [
                           TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Full Name')),
                           TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Mobile Number')),
-                          TextField(controller: dobController, decoration: const InputDecoration(labelText: 'Date of Birth (yyyy-MM-dd)')),
+                          TextField(controller: ageController, decoration: const InputDecoration(labelText: 'Age')),
                           TextField(controller: aadharController, decoration: const InputDecoration(labelText: 'Aadhar Number')),
                           TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Permanent Address')),
                           Row(
@@ -122,7 +127,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                       ),
                       TextButton(
                         onPressed: () async {
-                          if (nameController.text.isEmpty || phoneController.text.isEmpty || dobController.text.isEmpty || aadharController.text.isEmpty || addressController.text.isEmpty || selectedGender == null) {
+                          if (nameController.text.isEmpty || phoneController.text.isEmpty || ageController.text.isEmpty || aadharController.text.isEmpty || addressController.text.isEmpty || selectedGender == null) {
                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
                             return;
                           }
@@ -131,7 +136,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                             'name': nameController.text.trim(),
                             'email': user.email ?? '',
                             'phone': phoneController.text.trim(),
-                            'dob': dobController.text.trim(),
+                            'age': int.tryParse(ageController.text.trim()) ?? null,
                             'aadhar_number': aadharController.text.trim(),
                             'permanent_address': addressController.text.trim(),
                             'gender': selectedGender,
@@ -141,7 +146,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                           await prefs.remove('signup_name');
                           await prefs.remove('signup_email');
                           await prefs.remove('signup_phone');
-                          await prefs.remove('signup_dob');
+                          await prefs.remove('signup_age');
                           await prefs.remove('signup_aadhar');
                           await prefs.remove('signup_address');
                           await prefs.remove('signup_gender');
@@ -197,19 +202,32 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
   Future<void> _handleGoogleSignIn() async {
     final supabase = Supabase.instance.client;
     try {
+      // For web, use localhost callback for development
+      final redirect = kIsWeb
+          ? '${Uri.base.origin}/auth/v1/callback'
+          : 'carehive://login-callback';
+
+      print('🔐 Starting Google OAuth with redirect: $redirect');
+      
+      // Don't clear localStorage - Supabase needs to store PKCE parameters
+      if (kIsWeb) {
+        print('🔐 Starting OAuth with existing localStorage state');
+      }
+      
       await supabase.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb
-            ? 'http://localhost:5173/auth/v1/callback'
-            : 'carehive://login-callback',  // ✅ Explicitly use deep link for Android
+        redirectTo: redirect,
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
       // The OAuth callback will be handled in main.dart
     } on AuthException catch (e) {
+      print('❌ AuthException during Google sign-in: ${e.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
     } catch (e) {
+      print('❌ Error during Google sign-in: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
@@ -386,7 +404,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              'Hello!',
+              'Hello Healthcare Seeker !',
               style: TextStyle(
                 fontSize: 28,
                 color: Color(0xFF2260FF),
@@ -395,7 +413,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Welcome to SERECHI By SR CareHive',
+              'Welcome to Serechi By SR CareHive',
               style: TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2260FF),

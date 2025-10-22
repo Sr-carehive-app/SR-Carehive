@@ -100,7 +100,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       children: [
         const SizedBox(height: 20),
         const Text(
-          'Hello Healthcare Provider!',
+          'Hello Healthcare Provider !',
           style: TextStyle(
             fontSize: 28,
             color: Color(0xFF2260FF),

@@ -575,12 +575,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           // Registration Payment Status
           _buildPaymentStatusRow(
             'Registration Fee',
-            '₹100',
+            '₹10',
             registrationPaid,
             appointment['registration_payment_id'],
           ),
 
-          // Show "Pay ₹100" button if approved and not paid
+          // Show "Pay ₹10" button if approved and not paid
           if (status == 'approved' && !registrationPaid) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -596,7 +596,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 ),
                 icon: const Icon(Icons.payment, color: Colors.white),
                 label: const Text(
-                  'Pay ₹100 to Register Booking',
+                  'Pay ₹10 to Register Booking',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -780,7 +780,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       ),
                     ),
                     Text(
-                      '${(100 + totalAmount).toStringAsFixed(0)}',
+                      '${(10 + totalAmount).toStringAsFixed(0)}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

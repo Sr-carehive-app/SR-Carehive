@@ -109,12 +109,22 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty)
-                      ? NetworkImage(profileImageUrl!)
-                      : const AssetImage('assets/images/user.png') as ImageProvider,
-                ),
+                  GestureDetector(
+                    onTap: () {
+                      // Navigate to Profile tab within the dashboard
+                      setState(() {
+                        _currentIndex = 3;
+                      });
+                      // Refresh profile data when opening profile
+                      _loadProfileData();
+                    },
+                    child: CircleAvatar(
+                      radius: 28,
+                      backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                          ? NetworkImage(profileImageUrl!)
+                          : const AssetImage('assets/images/user.png') as ImageProvider,
+                    ),
+                  ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -172,7 +182,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                 Row(
                   children: [
                     Text(
-                      'SERECHI',
+                      'Serechi',
                       style: TextStyle(
                         color: const Color(0xFF2260FF),
                         fontWeight: FontWeight.w800,
@@ -220,7 +230,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
               children: [
                 buildServiceCard(
                   context,
-                  title: 'Hire a nurse',
+                  title: 'Hire a healthcare provider',
                   subtitle: 'Professional home care',
                   image: 'assets/images/nurse.png',
                   onTap: () {
