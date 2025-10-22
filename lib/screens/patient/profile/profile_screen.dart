@@ -198,24 +198,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
       
-      final bytes = await image.readAsBytes();
       final fileExtension = image.path.split('.').last.split('?').first; // Clean extension
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final cleanUserId = user.id.replaceAll('-', '').substring(0, 12); // Shorten UUID
       final fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
       
-      // Upload with upsert to overwrite if exists
-      await supabase.storage.from('profile-images').uploadBinary(
-        fileName, 
-        bytes, 
-        fileOptions: FileOptions(
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/$fileExtension', // Explicit content type
-        ),
-      );
-      
-      final imageUrl = supabase.storage.from('profile-images').getPublicUrl(fileName);
+      String imageUrl = '';
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        await supabase.storage
+            .from('profile-images')
+            .uploadBinary(fileName, bytes, fileOptions: FileOptions(cacheControl: '3600', upsert: true));
+        imageUrl = supabase.storage
+            .from('profile-images')
+            .getPublicUrl(fileName);
+      } else {
+        await supabase.storage
+            .from('profile-images')
+            .upload(fileName, File(image.path), fileOptions: FileOptions(cacheControl: '3600', upsert: true));
+        imageUrl = supabase.storage
+            .from('profile-images')
+            .getPublicUrl(fileName);
+      }
       
       // Update database
       await supabase.from('patients').update({'profile_image_url': imageUrl}).eq('user_id', user.id);
@@ -240,13 +244,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (e) {
       print('Error uploading image: $e');
+      print('Error type: ${e.runtimeType}');
       if (!mounted) return;
       
-      String errorMessage = 'Error uploading image';
+      String errorMessage = 'Error uploading image: $e';
       if (e.toString().contains('403') || e.toString().contains('Unauthorized')) {
         errorMessage = 'Permission denied. Please check storage policies in Supabase.';
       } else if (e.toString().contains('404')) {
         errorMessage = 'Bucket not found. Please create "profile-images" bucket.';
+      } else if (e.toString().contains('storage')) {
+        errorMessage = 'Storage error. Please check Supabase Storage configuration.';
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
