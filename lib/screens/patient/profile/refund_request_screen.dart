@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:care12/services/support_service.dart';
@@ -134,7 +135,31 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
                 _field(label: 'Full Name', controller: _name, validator: (v) => v!.trim().isEmpty ? 'Full name is required' : null),
                 _field(label: 'Email Address', controller: _email, keyboardType: TextInputType.emailAddress, validator: (v) => v!.contains('@') ? null : 'Enter a valid email'),
                 _field(label: 'Mobile Number', controller: _mobile, keyboardType: TextInputType.phone),
-                _field(label: 'Amount (₹)', controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                _field(
+                  label: 'Amount (₹)', 
+                  controller: _amount, 
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')), // Allow only numbers and decimal point
+                    LengthLimitingTextInputFormatter(10), // Limit to 10 characters
+                  ],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Amount is required';
+                    }
+                    final amount = double.tryParse(value.trim());
+                    if (amount == null) {
+                      return 'Please enter a valid amount';
+                    }
+                    if (amount <= 0) {
+                      return 'Amount must be greater than 0';
+                    }
+                    if (amount > 1000000) {
+                      return 'Amount cannot exceed ₹10,00,000';
+                    }
+                    return null;
+                  },
+                ),
                 _field(label: 'Complaint / Remarks', controller: _complaint, maxLines: 4),
                 const SizedBox(height: 8),
                 _dropdown(label: 'Reason', value: _reason, items: const ['Duplicate charge','Service not received','Accidental payment','Other'], onChanged: (v) => setState(() => _reason = v!)),
@@ -172,6 +197,7 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -180,6 +206,7 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
         validator: validator,
         keyboardType: keyboardType,
         maxLines: maxLines,
+        inputFormatters: inputFormatters,
         decoration: InputDecoration(
           labelText: label,
           filled: true,
