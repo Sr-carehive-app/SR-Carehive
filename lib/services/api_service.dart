@@ -11,7 +11,7 @@ class ApiService {
     try {
       return Uri.base.origin; // runtime origin (http://localhost:5173 for local web)
     } catch (_) {
-      return 'https://srcarehive.com';
+      return 'https://www.srcarehive.com';
     }
   }
 

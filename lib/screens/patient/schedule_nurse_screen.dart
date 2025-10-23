@@ -384,7 +384,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       // Notify admin about new appointment
       if (response != null && response['id'] != null) {
         try {
-          final apiBaseUrl = dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
+          final apiBaseUrl = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
           await http.post(
             Uri.parse('$apiBaseUrl/api/notify-new-appointment'),
             headers: {'Content-Type': 'application/json'},

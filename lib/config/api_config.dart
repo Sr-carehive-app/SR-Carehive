@@ -12,12 +12,12 @@ class ApiConfig {
     // If running on web, use production URL by default
     if (kIsWeb) {
       // In web mode, use production URL unless explicitly set to localhost
-      return envUrl ?? 'https://sr-carehive.vercel.app';
+      return envUrl ?? 'https://api.srcarehive.com';
     }
     
     // For mobile devices, ALWAYS use the production URL
     // Never use localhost on mobile as it refers to the device itself
-    return envUrl ?? 'https://sr-carehive.vercel.app';
+    return envUrl ?? 'https://api.srcarehive.com';
   }
   
   /// Password Reset OTP Endpoints

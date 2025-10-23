@@ -119,8 +119,8 @@ app.use(express.json());
 const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const allowedOrigins = allowedOriginsEnv.length > 0 ? allowedOriginsEnv : [
   'http://localhost:5173',
-  (process.env.FRONTEND_URL || 'https://srcarehive.com'),
-  'https://sr-carehive.vercel.app'
+  (process.env.FRONTEND_URL || 'https://www.srcarehive.com'),
+  'https://api.srcarehive.com'
 ];
 app.use(cors({
   origin: (origin, cb) => {

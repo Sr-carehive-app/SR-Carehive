@@ -7,7 +7,7 @@ import 'mobile_razorpay_helper.dart'
   if (dart.library.html) 'web_razorpay_helper.dart';
 
 class PaymentService {
-  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
+  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
   // Allows routing payment calls to production while keeping the rest on localhost during dev
   static String get _paymentBase => (dotenv.env['PAYMENT_API_BASE_URL'] ?? '').trim().isNotEmpty
       ? (dotenv.env['PAYMENT_API_BASE_URL']!.trim())

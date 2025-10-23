@@ -384,7 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       // Call your existing server endpoint to delete user from Supabase Auth
       final response = await http.post(
-        Uri.parse('https://sr-carehive.vercel.app/api/admin/delete-user'),
+        Uri.parse('https://api.srcarehive.com/api/admin/delete-user'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'user_id': user.id}),
       );

@@ -35,7 +35,7 @@ class NurseApiService {
     if (resp.statusCode == 200) return true;
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
   }
-  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
+  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
   static String? _token; // in-memory bearer token
 
   static Future<bool> login({required String email, required String password}) async {

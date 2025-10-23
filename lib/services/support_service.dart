@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class SupportService {
-  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
+  static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
 
   static Future<void> submitPaymentQuery({
     required String paymentId,

@@ -89,7 +89,7 @@ class OTPService {
   // Send OTP via Email (using your backend)
   static Future<bool> sendOTPViaEmail(String email, String otp) async {
     try {
-      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
       final response = await http.post(
         Uri.parse('$apiUrl/api/send-otp-email'),
         headers: {'Content-Type': 'application/json'},
