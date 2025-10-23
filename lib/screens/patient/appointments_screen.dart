@@ -1025,8 +1025,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           if (code == 'payment_cancelled' || code == 'cancelled') {
             errorMsg = 'Payment cancelled. Please try again.';
           }
-        } else if (err is String && err.toLowerCase().contains('cancelled')) {
-          errorMsg = 'Payment cancelled. Please try again.';
+        } else if (err is String) {
+          final lower = err.toLowerCase();
+          if (lower.contains('cancelled')) {
+            errorMsg = 'Payment cancelled. Please try again.';
+          } else if (lower.contains('{error:')) {
+            // Try to extract description
+            final descMatch = RegExp(r'description: ([^}]+)').firstMatch(lower);
+            if (descMatch != null && descMatch.group(1)?.contains('cancelled') == true) {
+              errorMsg = 'Payment cancelled. Please try again.';
+            }
+          }
         }
       } catch (_) {}
       scaffoldMessenger.showSnackBar(
@@ -1160,8 +1169,16 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           if (code == 'payment_cancelled' || code == 'cancelled') {
             errorMsg = 'Payment cancelled. Please try again.';
           }
-        } else if (err is String && err.toLowerCase().contains('cancelled')) {
-          errorMsg = 'Payment cancelled. Please try again.';
+        } else if (err is String) {
+          final lower = err.toLowerCase();
+          if (lower.contains('cancelled')) {
+            errorMsg = 'Payment cancelled. Please try again.';
+          } else if (lower.contains('{error:')) {
+            final descMatch = RegExp(r'description: ([^}]+)').firstMatch(lower);
+            if (descMatch != null && descMatch.group(1)?.contains('cancelled') == true) {
+              errorMsg = 'Payment cancelled. Please try again.';
+            }
+          }
         }
       } catch (_) {}
       scaffoldMessenger.showSnackBar(
