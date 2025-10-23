@@ -747,11 +747,11 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           ? '${Uri.base.origin}/auth/v1/callback'
           : 'carehive://login-callback';
 
-      print('🔐 Starting Google OAuth with redirect: $redirect');
+      print(' Starting Google OAuth with redirect: $redirect');
       
       // Don't clear localStorage - Supabase needs to store PKCE parameters
       if (kIsWeb) {
-        print('🔐 Starting OAuth with existing localStorage state');
+        print(' Starting OAuth with existing localStorage state');
       }
       
       await supabase.auth.signInWithOAuth(
