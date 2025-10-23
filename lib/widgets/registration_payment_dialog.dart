@@ -376,17 +376,26 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
         );
     } catch (e) {
       print('[Payment] ❌ Payment failed: $e');
-      
-      // Close loading dialog
       navigator.pop();
       print('[Payment] Loading dialog closed after error');
-      
-      // Show error
+      String errorMsg = 'Payment failed. Please try again.';
+      if (e is Map && e['error'] != null && (e['error']['code'] == 'payment_cancelled' || e['error']['code'] == 'cancelled')) {
+        errorMsg = 'Payment cancelled. Please try again.';
+      } else if (e.toString().contains('cancelled')) {
+        errorMsg = 'Payment cancelled. Please try again.';
+      }
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('❌ Payment failed: $e'),
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(errorMsg)),
+            ],
+          ),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
