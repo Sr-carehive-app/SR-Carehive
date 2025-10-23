@@ -491,11 +491,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   leading: const Icon(Icons.logout, color: Color(0xFF2260FF)),
                   title: const Text('Logout'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  onTap: () {
+                  onTap: () async {
+                    await Supabase.instance.client.auth.signOut();
                     Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(builder: (_) => const SplashScreen()),
-                          (route) => false,
+                      (route) => false,
                     );
                   },
                 ),
