@@ -1366,7 +1366,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
         // Send thank you email notification
         try {
-          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
           final notifyUri = Uri.parse('$apiBase/api/notify-feedback-submitted');
           
           await http.post(

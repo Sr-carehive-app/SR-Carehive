@@ -295,7 +295,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         
         // Send email/SMS notification to healthcare seeker
         try {
-          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
           final notifyUri = Uri.parse('$apiBase/api/notify-amount-set');
           
           await http.post(
@@ -530,7 +530,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         
         // Send email/SMS notification to healthcare seeker
         try {
-          final apiBase = dotenv.env['API_BASE_URL'] ?? 'http://localhost:9090';
+          final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://sr-carehive.vercel.app';
           final notifyUri = Uri.parse('$apiBase/api/notify-visit-completed');
           
           await http.post(
