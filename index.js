@@ -36,7 +36,6 @@ function buildCanonicalString(obj, { sortKeys = true }) {
 	if (!obj || typeof obj !== 'object') return '';
 	const keys = Object.keys(obj);
 	if (sortKeys) keys.sort();
-	// Typical payment gateway canonical format: key=value joined by &
 	return keys.map(k => `${k}=${obj[k]}`.trim()).join('&');
 }
 
