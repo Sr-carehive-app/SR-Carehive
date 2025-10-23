@@ -113,7 +113,7 @@ class PlatformRazorpay {
           rzp.on('payment.cancelled', function () {
             console.log('[care12] ⚠️ payment.cancelled event');
             window.dispatchEvent(new CustomEvent('rzp_failed', { 
-              detail: { error: { code: 'cancelled', description: 'Payment cancelled by user' } } 
+              detail: { error: { code: 'cancelled', description: 'Payment cancelled by user huihui' } } 
             }));
           });
           
