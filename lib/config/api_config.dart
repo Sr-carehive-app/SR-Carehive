@@ -9,10 +9,10 @@ class ApiConfig {
     // Check if we have an API_BASE_URL in .env file
     final envUrl = dotenv.env['API_BASE_URL'];
     
-    // If running on web (localhost development), use localhost:9090
+    // If running on web, use production URL by default
     if (kIsWeb) {
-      // In web mode, check if we're in development
-      return envUrl ?? 'http://localhost:9090';
+      // In web mode, use production URL unless explicitly set to localhost
+      return envUrl ?? 'https://sr-carehive.vercel.app';
     }
     
     // For mobile devices, ALWAYS use the production URL

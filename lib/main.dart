@@ -41,14 +41,20 @@ class ErrorScreen extends StatelessWidget {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
+  
+  // Try to load .env file, but don't fail if it doesn't exist
+  try {
+    await dotenv.load();
+  } catch (e) {
+    print('Warning: Could not load .env file: $e');
+  }
   
   // Log API configuration for debugging
   ApiConfig.logConfig();
   
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: dotenv.env['SUPABASE_URL'] ?? 'YOUR_SUPABASE_URL_HERE',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? 'YOUR_SUPABASE_ANON_KEY_HERE',
   );
   runApp(MyApp());
 }
