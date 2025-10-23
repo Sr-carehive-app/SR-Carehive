@@ -375,7 +375,7 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
           ),
         );
     } catch (e) {
-      print('[Payment] ❌ww Payment failed: $e');
+      print('[Payment] ❌Payment failed: $e');
       navigator.pop();
       print('[Payment] Loading dialog closed after error');
       String errorMsg = 'Payment failed. Please try again.';
