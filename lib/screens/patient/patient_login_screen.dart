@@ -404,7 +404,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              'Hello Healthcare Seeker !',
+              'Hello Healthcare Seeker!',
               style: TextStyle(
                 fontSize: 28,
                 color: Color(0xFF2260FF),
