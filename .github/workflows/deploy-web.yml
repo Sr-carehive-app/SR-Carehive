@@ -38,8 +38,12 @@ jobs:
           EOF
           ls -la .env
 
+
       - name: Build Flutter web
         run: flutter build web --release
+
+      - name: List build output
+        run: ls -la build/web
 
       - name: Install Vercel CLI
         run: npm install -g vercel
@@ -47,4 +51,4 @@ jobs:
       - name: Deploy to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel --prod ./build/web --token $VERCEL_TOKEN --confirm --name srcarehive-web
+        run: npx vercel --prod build/web --token $VERCEL_TOKEN --yes --name srcarehive-web
