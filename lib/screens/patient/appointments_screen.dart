@@ -1017,11 +1017,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     } catch (e) {
       navigator.pop();
       String errorMsg = 'Payment failed. Please try again.';
-      if (e is Map && e['error'] != null && (e['error']['code'] == 'payment_cancelled' || e['error']['code'] == 'cancelled')) {
-        errorMsg = 'Payment cancelled. Please try again.';
-      } else if (e.toString().contains('cancelled')) {
-        errorMsg = 'Payment cancelled. Please try again.';
-      }
+      try {
+        dynamic err = e;
+        if (err is Exception) err = err.toString();
+        if (err is Map && err['error'] != null) {
+          final code = err['error']['code']?.toString()?.toLowerCase();
+          if (code == 'payment_cancelled' || code == 'cancelled') {
+            errorMsg = 'Payment cancelled. Please try again.';
+          }
+        } else if (err is String && err.toLowerCase().contains('cancelled')) {
+          errorMsg = 'Payment cancelled. Please try again.';
+        }
+      } catch (_) {}
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
@@ -1145,11 +1152,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     } catch (e) {
       navigator.pop();
       String errorMsg = 'Payment failed. Please try again.';
-      if (e is Map && e['error'] != null && (e['error']['code'] == 'payment_cancelled' || e['error']['code'] == 'cancelled')) {
-        errorMsg = 'Payment cancelled. Please try again.';
-      } else if (e.toString().contains('cancelled')) {
-        errorMsg = 'Payment cancelled. Please try again.';
-      }
+      try {
+        dynamic err = e;
+        if (err is Exception) err = err.toString();
+        if (err is Map && err['error'] != null) {
+          final code = err['error']['code']?.toString()?.toLowerCase();
+          if (code == 'payment_cancelled' || code == 'cancelled') {
+            errorMsg = 'Payment cancelled. Please try again.';
+          }
+        } else if (err is String && err.toLowerCase().contains('cancelled')) {
+          errorMsg = 'Payment cancelled. Please try again.';
+        }
+      } catch (_) {}
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
