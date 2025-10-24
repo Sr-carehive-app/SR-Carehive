@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:care12/config/api_config.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({Key? key}) : super(key: key);
@@ -67,7 +70,6 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
 
   void _submitContactForm() async {
     if (!_formKey.currentState!.validate()) return;
-    
     // Validate phone number if provided
     if (phoneController.text.trim().isNotEmpty) {
       final phone = phoneController.text.trim();
@@ -86,33 +88,42 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
         return;
       }
     }
-    
     setState(() => isSubmitting = true);
-
     try {
-      final supabase = Supabase.instance.client;
-      await supabase.from('contact_messages').insert({
-        'name': nameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
-        'subject': subjectController.text.trim(),
-        'message': messageController.text.trim(),
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your message has been sent successfully!'),
-          backgroundColor: Colors.green,
-        ),
+      // Send to backend API for email notification
+      final response = await http.post(
+        Uri.parse(ApiConfig.submitContact),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'name': nameController.text.trim(),
+          'email': emailController.text.trim(),
+          'phone': phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+          'subject': subjectController.text.trim(),
+          'message': messageController.text.trim(),
+        }),
       );
-      
-      // Clear the form after successful submission
-      _formKey.currentState!.reset();
-      nameController.clear();
-      emailController.clear();
-      phoneController.clear();
-      subjectController.clear();
-      messageController.clear();
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your message has been sent successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Clear the form after successful submission
+        _formKey.currentState!.reset();
+        nameController.clear();
+        emailController.clear();
+        phoneController.clear();
+        subjectController.clear();
+        messageController.clear();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending message: ${response.body}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

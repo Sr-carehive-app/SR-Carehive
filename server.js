@@ -2566,4 +2566,72 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+
+// Contact form submission endpoint
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, phone, subject, message } = req.body || {};
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ error: 'Name, email, subject, and message are required.' });
+    }
+
+    // Store in DB if needed (already handled elsewhere)
+
+    // Admin email template
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">New Contact Form Submission</h1>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">A new contact form has been submitted:</p>
+          <ul style="color: #555; font-size: 15px;">
+            <li><strong>Name:</strong> ${name}</li>
+            <li><strong>Email:</strong> ${email}</li>
+            <li><strong>Phone:</strong> ${phone || '-'} </li>
+            <li><strong>Subject:</strong> ${subject}</li>
+            <li><strong>Message:</strong> ${message}</li>
+          </ul>
+        </div>
+        <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">SR CareHive Contact Center</p>
+      </div>
+    `;
+
+    // User thank you email template
+    const userHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Thank You for Contacting Us!</h1>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${name}</strong>,</p>
+          <p style="color: #555; line-height: 1.6;">Thank you for reaching out to SR CareHive. We have received your message and our team will contact you shortly.</p>
+          <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
+            <p style="margin: 0; color: #2e7d32;">Your submitted details:</p>
+            <ul style="color: #333; font-size: 15px;">
+              <li><strong>Subject:</strong> ${subject}</li>
+              <li><strong>Message:</strong> ${message}</li>
+            </ul>
+          </div>
+          <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">SR CareHive Team</p>
+        </div>
+      </div>
+    `;
+
+    // Send to both admins
+    await Promise.all([
+      sendEmail({ to: 'srcarehive@gmail.com', subject: `Contact Form Submission: ${subject}`, html: adminHtml }),
+      sendEmail({ to: 'ns.srcarehive@gmail.com', subject: `Contact Form Submission: ${subject}`, html: adminHtml })
+    ]);
+
+    // Send thank you to user
+    await sendEmail({ to: email, subject: 'Thank you for contacting SR CareHive', html: userHtml });
+
+    res.json({ success: true, message: 'Contact form submitted and emails sent.' });
+  } catch (e) {
+    console.error('[ERROR] /api/contact:', e);
+    res.status(500).json({ error: 'Failed to process contact form', details: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));

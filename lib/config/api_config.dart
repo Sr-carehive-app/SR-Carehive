@@ -43,6 +43,9 @@ class ApiConfig {
   /// Support Endpoints
   static String get submitIssue => '$baseUrl/api/support/submit-issue';
   
+  /// Contact Form Endpoint
+  static String get submitContact => '$baseUrl/api/contact';
+  
   /// Helper method to log the current configuration
   static void logConfig() {
     print('🌐 API Config:');
