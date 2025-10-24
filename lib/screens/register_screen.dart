@@ -63,7 +63,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do You Need\nHealthcare ?',
+                      'Do you need\nHealthcare ?',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -92,7 +92,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do You Wish to Work for Us ?',
+                      'Do you wish to work with us ?',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF2260FF),
