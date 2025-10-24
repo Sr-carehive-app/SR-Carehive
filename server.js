@@ -612,16 +612,24 @@ app.post('/api/nurse/login', (req, res) => {
 });
 
 // List all appointments (admin view). Protected.
+// Only returns appointments where nurse_visible is not explicitly false (includes null for backward compatibility)
 app.get('/api/nurse/appointments', async (req, res) => {
   try {
     if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
-    const { data, error } = await supabase
+    
+    // Fetch all appointments first
+    const { data: allData, error } = await supabase
       .from('appointments')
       .select('*')
       .order('created_at', { ascending: false });
+    
     if (error) return res.status(500).json({ error: error.message });
-    res.json({ items: data || [] });
+    
+    // Filter in JavaScript: include null and true, exclude false
+    const data = (allData || []).filter(item => item.nurse_visible !== false);
+    
+    res.json({ items: data });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2631,6 +2639,183 @@ app.post('/api/contact', async (req, res) => {
   } catch (e) {
     console.error('[ERROR] /api/contact:', e);
     res.status(500).json({ error: 'Failed to process contact form', details: e.message });
+  }
+});
+
+// Appointment cancellation notification endpoint
+app.post('/api/notify-appointment-cancelled', async (req, res) => {
+  try {
+    const {
+      appointmentId,
+      patientEmail,
+      patientName,
+      patientPhone,
+      date,
+      time,
+      status,
+      cancellationReason,
+      registrationPaid,
+      totalAmount,
+      prePaid
+    } = req.body || {};
+
+    if (!appointmentId || !patientEmail || !patientName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Format date and time in IST
+    let formattedDate = 'N/A';
+    let formattedDateTime = 'N/A';
+    
+    if (date) {
+      const dateObj = new Date(date);
+      
+      // Format date in IST
+      formattedDate = dateObj.toLocaleDateString('en-IN', { 
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      // Format full date-time in IST
+      formattedDateTime = dateObj.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+
+    // Determine refund status
+    let refundInfo = '';
+    if (registrationPaid) {
+      refundInfo = '₹10 registration fee';
+    }
+    if (prePaid && totalAmount) {
+      const preAmount = totalAmount / 2;
+      refundInfo = refundInfo 
+        ? `${refundInfo} + ₹${preAmount} pre-payment = ₹${10 + preAmount} total`
+        : `₹${preAmount} pre-payment`;
+    }
+
+    // Nurse notification email (to srcarehive@gmail.com and ns.srcarehive@gmail.com)
+    const nurseHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🚫 Appointment Cancelled</h1>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;"><strong>Healthcare Seeker has cancelled their appointment.</strong></p>
+          
+          <div style="background: #fee2e2; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+            <h3 style="margin-top: 0; color: #dc2626;">Appointment Details:</h3>
+            <ul style="color: #555; font-size: 15px; line-height: 1.8;">
+              <li><strong>Appointment ID:</strong> ${appointmentId}</li>
+              <li><strong>Patient Name:</strong> ${patientName}</li>
+              <li><strong>Patient Email:</strong> ${patientEmail}</li>
+              <li><strong>Patient Phone:</strong> ${patientPhone}</li>
+              <li><strong>Scheduled Date:</strong> ${formattedDate}</li>
+              <li><strong>Scheduled Time:</strong> ${time}</li>
+              <li><strong>Cancelled At:</strong> ${formattedDateTime} IST</li>
+              <li><strong>Previous Status:</strong> ${status.toUpperCase()}</li>
+            </ul>
+          </div>
+
+          ${cancellationReason && cancellationReason !== 'Not provided' ? `
+          <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+            <h3 style="margin-top: 0; color: #f59e0b;">Cancellation Reason:</h3>
+            <p style="color: #555; font-size: 15px; margin: 0;">${cancellationReason}</p>
+          </div>
+          ` : ''}
+
+          ${refundInfo ? `
+          <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+            <h3 style="margin-top: 0; color: #3b82f6;">⚠️ Refund Required:</h3>
+            <p style="color: #555; font-size: 15px; margin: 0;"><strong>${refundInfo}</strong></p>
+            <p style="color: #666; font-size: 13px; margin-top: 10px;">Please process the refund manually within 5-7 business days.</p>
+          </div>
+          ` : `
+          <div style="background: #d1fae5; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+            <p style="color: #065f46; font-size: 15px; margin: 0;">✅ No payment was made. No refund required.</p>
+          </div>
+          `}
+
+          <p style="color: #666; font-size: 14px; margin-top: 20px;">Please check the dashboard for more details and take necessary action.</p>
+        </div>
+        <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">SR CareHive Admin System</p>
+      </div>
+    `;
+
+    // Patient confirmation email
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Appointment Cancelled</h1>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${patientName}</strong>,</p>
+          <p style="color: #555; line-height: 1.6;">Your healthcare provider appointment has been cancelled successfully.</p>
+          
+          <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #333;">Cancelled Appointment Details:</h3>
+            <ul style="color: #555; font-size: 15px; line-height: 1.8;">
+              <li><strong>Scheduled Date:</strong> ${formattedDate}</li>
+              <li><strong>Scheduled Time:</strong> ${time}</li>
+              <li><strong>Cancelled At:</strong> ${formattedDateTime} IST</li>
+              <li><strong>Appointment ID:</strong> ${appointmentId}</li>
+            </ul>
+          </div>
+
+          ${refundInfo ? `
+          <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+            <h3 style="margin-top: 0; color: #3b82f6;">💰 Refund Information:</h3>
+            <p style="color: #555; font-size: 15px; margin: 0;">Amount to be refunded: <strong>${refundInfo}</strong></p>
+            <p style="color: #666; font-size: 13px; margin-top: 10px;">Your refund will be processed within <strong>5-7 business days</strong> to your original payment method.</p>
+          </div>
+          ` : ''}
+
+          <p style="color: #555; line-height: 1.6; margin-top: 20px;">If you have any questions or concerns, please feel free to contact us.</p>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <p style="color: #666; font-size: 14px;">Need to book another appointment?</p>
+            <a href="https://srcarehive.com" style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">Visit SR CareHive</a>
+          </div>
+        </div>
+        <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">SR CareHive - Your Healthcare Partner</p>
+      </div>
+    `;
+
+    // Send emails to both nurses
+    await Promise.all([
+      sendEmail({ 
+        to: 'srcarehive@gmail.com', 
+        subject: `🚫 Appointment Cancelled - ${patientName}`, 
+        html: nurseHtml 
+      }),
+      sendEmail({ 
+        to: 'ns.srcarehive@gmail.com', 
+        subject: `🚫 Appointment Cancelled - ${patientName}`, 
+        html: nurseHtml 
+      })
+    ]);
+
+    // Send confirmation to patient
+    await sendEmail({ 
+      to: patientEmail, 
+      subject: 'Appointment Cancelled - SR CareHive', 
+      html: patientHtml 
+    });
+
+    console.log(`[SUCCESS] ✅ Cancellation notifications sent for appointment: ${appointmentId}`);
+    res.json({ success: true, message: 'Cancellation notifications sent successfully' });
+
+  } catch (e) {
+    console.error('[ERROR] /api/notify-appointment-cancelled:', e);
+    res.status(500).json({ error: 'Failed to send cancellation notifications', details: e.message });
   }
 });
 

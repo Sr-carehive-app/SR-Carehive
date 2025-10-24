@@ -19,12 +19,17 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   String? _error;
   List<Map<String, dynamic>> _items = [];
   String _statusFilter = 'All';
+  Set<String> _selectedIds = {}; // Track selected appointment IDs
+  bool _isSelectionMode = false; // Track if in selection mode
   @override
   void initState() { super.initState(); _load(); }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
-    try { _items = await NurseApiService.listAppointments(); } catch (e) { _error = e.toString(); }
+    setState(() { _loading = true; _error = null; _selectedIds.clear(); _isSelectionMode = false; });
+    try { 
+      // Backend already filters out nurse_visible=false appointments
+      _items = await NurseApiService.listAppointments();
+    } catch (e) { _error = e.toString(); }
     if (mounted) setState(() { _loading = false; });
   }
 
@@ -578,6 +583,216 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     }
   }
 
+  // Delete confirmation dialog (soft delete - removes from nurse view, marks as expired)
+  Future<void> _deleteConfirmation({required List<String> ids, required String appointmentName}) async {
+    final count = ids.length;
+    final isMultiple = count > 1;
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.archive_rounded, color: Colors.orange, size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Remove from Dashboard',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isMultiple 
+                      ? 'Remove $count appointments from your dashboard?' 
+                      : 'Remove this appointment from your dashboard?',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  if (!isMultiple) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Appointment: $appointmentName',
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'ℹ️ This will hide the appointment from your dashboard and mark it as "Expired". Healthcare seeker can still view it in their history.',
+                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text('Cancel', style: TextStyle(fontSize: 15)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.archive_rounded, color: Colors.white, size: 20),
+            label: const Text(
+              'Remove',
+              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _performDelete(ids);
+    }
+  }
+
+  // Perform the actual deletion using Supabase client directly
+  Future<void> _performDelete(List<String> ids) async {
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Removing from dashboard...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Update directly using Supabase client (soft delete)
+      final supabase = Supabase.instance.client;
+      
+      // Update all appointments: hide from nurse view and mark as expired
+      for (final id in ids) {
+        await supabase.from('appointments').update({
+          'nurse_visible': false,
+          'status': 'expired',
+        }).eq('id', id);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ ${ids.length} appointment${ids.length > 1 ? 's' : ''} removed from dashboard and marked as expired!',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      _load(); // Reload appointments
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading if still open
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to remove appointment: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // Toggle selection mode
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedIds.clear();
+      }
+    });
+  }
+
+  // Toggle individual selection
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  // Select all filtered items
+  void _selectAll() {
+    setState(() {
+      final filtered = _filtered();
+      _selectedIds = filtered.map((a) => (a['id'] ?? '').toString()).toSet();
+    });
+  }
+
+  // Deselect all
+  void _deselectAll() {
+    setState(() {
+      _selectedIds.clear();
+    });
+  }
+
   Future<void> _viewDetails(Map<String, dynamic> a) async {
     String fmtDate() { final d = DateTime.tryParse(a['date'] ?? ''); return d != null ? DateFormat('MMM dd, yyyy').format(d) : 'N/A'; }
     String fmtVal(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '-' : v.toString();
@@ -727,6 +942,8 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
       case 'amount_set': return Colors.purple; // Purple - amount set, waiting for pre-payment
       case 'pre_paid': return Colors.indigo; // Indigo - pre-payment done
       case 'completed': return Colors.teal; // Teal - all payments complete
+      case 'expired': return Colors.grey; // Grey - archived/expired appointments
+      case 'cancelled': return Colors.red; // Red - patient cancelled
       default: return Colors.grey;
     }
   }
@@ -767,16 +984,60 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   @override
   Widget build(BuildContext context) {
     final listFiltered = _filtered();
+    final hasSelection = _selectedIds.isNotEmpty;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Appointments'),
-        actions:[
-          IconButton(
-            onPressed: _load,
-            icon: const Icon(Icons.refresh))
+        title: Text(_isSelectionMode ? '${_selectedIds.length} Selected' : 'Manage Appointments'),
+        leading: _isSelectionMode 
+          ? IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _toggleSelectionMode,
+            )
+          : null,
+        actions: [
+          if (_isSelectionMode && listFiltered.isNotEmpty) ...[
+            // Select All / Deselect All
+            TextButton.icon(
+              onPressed: _selectedIds.length == listFiltered.length ? _deselectAll : _selectAll,
+              icon: Icon(
+                _selectedIds.length == listFiltered.length ? Icons.deselect : Icons.select_all,
+                color: Colors.white,
+                size: 20,
+              ),
+              label: Text(
+                _selectedIds.length == listFiltered.length ? 'Deselect All' : 'Select All',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Delete Selected
+            if (hasSelection)
+              IconButton(
+                onPressed: () => _deleteConfirmation(
+                  ids: _selectedIds.toList(),
+                  appointmentName: 'Multiple Appointments',
+                ),
+                icon: const Icon(Icons.delete_forever, size: 26),
+                tooltip: 'Remove Selected',
+              ),
+          ] else ...[
+            // Selection Mode Toggle
+            IconButton(
+              onPressed: listFiltered.isNotEmpty ? _toggleSelectionMode : null,
+              icon: const Icon(Icons.checklist_rounded),
+              tooltip: 'Select Multiple',
+            ),
+            // Refresh
+            IconButton(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ],
-        backgroundColor: const Color(0xFF2260FF),
-        centerTitle:true),
+        backgroundColor: _isSelectionMode ? Colors.deepOrange : const Color(0xFF2260FF),
+        centerTitle: true,
+      ),
       body: _loading
           ? const Center(child:CircularProgressIndicator())
           : _error!=null
@@ -801,11 +1062,75 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                     final date = DateTime.tryParse(a['date'] ?? '');
                     final time = a['time'] ?? '';
                     final status = (a['status'] ?? 'pending') as String;
+                    final appointmentId = (a['id'] ?? '').toString();
+                    final isSelected = _selectedIds.contains(appointmentId);
+                    
                     // History header logic removed
-                    final card = Card(margin: const EdgeInsets.only(bottom:16), child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+                    final card = Card(
+                      margin: const EdgeInsets.only(bottom:16),
+                      elevation: isSelected ? 4 : 1,
+                      color: isSelected ? const Color(0xFFFFF3E0) : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: isSelected 
+                          ? const BorderSide(color: Colors.deepOrange, width: 2)
+                          : BorderSide.none,
+                      ),
+                      child: InkWell(
+                        onTap: _isSelectionMode ? () => _toggleSelection(appointmentId) : null,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Checkbox (always visible for easy access)
+                              Checkbox(
+                                value: isSelected,
+                                onChanged: (val) {
+                                  if (!_isSelectionMode) {
+                                    setState(() { _isSelectionMode = true; });
+                                  }
+                                  _toggleSelection(appointmentId);
+                                },
+                                activeColor: Colors.deepOrange,
+                              ),
+                              const SizedBox(width: 8),
+                              // Card Content
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
-                        Text(a['full_name'] ?? 'Unknown', style: const TextStyle(fontSize:16, fontWeight: FontWeight.bold)),
-                        Container(padding: const EdgeInsets.symmetric(horizontal:8, vertical:4), decoration: BoxDecoration(color:_statusColor(status), borderRadius: BorderRadius.circular(12)), child: Text(status.toUpperCase(), style: const TextStyle(color:Colors.white, fontSize:12, fontWeight: FontWeight.bold)))
+                        Expanded(
+                          child: Text(
+                            a['full_name'] ?? 'Unknown',
+                            style: const TextStyle(fontSize:16, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Individual delete button
+                        if (!_isSelectionMode)
+                          IconButton(
+                            onPressed: () => _deleteConfirmation(
+                              ids: [appointmentId],
+                              appointmentName: a['full_name'] ?? 'Unknown',
+                            ),
+                            icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 22),
+                            tooltip: 'Remove',
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.all(4),
+                          ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal:8, vertical:4),
+                          decoration: BoxDecoration(
+                            color:_statusColor(status),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            status.toUpperCase(),
+                            style: const TextStyle(color:Colors.white, fontSize:12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ]),
                       const SizedBox(height:8),
                       Row(children:[ const Icon(Icons.calendar_today, size:14, color: Color(0xFF2260FF)), const SizedBox(width:6), Text(date!=null? DateFormat('MMM dd, yyyy').format(date):'N/A'), const SizedBox(width:12), const Icon(Icons.access_time, size:14, color: Color(0xFF2260FF)), const SizedBox(width:6), Text(time) ]),
@@ -876,6 +1201,46 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                       ],
                       
                       if(a['nurse_name']!=null)...[ const Divider(), Text('Assigned Healthcare Provider: ${a['nurse_name']}'), if(a['nurse_phone']!=null) Text('Phone: ${a['nurse_phone']}'), if(a['nurse_branch']!=null) Text('Branch: ${a['nurse_branch']}'), if(a['nurse_comments']!=null) Text('Comments: ${a['nurse_comments']}') ],
+                      
+                      // Show cancellation details if cancelled
+                      if(status.toLowerCase()=='cancelled')...[
+                        const Divider(),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.cancel, color: Colors.red, size: 18),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Cancelled by Healthcare Seeker',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                              if(a['cancellation_reason']!=null && (a['cancellation_reason'] as String).isNotEmpty)...[
+                                const SizedBox(height:8),
+                                const Text('Reason:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                const SizedBox(height:4),
+                                Text(a['cancellation_reason'], style: const TextStyle(fontSize:12)),
+                              ],
+                              const SizedBox(height:8),
+                              const Text(
+                                '⚠️ Please check if refund is needed and process manually.',
+                                style: TextStyle(fontSize:11, color: Colors.black87),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      
                       const SizedBox(height:12),
                       
                       // Action buttons - conditional based on status
@@ -909,14 +1274,13 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                           const SizedBox(width:8),
                           IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
-                      ] else ...[
-                        // Approve/Reject buttons disabled for amount_set status
+                      ] else ...[                        // Approve/Reject buttons disabled for amount_set, cancelled, expired status
                         Row(children:[
                           Expanded(
                             child: OutlinedButton.icon(
                               icon: const Icon(Icons.close, color: Colors.red),
                               label: const Text('Reject', style: TextStyle(color:Colors.red)),
-                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='rejected' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid') ? null : () => _rejectDialog(a),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='rejected' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid' || status.toLowerCase()=='expired' || status.toLowerCase()=='cancelled') ? null : () => _rejectDialog(a),
                             ),
                           ),
                           const SizedBox(width:8),
@@ -925,14 +1289,24 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                               icon: const Icon(Icons.check_circle, color: Colors.white),
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                               label: const Text('Approve', style: TextStyle(color:Colors.white)),
-                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='approved' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid') ? null : () => _approveDialog(a),
+                              onPressed: (status.toLowerCase()=='completed' || status.toLowerCase()=='approved' || status.toLowerCase()=='amount_set' || status.toLowerCase()=='pre_paid' || status.toLowerCase()=='expired' || status.toLowerCase()=='cancelled') ? null : () => _approveDialog(a),
                             ),
                           ),
                           const SizedBox(width:8),
-                          IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
+                          IconButton(
+                            tooltip:'View details',
+                            onPressed: () => _viewDetails(a),
+                            icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)),
+                          ),
                         ]),
                       ]
-                    ])));
+                    ]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
                     return card;
                   },
                 ),
@@ -944,20 +1318,21 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   if(_statusFilter=='All') return _items;
   // Map display tab to status value in DB
   final statusMap = {
-    'Pending': 'pending',
-    'Approved': 'approved',
-    'Rejected': 'rejected',
-    'Completed': 'completed',
-    'Booked': 'booked',
-    'Amount Set': 'amount_set',
-    'Pre Paid': 'pre_paid',
+  'Pending': 'pending',
+  'Approved': 'approved',
+  'Rejected': 'rejected',
+  'Completed': 'completed',
+  'Booked': 'booked',
+  'Amount Set': 'amount_set',
+  'Pre Paid': 'pre_paid',
+  'Cancelled': 'cancelled',
   };
   final want = statusMap[_statusFilter] ?? _statusFilter.toLowerCase();
   return _items.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
   }
 
   Widget _filtersBar(){
-  final options=['All','Pending','Approved','Rejected','Completed','Booked','Amount Set','Pre Paid'];
+  final options=['All','Pending','Approved','Rejected','Completed','Booked','Amount Set','Pre Paid','Cancelled']; // 'Expired' removed
   return Wrap(
     spacing:8,
     runSpacing:8,

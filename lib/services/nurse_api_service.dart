@@ -127,4 +127,20 @@ class NurseApiService {
     }
     throw Exception('Reject failed: ${resp.statusCode} ${resp.body}');
   }
+
+  // Soft delete single appointment (hide from nurse dashboard, mark as expired)
+  // Using direct Supabase update since backend archive endpoint doesn't exist
+  static Future<void> deleteAppointment({required String id}) async {
+    // This will be handled directly in the UI layer using Supabase client
+    // to avoid backend dependency
+    throw UnimplementedError('Use Supabase client directly in UI layer');
+  }
+
+  // Soft delete multiple appointments (hide from nurse dashboard, mark as expired)
+  // Using direct Supabase update since backend archive endpoint doesn't exist
+  static Future<void> deleteAppointments({required List<String> ids}) async {
+    // This will be handled directly in the UI layer using Supabase client
+    // to avoid backend dependency
+    throw UnimplementedError('Use Supabase client directly in UI layer');
+  }
 }
