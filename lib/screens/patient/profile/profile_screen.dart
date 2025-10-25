@@ -19,8 +19,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ProfileScreen extends StatefulWidget {
   final String? userName;
   final VoidCallback? onProfileUpdated; // Add callback parameter
+  final VoidCallback? onBackToHome; // Add back to home callback
   
-  const ProfileScreen({Key? key, this.userName, this.onProfileUpdated}) : super(key: key);
+  const ProfileScreen({Key? key, this.userName, this.onProfileUpdated, this.onBackToHome}) : super(key: key);
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -442,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
         title: const Text('My Profile', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,

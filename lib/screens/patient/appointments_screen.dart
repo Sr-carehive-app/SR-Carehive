@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class AppointmentsScreen extends StatefulWidget {
-  const AppointmentsScreen({Key? key}) : super(key: key);
+  final VoidCallback? onBackToHome;
+  
+  const AppointmentsScreen({Key? key, this.onBackToHome}) : super(key: key);
 
   @override
   State<AppointmentsScreen> createState() => _AppointmentsScreenState();
@@ -172,7 +174,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
         title: const Text('My Appointments'),
         backgroundColor: primaryColor,

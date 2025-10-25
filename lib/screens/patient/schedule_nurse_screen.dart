@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ScheduleNurseScreen extends StatefulWidget {
-  const ScheduleNurseScreen({Key? key}) : super(key: key);
+  final VoidCallback? onBackToHome;
+
+  const ScheduleNurseScreen({Key? key, this.onBackToHome}) : super(key: key);
 
   @override
   State<ScheduleNurseScreen> createState() => _ScheduleNurseScreenState();
@@ -535,7 +537,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
         title: const Text('Schedule'),
         backgroundColor: primaryColor,

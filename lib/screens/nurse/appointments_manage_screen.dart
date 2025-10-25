@@ -1117,26 +1117,61 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     return Scaffold(
       appBar: AppBar(
         title: Text(_isSelectionMode ? '${_selectedIds.length} Selected' : 'Manage Appointments'),
+        leadingWidth: _isSelectionMode ? 56 : 110,
         leading: _isSelectionMode 
           ? IconButton(
               icon: const Icon(Icons.close),
               onPressed: _toggleSelectionMode,
             )
-          : Container(
-              margin: const EdgeInsets.all(8),
-              child: ElevatedButton.icon(
-                onPressed: _showLogoutConfirmation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+          : Padding(
+              padding: const EdgeInsets.only(left: 8.0, top: 6.0, bottom: 6.0),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 95, maxWidth: 110),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5252), Color(0xFFE53935)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                icon: const Icon(Icons.arrow_back, size: 16),
-                label: const Text(
-                  'Logout',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _showLogoutConfirmation,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Logout',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

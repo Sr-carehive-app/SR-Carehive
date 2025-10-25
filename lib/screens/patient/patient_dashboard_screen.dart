@@ -17,6 +17,8 @@ class PatientDashboardScreen extends StatefulWidget {
 
 class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   int _currentIndex = 0;
+  int _previousIndex = 0; // Track previous tab
+  int _backPressCount = 0; // Track consecutive back presses
   String? profileImageUrl;
   String? userName;
   bool isLoading = true;
@@ -25,6 +27,8 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    _previousIndex = 0; // Default to Home
+    _backPressCount = 0;
     _loadProfileData();
   }
 
@@ -59,6 +63,28 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
     }
   }
 
+  void _handleBackButton() {
+    setState(() {
+      // If already on Home, do nothing
+      if (_currentIndex == 0) return;
+      
+      _backPressCount++; // Increment back press counter
+      
+      // First back press: Go to previous tab
+      if (_backPressCount == 1) {
+        int temp = _currentIndex;
+        _currentIndex = _previousIndex;
+        _previousIndex = temp;
+      } 
+      // Second back press: Always go to Home
+      else {
+        _previousIndex = _currentIndex;
+        _currentIndex = 0;
+        _backPressCount = 0; // Reset counter after going home
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = const Color(0xFF2260FF);
@@ -69,11 +95,12 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
         index: _currentIndex,
         children: [
           _buildDashboard(context, primaryColor),
-          const AppointmentsScreen(), // Changed from Chat screen to Appointments
-          const ScheduleNurseScreen(), // Changed from placeholder to actual Schedule screen
+          AppointmentsScreen(onBackToHome: _handleBackButton), // Use smart back handler
+          ScheduleNurseScreen(onBackToHome: _handleBackButton), // Use smart back handler
           ProfileScreen(
             userName: userName ?? widget.userName,
             onProfileUpdated: _loadProfileData, // Add callback
+            onBackToHome: _handleBackButton, // Use smart back handler
           ),
         ],
       ),
@@ -85,7 +112,9 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
           setState(() {
+            _previousIndex = _currentIndex; // Save current as previous before switching
             _currentIndex = index;
+            _backPressCount = 0; // Reset back press counter on manual tab switch
           });
           // Refresh profile data when navigating to Home tab
           if (index == 0) {
