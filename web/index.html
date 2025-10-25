@@ -31,6 +31,13 @@
 
   <title>Serechi</title>
   <link rel="manifest" href="manifest.json">
+  
+  <!-- Auto-redirect www to non-www for consistent localStorage -->
+  <script>
+    if (window.location.hostname === 'www.srcarehive.com') {
+      window.location.replace('https://srcarehive.com' + window.location.pathname + window.location.search + window.location.hash);
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
