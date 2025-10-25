@@ -61,8 +61,8 @@ class AboutScreen extends StatelessWidget {
                     _p('Serechi is an innovative digital platform by SR CareHive Pvt. Ltd., designed to seamlessly connect healthcare seekers and healthcare providers across communities. Rooted in the philosophy "Through the people, for the people, and by the people," Serechi brings compassionate, professional, and reliable care to your doorstep.'),
                     const SizedBox(height: 20),
                     
-                    // For Care Seekers
-                    _h('For Care Seekers'),
+                    // For Healthcare Seekers
+                    _h('For Healthcare Seekers'),
                     const SizedBox(height: 8),
                     _p('Serechi offers a simple, secure, and transparent way to find, choose, order, and manage healthcare services — from home nursing and elderly care to physiotherapy, post-surgical support, and chronic disease management. Users can view verified profiles, book trusted professionals, track appointments, make secure payments, and share feedback — all in one place.'),
                     const SizedBox(height: 20),

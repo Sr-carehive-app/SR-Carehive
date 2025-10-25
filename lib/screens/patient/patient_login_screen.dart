@@ -409,7 +409,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              'Login below to continue',
+              'Welcome Back!',
               style: TextStyle(
                 fontSize: 28,
                 color: Color(0xFF2260FF),
@@ -418,7 +418,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              '',
+              'Login below to continue',
               style: TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2260FF),

@@ -710,9 +710,9 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
           const SizedBox(height: 24),
 
-          // Care Seeker section
+          // Healthcare Seeker section
           const Text(
-            'Care Seeker Details',
+            'Healthcare Seeker Details',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
