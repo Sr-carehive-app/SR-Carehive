@@ -316,7 +316,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
       
-      // Update database to remove avatar URL
+      
       await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
       
       setState(() { 
