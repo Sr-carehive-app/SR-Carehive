@@ -80,7 +80,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String getPhonePlaceholder() {
     final length = getPhoneNumberLength();
-    return '9' * length;
+    return 'X' * length;
   }
 
   @override

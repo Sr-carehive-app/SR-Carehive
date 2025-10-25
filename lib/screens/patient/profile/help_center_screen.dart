@@ -54,7 +54,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
 
   String getPhonePlaceholder() {
     final length = getPhoneNumberLength();
-    return '9' * length; // e.g., "9999999999" for 10 digits
+    return 'X' * length; // e.g., "XXXXXXXXXX" for 10 digits
   }
 
   @override

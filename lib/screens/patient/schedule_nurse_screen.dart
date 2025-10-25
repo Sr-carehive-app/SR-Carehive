@@ -77,7 +77,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
   String getPhonePlaceholder(String countryCode) {
     final length = getPhoneNumberLength(countryCode);
-    return '9' * length; // e.g., "9999999999" for 10 digits
+    return 'X' * length; // e.g., "XXXXXXXXXX" for 10 digits
   }
 
   @override
