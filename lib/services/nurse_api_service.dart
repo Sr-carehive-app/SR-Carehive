@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NurseApiService {
   // Send OTP for healthcare provider login
@@ -37,6 +38,35 @@ class NurseApiService {
   }
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
   static String? _token; // in-memory bearer token
+  static const String _tokenKey = 'nurse_auth_token';
+
+  // Initialize and load token from storage
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _token = prefs.getString(_tokenKey);
+    if (_token != null) {
+      print('✅ Nurse token loaded from storage');
+    }
+  }
+
+  // Save token to storage
+  static Future<void> _saveToken(String token) async {
+    _token = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+    print('💾 Nurse token saved to storage');
+  }
+
+  // Clear token from storage
+  static Future<void> logout() async {
+    _token = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    print('🔒 Nurse token cleared from storage');
+  }
+
+  // Check if user is authenticated
+  static bool get isAuthenticated => _token != null;
 
   static Future<bool> login({required String email, required String password}) async {
     final resp = await http.post(
@@ -46,8 +76,11 @@ class NurseApiService {
     );
     if (resp.statusCode == 200) {
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
-      _token = json['token'] as String?;
-      return _token != null;
+      final token = json['token'] as String?;
+      if (token != null) {
+        await _saveToken(token);
+        return true;
+      }
     }
     return false;
   }

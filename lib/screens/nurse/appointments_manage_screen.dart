@@ -22,14 +22,47 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   Set<String> _selectedIds = {}; // Track selected appointment IDs
   bool _isSelectionMode = false; // Track if in selection mode
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() { 
+    super.initState(); 
+    _initAndLoad();
+  }
+
+  Future<void> _initAndLoad() async {
+    // Load token from storage
+    await NurseApiService.init();
+    
+    // Check if authenticated
+    if (!NurseApiService.isAuthenticated) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session expired. Please login again.')),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+    
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; _selectedIds.clear(); _isSelectionMode = false; });
     try { 
       // Backend already filters out nurse_visible=false appointments
       _items = await NurseApiService.listAppointments();
-    } catch (e) { _error = e.toString(); }
+    } catch (e) { 
+      _error = e.toString();
+      
+      // Handle 401 Unauthorized - token expired or invalid
+      if (_error!.contains('401') || _error!.contains('Unauthorized')) {
+        await NurseApiService.logout();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session expired. Please login again.')),
+        );
+        Navigator.of(context).pop();
+        return;
+      }
+    }
     if (mounted) setState(() { _loading = false; });
   }
 

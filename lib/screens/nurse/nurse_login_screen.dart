@@ -22,6 +22,18 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _checkExistingAuth();
+  }
+
+  Future<void> _checkExistingAuth() async {
+    // Load token from storage
+    await NurseApiService.init();
+    
+    // If already authenticated, try to go to appointments directly
+    if (NurseApiService.isAuthenticated) {
+      print('✅ Existing nurse session found, checking validity...');
+      // We'll let them continue - if token is invalid, they'll get 401 on appointments screen
+    }
   }
 
   void _startResendCooldown() {
