@@ -119,7 +119,8 @@ app.use(express.json());
 const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const allowedOrigins = allowedOriginsEnv.length > 0 ? allowedOriginsEnv : [
   'http://localhost:5173',
-  (process.env.FRONTEND_URL || 'https://www.srcarehive.com'),
+  'https://srcarehive.com',      // Without www
+  'https://www.srcarehive.com',  // With www
   'https://api.srcarehive.com'
 ];
 app.use(cors({
@@ -2782,7 +2783,7 @@ app.post('/api/notify-appointment-cancelled', async (req, res) => {
           
           <div style="text-align: center; margin-top: 30px;">
             <p style="color: #666; font-size: 14px;">Need to book another appointment?</p>
-            <a href="https://srcarehive.com" style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">Visit SR CareHive</a>
+            <a href="${FRONTEND_URL || 'https://www.srcarehive.com'}" style="display: inline-block; background: #2260FF; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">Visit SR CareHive</a>
           </div>
         </div>
         <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">SR CareHive - Your Healthcare Partner</p>
