@@ -14,6 +14,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userName;
@@ -390,8 +391,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await supabase.from('patients').delete().eq('user_id', user.id);
       
       // Call your existing server endpoint to delete user from Supabase Auth
+      final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
       final response = await http.post(
-        Uri.parse('https://api.srcarehive.com/api/admin/delete-user'),
+        Uri.parse('$apiBase/api/admin/delete-user'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'user_id': user.id}),
       );
