@@ -32,10 +32,10 @@
   <title>Serechi</title>
   <link rel="manifest" href="manifest.json">
   
-  <!-- Auto-redirect www to non-www for consistent localStorage -->
+  <!-- Auto-redirect non-www to www for consistent localStorage -->
   <script>
-    if (window.location.hostname === 'www.srcarehive.com') {
-      window.location.replace('https://srcarehive.com' + window.location.pathname + window.location.search + window.location.hash);
+    if (window.location.hostname === 'srcarehive.com') {
+      window.location.replace('https://www.srcarehive.com' + window.location.pathname + window.location.search + window.location.hash);
     }
   </script>
 </head>
