@@ -128,9 +128,25 @@ const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s =
 if (allowedOriginsEnv.length > 0) {
   allowedOrigins.push(...allowedOriginsEnv);
 }
+// Log allowed origins on startup
+console.log('🌐 CORS Allowed Origins:', allowedOrigins);
+
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) {
+      console.log('✅ CORS: No origin (allowed)');
+      return cb(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: ${origin} (allowed)`);
+      return cb(null, true);
+    }
+    
+    // Block unauthorized origins
+    console.log(`❌ CORS: ${origin} (blocked)`);
     return cb(new Error('CORS blocked: ' + origin));
   },
   credentials: false
