@@ -53,6 +53,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         
         // Build full name from parts if available, otherwise use legacy name field
         String displayName = patient['name'] ?? widget.userName;
+        final salutation = patient['salutation'] ?? '';
+        
         if (patient['first_name'] != null) {
           displayName = patient['first_name'];
           if (patient['middle_name'] != null && patient['middle_name'].toString().isNotEmpty) {
@@ -61,6 +63,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (patient['last_name'] != null) {
             displayName += ' ${patient['last_name']}';
           }
+        }
+        
+        // Add salutation prefix if available
+        if (salutation.isNotEmpty) {
+          displayName = '$salutation $displayName';
         }
         
         setState(() {

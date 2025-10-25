@@ -25,7 +25,8 @@ class PatientSignUpScreen extends StatefulWidget {
 }
 
 class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
-  // Name fields
+  // Salutation and Name fields
+  String? selectedSalutation;
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController middleNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
@@ -61,6 +62,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   bool _aadharTouched = false;
   bool _phoneVerified = false;
 
+  // Salutation options
+  final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
+  
   // Country codes list with phone number lengths
   final List<Map<String, dynamic>> countryCodes = [
     {'code': '+91', 'country': 'India', 'length': 10},
@@ -401,6 +405,13 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
 
   Future<void> _handleSignUp() async {
     // Validate all required fields with specific error messages
+    if (selectedSalutation == null || selectedSalutation!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your salutation')),
+      );
+      return;
+    }
+    
     if (firstNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your first name')),
@@ -585,6 +596,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     
     try {
       final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
+      final fullNameWithSalutation = selectedSalutation != null && selectedSalutation!.isNotEmpty 
+          ? '$selectedSalutation $fullName' 
+          : fullName;
       final phoneWithCode = selectedCountryCode + aadharLinkedPhoneController.text.trim();
       
       if (_isGoogleUser) {
@@ -597,6 +611,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           
           await supabase.from('patients').insert({
             'user_id': user.id,
+            'salutation': selectedSalutation,
             'name': fullName,
             'first_name': firstNameController.text.trim(),
             'middle_name': middleNameController.text.trim(),
@@ -626,7 +641,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (_) => PatientDashboardScreen(userName: fullName),
+              builder: (_) => PatientDashboardScreen(userName: fullNameWithSalutation),
             ),
             (route) => false,
           );
@@ -650,6 +665,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           if (user != null) {
             await supabase.from('patients').insert({
               'user_id': user.id,
+              'salutation': selectedSalutation,
               'name': fullName,
               'first_name': firstNameController.text.trim(),
               'middle_name': middleNameController.text.trim(),
@@ -787,7 +803,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   // Get placeholder for selected country
   String getPhonePlaceholder() {
     final length = getPhoneNumberLength();
-    return '9' * length; // e.g., "9999999999" for 10 digits
+    return 'X' * length; // e.g., "XXXXXXXXXX" for 10 digits
   }
 
   Widget buildTextField({
@@ -898,10 +914,41 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               ),
             ],
             const SizedBox(height: 20),
+            // Salutation Dropdown
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Salutation *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEDEFFF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButton<String>(
+                    value: selectedSalutation,
+                    hint: const Text('Select Salutation'),
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    items: salutationOptions.map((salutation) {
+                      return DropdownMenuItem<String>(
+                        value: salutation,
+                        child: Text(salutation, style: const TextStyle(fontSize: 14)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() => selectedSalutation = value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             // First Name
             buildTextField(
               label: 'First Name *',
-              hint: 'Nitin',
+              hint: '',
               controller: firstNameController,
               keyboardType: TextInputType.name,
             ),
@@ -909,7 +956,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             // Middle Name (Optional)
             buildTextField(
               label: 'Middle Name (Optional)',
-              hint: 'Kumar',
+              hint: '',
               controller: middleNameController,
               keyboardType: TextInputType.name,
             ),
@@ -917,7 +964,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             // Last Name
             buildTextField(
               label: 'Last Name *',
-              hint: 'Sharma',
+              hint: '',
               controller: lastNameController,
               keyboardType: TextInputType.name,
             ),
@@ -1078,7 +1125,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
                   decoration: InputDecoration(
-                    hintText: 'Enter your age',
+                    hintText: 'XX',
                     filled: true,
                     fillColor: const Color(0xFFEDEFFF),
                     border: OutlineInputBorder(
@@ -1146,31 +1193,31 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             const SizedBox(height: 16),
             buildTextField(
               label: 'House/Flat Number *',
-              hint: '123 or A-45',
+              hint: '',
               controller: houseNumberController,
             ),
             const SizedBox(height: 20),
             buildTextField(
               label: 'Town/Locality *',
-              hint: 'Rajpur',
+              hint: '',
               controller: townController,
             ),
             const SizedBox(height: 20),
             buildTextField(
               label: 'City *',
-              hint: 'Dehradun',
+              hint: '',
               controller: cityController,
             ),
             const SizedBox(height: 20),
             buildTextField(
               label: 'State *',
-              hint: 'Uttarakhand',
+              hint: '',
               controller: stateController,
             ),
             const SizedBox(height: 20),
             buildTextField(
               label: 'PIN Code *',
-              hint: '248001',
+              hint: 'XXXXXX',
               controller: pincodeController,
               keyboardType: TextInputType.number,
             ),

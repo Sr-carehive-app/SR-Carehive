@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'nurse/nurse_login_screen.dart';
-import 'patient/patient_login_screen.dart';
+import 'patient/healthcare_seeker_selection_screen.dart';
 
 class RegisterScreen extends StatelessWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -37,7 +37,7 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 60), // spacing before choose role
                 const Text(
-                  'Choose Your Role To Continue',
+                  'How may i help you ?',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.black54,
@@ -52,7 +52,7 @@ class RegisterScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const PatientLoginScreen()),
+                        MaterialPageRoute(builder: (_) => const HealthcareSeekerSelectionScreen()),
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -63,7 +63,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do you need\nHealthcare ?',
+                      'I need\nHealthcare ?',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -92,7 +92,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'Do you wish to work with us ?',
+                      'I am a Healthcare worker',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF2260FF),

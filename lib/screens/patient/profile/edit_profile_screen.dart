@@ -41,6 +41,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController ageController = TextEditingController();
   final TextEditingController aadharController = TextEditingController();
   
+  String? selectedSalutation;
   String? selectedGender;
   String selectedCountryCode = '+91';
   bool isLoading = true;
@@ -54,6 +55,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? selectedImageFile;
   Uint8List? selectedImageBytes;
   final ImagePicker _picker = ImagePicker();
+  
+  // Salutation options
+  final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
   
   // Country codes with phone number lengths
   final List<Map<String, dynamic>> countryCodes = [
@@ -180,6 +184,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             .single();
         
         setState(() {
+          // Load salutation
+          selectedSalutation = patient['salutation'];
+          
           // Load split name fields (with fallback to legacy name field)
           if (patient['first_name'] != null) {
             firstNameController.text = patient['first_name'] ?? '';
@@ -490,6 +497,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await supabase
             .from('patients')
             .update({
+              // Salutation
+              'salutation': selectedSalutation,
+              
               // Split name fields
               'first_name': firstNameController.text.trim(),
               'middle_name': middleNameController.text.trim(),
@@ -602,9 +612,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           const SizedBox(height: 24),
           
-          // Name Section - Split into 3 fields
+          // Name Section - Salutation and Split into 3 fields
           const Text('Name *', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
+          
+          // Salutation Dropdown
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('Salutation', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(' *', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEDEFFF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButton<String>(
+                  value: selectedSalutation,
+                  hint: const Text('Select Salutation'),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  items: salutationOptions.map((salutation) {
+                    return DropdownMenuItem<String>(
+                      value: salutation,
+                      child: Text(salutation, style: const TextStyle(fontSize: 14)),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => selectedSalutation = value);
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+          
           buildTextField('First Name', 'Enter first name', firstNameController, isRequired: true),
           buildTextField('Middle Name (Optional)', 'Enter middle name', middleNameController),
           buildTextField('Last Name', 'Enter last name', lastNameController, isRequired: true),

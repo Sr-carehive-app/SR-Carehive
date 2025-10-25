@@ -106,13 +106,16 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       if (user != null) {
         final patient = await supabase
             .from('patients')
-            .select('name, phone, permanent_address, aadhar_number, email, age')
+            .select('salutation, name, phone, permanent_address, aadhar_number, email, age')
             .eq('user_id', user.id)
             .maybeSingle();
         
         if (patient != null) {
           setState(() {
-            fullNameController.text = patient['name'] ?? '';
+            // Include salutation with name if available
+            final salutation = patient['salutation'] ?? '';
+            final name = patient['name'] ?? '';
+            fullNameController.text = salutation.isNotEmpty ? '$salutation $name' : name;
             phoneController.text = patient['phone'] ?? '';
             addressController.text = patient['permanent_address'] ?? '';
             aadharController.text = patient['aadhar_number'] ?? '';
@@ -128,12 +131,12 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     }
   }
 
-  /// Generate current week's dates (Mon–Sun)
+  /// Generate dates from today onwards (next 7 days)
   List<DateTime> getCurrentWeekDates() {
     DateTime now = DateTime.now();
-    int weekday = now.weekday; // Monday = 1
-    DateTime monday = now.subtract(Duration(days: weekday - 1));
-    return List.generate(7, (index) => monday.add(Duration(days: index)));
+    // Only return dates from today onwards
+    DateTime today = DateTime(now.year, now.month, now.day);
+    return List.generate(7, (index) => today.add(Duration(days: index)));
   }
 
   /// Update time slots when date changes
@@ -354,7 +357,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       // Create appointment directly in database
       final appointmentData = {
         'patient_id': patientId,
-        'full_name': fullNameController.text.trim(),
+        'full_name': fullNameController.text.trim(), // Already includes salutation from form
         'age': int.tryParse(ageController.text.trim()) ?? 0,
         'gender': selectedGender,
         'phone': phoneController.text.trim(),
@@ -517,6 +520,12 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           title: const Text('Schedule'),
           backgroundColor: primaryColor,
           centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: null, // Disabled during loading
+            ),
+          ],
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -527,6 +536,26 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         title: const Text('Schedule'),
         backgroundColor: primaryColor,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Refresh user data and reset form
+              _loadUserData();
+              setState(() {
+                weekDates = getCurrentWeekDates();
+                selectedDate = DateTime.now();
+                updateTimeSlotsForDate(selectedDate);
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Refreshed successfully'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

@@ -40,7 +40,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
             .single();
         setState(() {
           profileImageUrl = patient['profile_image_url'];
-          userName = patient['name'] ?? widget.userName;
+          // Include salutation with name if available
+          final salutation = patient['salutation'] ?? '';
+          final name = patient['name'] ?? widget.userName;
+          userName = salutation.isNotEmpty ? '$salutation $name' : name;
           isLoading = false;
         });
       } else {

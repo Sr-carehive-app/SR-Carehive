@@ -171,10 +171,15 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Login successful!')),
         );
+        // Build display name with salutation if available
+        final salutation = patient?['salutation'] ?? '';
+        final name = patient?['name'] ?? '';
+        final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+        
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (_) => PatientDashboardScreen(userName: patient?['name'] ?? ''),
+            builder: (_) => PatientDashboardScreen(userName: displayName),
           ),
               (route) => false,
         );
@@ -404,7 +409,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              'Hello Healthcare Seeker!',
+              'Login below to continue',
               style: TextStyle(
                 fontSize: 28,
                 color: Color(0xFF2260FF),
@@ -413,7 +418,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Welcome to Serechi By SR CareHive',
+              '',
               style: TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2260FF),
