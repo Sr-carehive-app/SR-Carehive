@@ -12,6 +12,13 @@ class NurseApiService {
       body: jsonEncode({'email': email}),
     );
     if (resp.statusCode == 200) return true;
+    
+    // Handle rate limiting (429 Too Many Requests)
+    if (resp.statusCode == 429) {
+      final error = resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? 'Too many requests' : 'Too many requests';
+      throw Exception('429: $error');
+    }
+    
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
   }
 
@@ -34,6 +41,13 @@ class NurseApiService {
       body: jsonEncode({'email': email, 'resend': true}),
     );
     if (resp.statusCode == 200) return true;
+    
+    // Handle rate limiting (429 Too Many Requests)
+    if (resp.statusCode == 429) {
+      final error = resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? 'Too many requests' : 'Too many requests';
+      throw Exception('429: $error');
+    }
+    
     return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
   }
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';

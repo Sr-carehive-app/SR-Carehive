@@ -18,6 +18,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   String? _otpError;
   int _resendCooldown = 0;
   Timer? _resendTimer;
+  bool _otpSent = false; // Flag to prevent duplicate OTP sends
 
   @override
   void initState() {
@@ -71,20 +72,41 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       return;
     }
 
+    // Prevent duplicate submissions
+    if (_isLoading) return;
+
     setState(() => _isLoading = true);
     final ok = await NurseApiService.login(
       email: emailController.text.trim(),
       password: passwordController.text.trim(),
     );
     setState(() => _isLoading = false);
+    
     if (ok) {
-      // Request OTP
-      setState(() {
-        _showOtpScreen = true;
-        _otpError = null;
-      });
-      _startResendCooldown();
-      await NurseApiService.sendOtp(email: emailController.text.trim());
+      // Request OTP only once
+      if (!_otpSent) {
+        setState(() {
+          _showOtpScreen = true;
+          _otpError = null;
+          _otpSent = true;
+        });
+        _startResendCooldown();
+        
+        try {
+          await NurseApiService.sendOtp(email: emailController.text.trim());
+        } catch (e) {
+          // Handle rate limiting error
+          if (e.toString().contains('429') || e.toString().contains('wait')) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Too many requests. Please wait 2 minutes before trying again.'),
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+        }
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login failed! Please check credentials')),
@@ -264,9 +286,19 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to resend OTP: $e')),
-      );
+      // Handle rate limiting error
+      if (e.toString().contains('429') || e.toString().contains('wait')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait 2 minutes before requesting another OTP.'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to resend OTP: $e')),
+        );
+      }
     } finally {
       setState(() {
         _isOtpLoading = false;
