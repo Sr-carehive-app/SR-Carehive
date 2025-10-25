@@ -63,7 +63,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'I need\nHealthcare ?',
+                      'I need\nHealthcare',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
