@@ -868,7 +868,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               // Assigned healthcare provider Info
               if (a['status']?.toString().toLowerCase() == 'approved') ...[
                 const Divider(height: 24),
-                const Text('Assigned Nurse', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text('Assigned Healthcare Provider', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 _kv('Name', fmtVal(a['nurse_name'])),
                 _kv('Phone', fmtVal(a['nurse_phone'])),
