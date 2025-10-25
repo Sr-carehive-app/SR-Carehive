@@ -115,14 +115,19 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 // Configurable CORS: allow localhost:5173, Vercel, and production frontend
-// Allowed origins: prefer values passed in via ALLOWED_ORIGINS env var, otherwise default to common dev/prod origins
-const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-const allowedOrigins = allowedOriginsEnv.length > 0 ? allowedOriginsEnv : [
+// IMPORTANT: Always allow both srcarehive.com and www.srcarehive.com
+const allowedOrigins = [
   'http://localhost:5173',
   'https://srcarehive.com',      // Without www
   'https://www.srcarehive.com',  // With www
   'https://api.srcarehive.com'
 ];
+
+// Optional: Allow additional origins from env var
+const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+if (allowedOriginsEnv.length > 0) {
+  allowedOrigins.push(...allowedOriginsEnv);
+}
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
