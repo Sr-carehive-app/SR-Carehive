@@ -187,8 +187,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       answer: 'Click on "Forgot Password?" on the login screen, enter your email address, and we\'ll send you a password reset link. Click the link in your email to set a new password.',
                     ),
                     FAQItem(
-                      question: 'Can I use Google to sign in?',
-                      answer: 'Yes! You can sign in using your Google account. Simply click the "Sign in with Google" button on the login screen. This is a secure and convenient way to access your account.',
+                      question: 'Can I use Google to Log In?',
+                      answer: 'Yes! You can log in using your Google account. Simply click the "Log In with Google" button on the login screen. This is a secure and convenient way to access your account.',
                     ),
                   ],
                 ),

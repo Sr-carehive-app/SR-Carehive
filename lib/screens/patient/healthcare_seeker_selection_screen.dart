@@ -67,8 +67,8 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
                 _buildSelectionCard(
                   context: context,
                   title: 'Already a User?',
-                  description: 'Please sign in here to continue\naccessing your healthcare services',
-                  buttonText: 'Sign In',
+                  description: 'Please log in here to continue\naccessing your healthcare services',
+                  buttonText: 'Log In',
                   buttonColor: const Color(0xFFCAD6FF),
                   buttonTextColor: const Color(0xFF2260FF),
                   onTap: () {
