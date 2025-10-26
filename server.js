@@ -477,7 +477,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
         <div style="background: white; padding: 25px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
           <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
             <p style="margin: 0; color: #856404; font-size: 16px; font-weight: bold;">
-              ${type === 'NEW_APPOINTMENT' ? 'Action Required: Review and assign nurse' :
+              ${type === 'NEW_APPOINTMENT' ? 'Action Required: Review and assign healthcare provider' :
                 type === 'REGISTRATION_PAYMENT' ? 'Healthcare seeker paid registration fee - Review appointment' :
                 type === 'PRE_VISIT_PAYMENT' ? 'Healthcare seeker ready for appointment - Proceed with visit' :
                 type === 'FINAL_PAYMENT' ? 'Service completed - All payments received!' :
@@ -580,7 +580,7 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
     const emailPromises = ADMIN_EMAILS.map(adminEmail => 
       sendEmail({ 
         to: adminEmail, 
-        subject: `${subjectPrefix} - Appointment #${appointment?.id || 'N/A'} - ${appointment?.full_name || 'Patient'}`, 
+        subject: `${subjectPrefix} - Appointment #${appointment?.id || 'N/A'} - ${appointment?.full_name || 'Healthcare Seeker'}`, 
         html: adminHtml 
       })
     );
@@ -2737,9 +2737,9 @@ app.post('/api/notify-appointment-cancelled', async (req, res) => {
             <h3 style="margin-top: 0; color: #dc2626;">Appointment Details:</h3>
             <ul style="color: #555; font-size: 15px; line-height: 1.8;">
               <li><strong>Appointment ID:</strong> ${appointmentId}</li>
-              <li><strong>Patient Name:</strong> ${patientName}</li>
-              <li><strong>Patient Email:</strong> ${patientEmail}</li>
-              <li><strong>Patient Phone:</strong> ${patientPhone}</li>
+              <li><strong>Healthcare Seeker Name:</strong> ${patientName}</li>
+              <li><strong>Healthcare Seeker Email:</strong> ${patientEmail}</li>
+              <li><strong>Healthcare Seeker Phone:</strong> ${patientPhone}</li>
               <li><strong>Scheduled Date:</strong> ${formattedDate}</li>
               <li><strong>Scheduled Time:</strong> ${time}</li>
               <li><strong>Cancelled At:</strong> ${formattedDateTime} IST</li>

@@ -200,7 +200,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   'Healthcare provider Services & Scheduling',
                   [
                     FAQItem(
-                      question: 'How do I schedule a nurse?',
+                      question: 'How do I schedule a healthcare provider?',
                       answer: 'Go to the Schedule section in your dashboard, select your preferred date and time slot, fill in the healthcare seekers details (yourself or another person), and describe your health requirements. Complete the payment to confirm your appointment.',
                     ),
                     FAQItem(
@@ -262,8 +262,8 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       answer: 'Currently, appointment cancellation can be done by contacting our support team through the Contact Us form. Please provide your appointment details and reason for cancellation.',
                     ),
                     FAQItem(
-                      question: 'Are the nurses qualified and verified?',
-                      answer: 'Yes, all our nurses are professionally qualified, licensed, and thoroughly verified. We conduct background checks and ensure they meet our high standards healthcare seeker care.',
+                      question: 'Are the healthcare providers qualified and verified?',
+                      answer: 'Yes, all our healthcare providers are professionally qualified, licensed, and thoroughly verified. We conduct background checks and ensure they meet our high standards healthcare seeker care.',
                     ),
                   ],
                 ),
