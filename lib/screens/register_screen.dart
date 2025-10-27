@@ -35,7 +35,7 @@ class RegisterScreen extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 60), // spacing before choose role
+                const SizedBox(height: 60), 
                 const Text(
                   'How may i help you ?',
                   textAlign: TextAlign.center,
@@ -45,7 +45,7 @@ class RegisterScreen extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 30), // spacing before Patient button
+                const SizedBox(height: 30), 
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
