@@ -85,7 +85,7 @@ class ApiService {
       return {'success': false, 'name': ''};
     }
   }
-  /// Login healthcare provider (now sending JSON)
+  /// Login healthcare provider
   static Future<Map<String, dynamic>> loginNurse({
     required String email,
     required String password,
