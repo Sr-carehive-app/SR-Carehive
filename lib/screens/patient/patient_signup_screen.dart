@@ -12,7 +12,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/services/otp_service.dart';
 import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:async';
-import 'dart:html' as html;
 
 class PatientSignUpScreen extends StatefulWidget {
   final Map<String, String>? prefillData;

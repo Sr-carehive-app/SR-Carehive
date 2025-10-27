@@ -11,8 +11,8 @@ import 'screens/patient/profile/profile_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'dart:html' as html; // web-only diagnostics (used behind kIsWeb guard)
 import 'config/api_config.dart';
+import 'utils/web_utils.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -290,10 +290,7 @@ class _MyAppState extends State<MyApp> {
           print('Callback URI passed to getSessionFromUrl: $callbackUri');
           
           // Log localStorage for debugging
-          try {
-            final keys = html.window.localStorage.keys;
-            print('LocalStorage keys: $keys');
-          } catch (_) {}
+          logLocalStorageKeys();
         }
         
         // Try to establish session from URL
