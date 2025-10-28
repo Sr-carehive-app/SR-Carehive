@@ -195,7 +195,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                 
                 const SizedBox(height: 24),
                 
-                // Healthcare provider Services Section
+                // Healthcare provider Services 
                 _buildFAQSection(
                   'Healthcare provider Services & Scheduling',
                   [
