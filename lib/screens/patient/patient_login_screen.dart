@@ -486,7 +486,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               child: const Text('Log In', style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
             const SizedBox(height: 20),
-            // Google Sign-In Button
+            // Google Sign-In 
             OutlinedButton(
               onPressed: _handleGoogleSignIn,
               style: OutlinedButton.styleFrom(
