@@ -889,7 +889,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                 const Text('Payment Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
                 if (a['registration_paid'] == true)
-                  _kv('Registration', '✅ Paid (₹1)'),
+                  _kv('Registration', '✅ Paid (₹10)'),
                 if (a['total_amount'] != null)
                   _kv('Total Amount', '₹${a['total_amount']}'),
                 if (a['pre_paid'] == true)
