@@ -382,16 +382,9 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
 
     if (patientEmail) await sendEmail({ to: patientEmail, subject, html, attachments: attach });
     
-    // Send comprehensive admin notification to both admin emails
-    await sendAdminNotification({
-      appointment,
-      type: 'REGISTRATION_PAYMENT',
-      paymentDetails: {
-        amount: amountRupees || 10,
-        paymentId: paymentId,
-        orderId: orderId
-      }
-    });
+    // NOTE: Admin notifications are sent separately via /api/notify-registration-payment
+    // to avoid duplicate emails. This function only sends patient confirmation.
+    console.log('[EMAIL] Patient confirmation sent. Admin notification will be sent via notification endpoint.');
   } catch (e) {
     console.error('[EMAIL] payment emails failed', e.message);
   }
@@ -1025,63 +1018,11 @@ app.post('/api/pg/razorpay/verify', checkRateLimit, validateOrigin, async (req, 
           }
           appt.persisted = true;
 
-          // Send payment emails using COMPLETE data - FETCH from database to ensure all fields
-          try {
-            // CRITICAL: Always fetch COMPLETE appointment data from database using appointment ID
-            let completeAppt = null;
-            
-            // Try to get the appointment ID from dbAppt or appt
-            const appointmentId = dbAppt?.id || appt?.id;
-            
-            if (appointmentId && supabase) {
-              console.log('[EMAIL] Fetching complete appointment data for ID:', appointmentId);
-              const { data: fullAppt, error: fetchError } = await supabase
-                .from('appointments')
-                .select('*')
-                .eq('id', appointmentId)
-                .maybeSingle();
-              
-              if (!fetchError && fullAppt) {
-                completeAppt = { ...fullAppt, order_id: razorpay_order_id, payment_id: razorpay_payment_id };
-                console.log('[EMAIL] ✅ Fetched complete appointment data:', {
-                  id: completeAppt.id,
-                  full_name: completeAppt.full_name,
-                  age: completeAppt.age,
-                  phone: completeAppt.phone,
-                  email: completeAppt.patient_email,
-                  address: completeAppt.address,
-                  problem: completeAppt.problem
-                });
-              } else {
-                console.error('[EMAIL] ❌ CRITICAL: Could not fetch complete appointment from database!', {
-                  appointmentId,
-                  error: fetchError?.message || 'No data returned'
-                });
-              }
-            } else {
-              console.error('[EMAIL] ❌ CRITICAL: No appointment ID available!', {
-                dbAppt_id: dbAppt?.id,
-                appt_id: appt?.id,
-                appt_keys: appt ? Object.keys(appt) : []
-              });
-            }
-            
-            // CRITICAL: Only send email if we have complete appointment data
-            // Never send emails with incomplete/fallback data to prevent empty fields
-            if (!completeAppt || !completeAppt.full_name) {
-              console.error('[EMAIL] ❌ SKIPPING email send - incomplete appointment data!', {
-                has_completeAppt: !!completeAppt,
-                has_full_name: completeAppt?.full_name,
-                completeAppt_keys: completeAppt ? Object.keys(completeAppt) : []
-              });
-              throw new Error('Cannot send email with incomplete appointment data');
-            }
-            
-            console.log('[EMAIL] Sending payment emails with complete data...');
-            await sendPaymentEmails({ appointment: completeAppt, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
-          } catch (e) {
-            console.warn('[WARN] payment email skipped/failed:', e.message);
-          }
+          // IMPORTANT: Skip email here - Flutter will call /api/notify-registration-payment 
+          // which sends comprehensive admin notifications with all details
+          // This prevents duplicate emails to admin
+          console.log('[PAYMENT] ✅ Payment verified. Email notifications will be sent via notification endpoint.');
+          console.log('[PAYMENT] Appointment ID:', dbAppt?.id || appt?.id);
         } catch (dbErr) {
           console.error('Supabase insert failed', dbErr.message);
         }
@@ -1090,6 +1031,7 @@ app.post('/api/pg/razorpay/verify', checkRateLimit, validateOrigin, async (req, 
     // Fallback: if no in-memory appointment (server restart), try to find existing appointment by order_id
     else if (supabase) {
       try {
+        console.log('[FALLBACK] No in-memory appointment found. Trying database lookup...');
         // First try to find existing appointment by order_id
         const { data: existingAppt, error: findError } = await supabase
           .from('appointments')
@@ -1109,18 +1051,12 @@ app.post('/api/pg/razorpay/verify', checkRateLimit, validateOrigin, async (req, 
             .select('*')
             .maybeSingle();
           
-          console.log('[FALLBACK] Found existing appointment, sending email with full data:', {
-            id: existingAppt.id,
-            full_name: existingAppt.full_name,
-            age: existingAppt.age,
-            phone: existingAppt.phone
-          });
-          
-          const emailAppt = updated || existingAppt;
-          await sendPaymentEmails({ appointment: emailAppt, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
+          console.log('[FALLBACK] ✅ Found and updated existing appointment:', existingAppt.id);
+          console.log('[FALLBACK] Email notifications will be sent via notification endpoint (no duplicate emails)');
         } else {
           // No existing appointment found - create minimal record
-          console.warn('[FALLBACK] No appointment data found for order:', razorpay_order_id);
+          console.warn('[FALLBACK] ⚠️ No appointment data found for order:', razorpay_order_id);
+          console.warn('[FALLBACK] Creating minimal appointment record (this should rarely happen)');
           const { data: d4 } = await supabase.from('appointments').insert({
             status: 'pending',
             created_at: new Date().toISOString(),
@@ -1129,11 +1065,11 @@ app.post('/api/pg/razorpay/verify', checkRateLimit, validateOrigin, async (req, 
           }).select('*').maybeSingle();
           
           if (d4) {
-            await sendPaymentEmails({ appointment: d4, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
+            console.log('[FALLBACK] ✅ Created minimal appointment:', d4.id);
           }
         }
       } catch (e) {
-        console.error('[FALLBACK] Error processing payment email:', e.message);
+        console.error('[FALLBACK] ❌ Error in fallback processing:', e.message);
       }
     }
 
