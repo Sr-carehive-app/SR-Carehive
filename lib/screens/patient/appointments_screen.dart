@@ -1326,37 +1326,46 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     } catch (e) {
       navigator.pop();
       String errorMsg = 'Payment failed. Please try again.';
+      bool isCancelled = false;
+      
       try {
-        dynamic err = e;
-        if (err is Exception) err = err.toString();
-        if (err is Map && err['error'] != null) {
-          final code = err['error']['code']?.toString()?.toLowerCase();
-          if (code == 'payment_cancelled' || code == 'cancelled') {
-            errorMsg = 'Payment cancelled. Please try again.';
-          }
-        } else if (err is String) {
-          final lower = err.toLowerCase();
-          if (lower.contains('cancelled')) {
-            errorMsg = 'Payment cancelled. Please try again.';
-          } else if (lower.contains('{error:')) {
-            // Try to extract description
-            final descMatch = RegExp(r'description: ([^}]+)').firstMatch(lower);
-            if (descMatch != null && descMatch.group(1)?.contains('cancelled') == true) {
-              errorMsg = 'Payment cancelled. Please try again.';
+        final errorStr = e.toString();
+        print('[Payment] Error string: $errorStr');
+        
+        // Check for cancellation in various formats
+        if (errorStr.contains('cancelled') || errorStr.contains('dismissed')) {
+          errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+          isCancelled = true;
+        } else if (e is Map) {
+          final errorData = e as Map;
+          if (errorData['error'] != null) {
+            final code = errorData['error']['code']?.toString()?.toLowerCase() ?? '';
+            final desc = errorData['error']['description']?.toString() ?? '';
+            
+            if (code.contains('cancel') || desc.contains('cancel') || 
+                code.contains('dismiss') || desc.contains('dismiss')) {
+              errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+              isCancelled = true;
             }
           }
         }
-      } catch (_) {}
+      } catch (parseError) {
+        print('[Payment] Error parsing error message: $parseError');
+      }
+      
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error, color: Colors.white),
+              Icon(
+                isCancelled ? Icons.info : Icons.error,
+                color: Colors.white,
+              ),
               const SizedBox(width: 12),
               Expanded(child: Text(errorMsg)),
             ],
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: isCancelled ? Colors.orange : Colors.red,
           duration: const Duration(seconds: 5),
           behavior: SnackBarBehavior.floating,
         ),
@@ -1470,36 +1479,46 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     } catch (e) {
       navigator.pop();
       String errorMsg = 'Payment failed. Please try again.';
+      bool isCancelled = false;
+      
       try {
-        dynamic err = e;
-        if (err is Exception) err = err.toString();
-        if (err is Map && err['error'] != null) {
-          final code = err['error']['code']?.toString()?.toLowerCase();
-          if (code == 'payment_cancelled' || code == 'cancelled') {
-            errorMsg = 'Payment cancelled. Please try again.';
-          }
-        } else if (err is String) {
-          final lower = err.toLowerCase();
-          if (lower.contains('cancelled')) {
-            errorMsg = 'Payment cancelled. Please try again.';
-          } else if (lower.contains('{error:')) {
-            final descMatch = RegExp(r'description: ([^}]+)').firstMatch(lower);
-            if (descMatch != null && descMatch.group(1)?.contains('cancelled') == true) {
-              errorMsg = 'Payment cancelled. Please try again.';
+        final errorStr = e.toString();
+        print('[Payment] Error string: $errorStr');
+        
+        // Check for cancellation in various formats
+        if (errorStr.contains('cancelled') || errorStr.contains('dismissed')) {
+          errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+          isCancelled = true;
+        } else if (e is Map) {
+          final errorData = e as Map;
+          if (errorData['error'] != null) {
+            final code = errorData['error']['code']?.toString()?.toLowerCase() ?? '';
+            final desc = errorData['error']['description']?.toString() ?? '';
+            
+            if (code.contains('cancel') || desc.contains('cancel') || 
+                code.contains('dismiss') || desc.contains('dismiss')) {
+              errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+              isCancelled = true;
             }
           }
         }
-      } catch (_) {}
+      } catch (parseError) {
+        print('[Payment] Error parsing error message: $parseError');
+      }
+      
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error, color: Colors.white),
+              Icon(
+                isCancelled ? Icons.info : Icons.error,
+                color: Colors.white,
+              ),
               const SizedBox(width: 12),
               Expanded(child: Text(errorMsg)),
             ],
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: isCancelled ? Colors.orange : Colors.red,
           duration: const Duration(seconds: 5),
           behavior: SnackBarBehavior.floating,
         ),

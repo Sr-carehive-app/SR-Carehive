@@ -25,7 +25,31 @@ class PlatformRazorpay {
 
     razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse resp) {
       clearHandlers();
-      completer.completeError('payment_error: ${resp.code} ${resp.message}');
+      
+      // Check if user cancelled payment
+      final code = resp.code?.toString() ?? '';
+      final message = resp.message?.toString() ?? '';
+      
+      // Razorpay codes: 0 = Cancelled by user, 2 = Back button pressed
+      if (code == '0' || code == '2' || 
+          message.toLowerCase().contains('cancel') || 
+          message.toLowerCase().contains('dismiss')) {
+        // Return structured error for cancellation
+        completer.completeError({
+          'error': {
+            'code': 'cancelled',
+            'description': 'Payment cancelled by user'
+          }
+        });
+      } else {
+        // Return structured error for failures
+        completer.completeError({
+          'error': {
+            'code': resp.code?.toString() ?? 'payment_failed',
+            'description': message.isNotEmpty ? message : 'Payment failed'
+          }
+        });
+      }
     });
 
     razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (_) {});
