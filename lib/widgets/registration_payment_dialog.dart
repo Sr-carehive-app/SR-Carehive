@@ -285,32 +285,44 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
   }
 
   Future<void> _handlePayment(BuildContext context) async {
-    // CRITICAL FIX: Store the navigator and scaffold messenger BEFORE any navigation
-    final navigator = Navigator.of(context, rootNavigator: true);
+    // Store navigator and scaffold messenger before any async operations
+    final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     
-    Navigator.pop(context); // Close registration dialog
+    // Close registration dialog FIRST
+    navigator.pop();
     
-    // Show loading dialog with a key to dismiss it later
+    // Small delay to ensure dialog is fully closed before showing loading
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // Show loading dialog - track if it's shown
+    bool loadingDialogShown = false;
+    if (!context.mounted) return;
+    
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Processing Payment...'),
-              ],
+      builder: (loadingDialogContext) => WillPopScope(
+        onWillPop: () async => false,
+        child: const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Processing Payment...'),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+    loadingDialogShown = true;
+    print('[Payment] Loading dialog shown');
 
     try {
       print('[Payment] Starting payment process...');
@@ -322,98 +334,135 @@ class _RegistrationPaymentDialogState extends State<RegistrationPaymentDialog> {
       );
       print('[Payment] ✅ Payment completed successfully: $result');
 
-      // Close loading dialog immediately
-      navigator.pop();
-      print('[Payment] Loading dialog closed');
+      // Close loading dialog IMMEDIATELY - use try-catch to ensure it closes
+      if (loadingDialogShown) {
+        try {
+          navigator.pop();
+          loadingDialogShown = false;
+          print('[Payment] Loading dialog closed successfully');
+        } catch (e) {
+          print('[Payment] ⚠️ Error closing loading dialog: $e');
+        }
+      }
       
-      // Extract payment ID before calling callback
+      // Extract payment ID
       final paymentId = result['razorpay_payment_id']?.toString() ?? 
                        result['payment_id']?.toString() ?? 
                        result['paymentId']?.toString() ?? 
                        'Completed';
       
-      // Small delay to ensure context is stable before callback
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Small delay to ensure loading dialog is fully dismissed
+      await Future.delayed(const Duration(milliseconds: 150));
       
-      // Call success callback to refresh appointments
+      // Call success callback to refresh appointments list
       widget.onSuccess();
-      print('[Payment] Success callback executed');
+      print('[Payment] Success callback executed - appointments refreshed');
       
-      scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        '✅ Registration Payment Successful!',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Payment ID: $paymentId',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        '📧 Confirmation email sent! Care provider will contact you.',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 6),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } catch (e) {
-      print('[Payment] ❌Payment failed: $e');
-      navigator.pop();
-      print('[Payment] Loading dialog closed after error');
-      String errorMsg = 'Payment failed. Please try again.';
-      // Robust error parsing
-      try {
-        dynamic err = e;
-        if (err is Exception) err = err.toString();
-        if (err is Map && err['error'] != null) {
-          final code = err['error']['code']?.toString()?.toLowerCase();
-          if (code == 'payment_cancelled' || code == 'cancelled') {
-            errorMsg = 'Payment cancelled. Please try again.';
-          }
-        } else if (err is String) {
-          final lower = err.toLowerCase();
-          if (lower.contains('cancelled')) {
-            errorMsg = 'Payment cancelled. Please try again.';
-          } else if (lower.contains('{error:')) {
-            final descMatch = RegExp(r'description: ([^}]+)').firstMatch(lower);
-            if (descMatch != null && descMatch.group(1)?.contains('cancelled') == true) {
-              errorMsg = 'Payment cancelled. Please try again.';
-            }
-          }
-        }
-      } catch (_) {}
+      // Show success message
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.error, color: Colors.white),
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '✅ Registration Payment Successful!',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Payment ID: $paymentId',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '📧 Confirmation sent! Healthcare provider will contact you soon.',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      print('[Payment] ❌ Payment error caught: $e');
+      print('[Payment] Error type: ${e.runtimeType}');
+      
+      // CRITICAL: Close loading dialog FIRST, before any other operations
+      if (loadingDialogShown) {
+        try {
+          navigator.pop();
+          loadingDialogShown = false;
+          print('[Payment] ✅ Loading dialog closed after error');
+        } catch (closeError) {
+          print('[Payment] ⚠️ Error closing loading dialog: $closeError');
+        }
+      }
+      
+      // Parse error message
+      String errorMsg = 'Payment failed. Please try again.';
+      bool isCancelled = false;
+      
+      try {
+        final errorStr = e.toString();
+        print('[Payment] Error string: $errorStr');
+        
+        // Check for cancellation in various formats
+        if (errorStr.contains('cancelled') || errorStr.contains('dismissed')) {
+          errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+          isCancelled = true;
+        } else if (e is Map) {
+          final errorData = e as Map;
+          if (errorData['error'] != null) {
+            final code = errorData['error']['code']?.toString()?.toLowerCase() ?? '';
+            final desc = errorData['error']['description']?.toString() ?? '';
+            
+            if (code.contains('cancel') || desc.contains('cancel') || 
+                code.contains('dismiss') || desc.contains('dismiss')) {
+              errorMsg = '⚠️ Payment cancelled by you. Try again when ready.';
+              isCancelled = true;
+            }
+          }
+        }
+      } catch (parseError) {
+        print('[Payment] Error parsing error message: $parseError');
+      }
+      
+      print('[Payment] Final error message: $errorMsg');
+      print('[Payment] Is cancelled: $isCancelled');
+      
+      // Wait a bit to ensure loading dialog is fully dismissed
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      // Show error message using stored scaffold messenger
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isCancelled ? Icons.info : Icons.error,
+                color: Colors.white,
+              ),
               const SizedBox(width: 12),
               Expanded(child: Text(errorMsg)),
             ],
           ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
+          backgroundColor: isCancelled ? Colors.orange : Colors.red,
+          duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
         ),
       );
+      print('[Payment] Error snackbar shown');
     }
   }
 }

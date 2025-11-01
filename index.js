@@ -85,7 +85,7 @@ function showUsage() {
 		`  --sort              Sort keys when JSON -> canonical string\n` +
 		`  --quiet             Digest only output\n\n` +
 		`Examples:\n` +
-		`  node index.js --msg "orderId=123&amount=100.00" --key "myKey"\n` +
+		`  node index.js --msg "orderId=123&amount=10.00" --key "myKey"\n` +
 		`  node index.js --file data.json --key "myKey" --sort --upper\n` +
 		`  $env:HMAC_KEY="myKey"; $env:MESSAGE="orderId=123"; node index.js\n`);
 }

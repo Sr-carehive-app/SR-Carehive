@@ -184,11 +184,17 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     }
     // Email required and valid
     if (patientEmailController.text.trim().isEmpty) {
-      _showErrorSnackBar('Please enter your email');
+      final emailContext = selectedPatient == 'Another Person' 
+        ? 'Please enter the healthcare seeker\'s email' 
+        : 'Please enter your email';
+      _showErrorSnackBar(emailContext);
       return false;
     }
-        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(patientEmailController.text.trim())) {
-      _showErrorSnackBar('Please enter a valid email');
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(patientEmailController.text.trim())) {
+      final emailContext = selectedPatient == 'Another Person' 
+        ? 'Please enter a valid email for the healthcare seeker' 
+        : 'Please enter a valid email';
+      _showErrorSnackBar(emailContext);
       return false;
     }
     if (phoneController.text.trim().isEmpty) {
@@ -736,18 +742,42 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 16),
           buildTextField('Age', controller: ageController, keyboardType: TextInputType.number),
           const SizedBox(height: 16),
-          // Patient Email (required) - populated from authenticated user and read-only
-          const SizedBox.shrink(),
+          // Patient Email - read-only for "Yourself", editable for "Another Person"
           TextField(
             controller: patientEmailController,
-            readOnly: true,
+            readOnly: selectedPatient == 'Yourself',
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               labelText: 'Email',
+              suffixIcon: selectedPatient == 'Another Person' 
+                ? const Icon(Icons.edit, size: 20, color: Colors.grey) 
+                : const Icon(Icons.lock, size: 18, color: Colors.grey),
               filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              fillColor: selectedPatient == 'Yourself' 
+                ? const Color(0xFFF5F5F5) 
+                : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12), 
+                borderSide: selectedPatient == 'Another Person' 
+                  ? const BorderSide(color: Color(0xFF2260FF), width: 1.5) 
+                  : BorderSide.none
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12), 
+                borderSide: selectedPatient == 'Another Person' 
+                  ? const BorderSide(color: Color(0xFF2260FF), width: 1.5) 
+                  : BorderSide.none
+              ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              helperText: selectedPatient == 'Another Person' 
+                ? 'Enter the healthcare seeker\'s email address' 
+                : 'Your email (read-only)',
+              helperStyle: TextStyle(
+                color: selectedPatient == 'Another Person' 
+                  ? const Color(0xFF2260FF) 
+                  : Colors.grey,
+                fontSize: 12,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -851,7 +881,20 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   Widget toggleButton(String text) {
     final bool isSelected = selectedPatient == text;
     return GestureDetector(
-      onTap: () => setState(() => selectedPatient = text),
+      onTap: () {
+        setState(() {
+          selectedPatient = text;
+          // When switching to "Another Person", clear email to force user to enter it
+          // When switching back to "Yourself", restore logged-in user's email
+          if (text == 'Another Person') {
+            patientEmailController.text = ''; // Clear for other person
+          } else {
+            // Restore user's email
+            final user = Supabase.instance.client.auth.currentUser;
+            patientEmailController.text = user?.email ?? '';
+          }
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(

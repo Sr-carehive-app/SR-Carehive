@@ -19,7 +19,7 @@ class PaymentService {
   static const String FINAL_PAYMENT = 'final_payment';
   
   // Fixed registration amount - Production value
-  static const double REGISTRATION_AMOUNT = 10.0;  // Registration fee: ₹10
+  static const double REGISTRATION_AMOUNT = 1.0;  // Registration fee: ₹10
 
   // High-level API: create Razorpay order, open checkout, verify signature.
   static Future<Map<String, dynamic>> payWithRazorpay({
@@ -46,6 +46,11 @@ class PaymentService {
     }
     final createJson = jsonDecode(createResp.body) as Map<String, dynamic>;
     final orderId = createJson['orderId'] as String;
+    
+    // SECURITY NOTE: keyId is Razorpay's public key (like Stripe's publishable key)
+    // It's required by Razorpay SDK to initialize payment checkout and is safe to expose
+    // The actual secret key (key_secret) remains secure on the backend and is NEVER exposed
+    // Backend enforces security through: rate limiting, origin validation, and signature verification
     final keyId = (createJson['keyId'] ?? createJson['key_id'] ?? createJson['key']) as String;
     if (keyId.isEmpty) {
       throw Exception('create-order returned empty keyId');

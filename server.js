@@ -152,6 +152,19 @@ app.use(cors({
   credentials: false
 }));
 
+// Security headers middleware
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Enable XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Config (adjust for deployment)
 const PORT = process.env.PORT || 9090;
 
@@ -418,8 +431,6 @@ async function sendApprovalEmail(appointment) {
         <hr>
         <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹10 to confirm your booking.</p>
         <p>You can pay and view your appointment in the app by clicking the button below:</p>
-  // Prefer app deep-link (opens native app if installed). If you explicitly set WEB_FRONTEND_URL in env,
-  // use that as a web fallback.
   <a href="${(process.env.WEB_FRONTEND_URL || `carehive://appointments?aid=${appointment.id}`)}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
         <p>— Serechi By SR CareHive</p>
       </div>`;
@@ -463,6 +474,11 @@ async function sendRejectionEmail(appointment) {
 // Comprehensive admin notification with ALL healthcare seeker details
 async function sendAdminNotification({ appointment, type, paymentDetails = null }) {
   try {
+    console.log('[ADMIN_EMAIL] ='.repeat(30));
+    console.log(`[ADMIN_EMAIL] Preparing ${type} notification`);
+    console.log('[ADMIN_EMAIL] Full appointment object:', JSON.stringify(appointment, null, 2));
+    console.log('[ADMIN_EMAIL] ='.repeat(30));
+    
     const adminHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
         <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
@@ -738,10 +754,17 @@ app.post('/api/nurse/appointments/:id/reject', async (req, res) => {
 // Create Razorpay order
 // Input: { amount, currency?, receipt?, notes?, appointment? }
 // Output: { orderId, amount, currency, keyId }
-app.post('/api/pg/razorpay/create-order', async (req, res) => {
+app.post('/api/pg/razorpay/create-order', checkRateLimit, validateOrigin, async (req, res) => {
   try {
   const { amount, currency = 'INR', receipt, notes, appointment } = req.body || {};
     if (!amount) return res.status(400).json({ error: 'amount is required (in rupees as string, e.g., "99.00")' });
+    
+    // Validate amount is reasonable (prevent abuse)
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0 || amountNum > 1000000) {
+      return res.status(400).json({ error: 'Invalid amount. Must be between 0 and 1,000,000 rupees.' });
+    }
+    
     if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) return res.status(500).json({ error: 'Server misconfigured: Razorpay keys missing' });
 
     const paise = Math.round(parseFloat(amount) * 100);
@@ -775,6 +798,10 @@ app.post('/api/pg/razorpay/create-order', async (req, res) => {
             duration_hours: appointment.duration_hours ?? null,
             amount_rupees: appointment.amount_rupees ?? null,
             patient_email: appointment.patient_email || appointment.email || null,
+            aadhar_number: appointment.aadhar_number || null,
+            primary_doctor_name: appointment.primary_doctor_name || null,
+            primary_doctor_phone: appointment.primary_doctor_phone || null,
+            primary_doctor_location: appointment.primary_doctor_location || null,
             status: 'payment_initiated',
             created_at: new Date().toISOString(),
             order_id: order.id,
@@ -790,7 +817,19 @@ app.post('/api/pg/razorpay/create-order', async (req, res) => {
       }
     }
 
-    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId: RAZORPAY_KEY_ID });
+    // Log successful order creation for monitoring
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log(`[PAYMENT] Order created: ${order.id} | Amount: ₹${amount} | IP: ${ip}`);
+    
+    // Note: keyId is intentionally returned here as it's required by Razorpay SDK (public key)
+    // The key_secret remains secure on the server and is never exposed
+    // Security is enforced through rate limiting, origin validation, and server-side signature verification
+    res.json({ 
+      orderId: order.id, 
+      amount: order.amount, 
+      currency: order.currency, 
+      keyId: RAZORPAY_KEY_ID  // Public key - required for Razorpay checkout
+    });
   } catch (err) {
     // Surface Razorpay error details when available
     const status = err?.statusCode || 500;
@@ -801,19 +840,90 @@ app.post('/api/pg/razorpay/create-order', async (req, res) => {
   }
 });
 
+// Security: Rate limiting middleware for payment endpoints
+const paymentRateLimiter = new Map(); // IP -> { count, resetTime }
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const MAX_PAYMENT_REQUESTS = 10; // Max 10 payment requests per 15 min per IP
+
+function checkRateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  
+  let limiter = paymentRateLimiter.get(ip);
+  if (!limiter || now > limiter.resetTime) {
+    limiter = { count: 1, resetTime: now + RATE_LIMIT_WINDOW };
+    paymentRateLimiter.set(ip, limiter);
+    return next();
+  }
+  
+  if (limiter.count >= MAX_PAYMENT_REQUESTS) {
+    return res.status(429).json({ 
+      error: 'Too many payment requests. Please try again later.',
+      retryAfter: Math.ceil((limiter.resetTime - now) / 1000)
+    });
+  }
+  
+  limiter.count++;
+  next();
+}
+
+// Security: Origin validation for payment endpoints
+function validateOrigin(req, res, next) {
+  const allowedOrigins = [
+    'https://srcarehive.com',
+    'https://www.srcarehive.com',
+    'https://api.srcarehive.com',
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'http://localhost:5173',  
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5000',
+    'http://127.0.0.1:5173'   
+  ];
+  
+  const origin = req.headers.origin || req.headers.referer;
+  
+  // Allow requests without origin (mobile apps)
+  if (!origin) return next();
+  
+  // Check if origin is allowed
+  const isAllowed = allowedOrigins.some(allowed => origin.startsWith(allowed));
+  
+  if (isAllowed) {
+    return next();
+  }
+  
+  console.warn(`[SECURITY] Blocked payment request from unauthorized origin: ${origin}`);
+  return res.status(403).json({ error: 'Unauthorized origin' });
+}
+
 // Verify payment signature after checkout success
 // Input: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
 // Output: { verified: true, details }
-app.post('/api/pg/razorpay/verify', async (req, res) => {
+app.post('/api/pg/razorpay/verify', checkRateLimit, validateOrigin, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ error: 'Missing fields' });
+      return res.status(400).json({ error: 'Missing required payment verification fields' });
     }
+    
+    // Validate format of IDs to prevent injection
+    if (!/^order_[A-Za-z0-9]+$/.test(razorpay_order_id)) {
+      return res.status(400).json({ error: 'Invalid order ID format' });
+    }
+    if (!/^pay_[A-Za-z0-9]+$/.test(razorpay_payment_id)) {
+      return res.status(400).json({ error: 'Invalid payment ID format' });
+    }
+    
+    // Verify signature using HMAC SHA256 (most critical security check)
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
     const expected = crypto.createHmac('sha256', RAZORPAY_KEY_SECRET).update(body).digest('hex');
     const verified = expected === razorpay_signature;
-    if (!verified) return res.status(400).json({ verified: false, error: 'Signature mismatch' });
+    
+    if (!verified) {
+      console.warn(`[SECURITY] Payment signature mismatch! Order: ${razorpay_order_id}`);
+      return res.status(400).json({ verified: false, error: 'Payment signature verification failed' });
+    }
 
     // Mark appointment paid and optionally persist via Supabase
   let appt = pendingAppointments.get(razorpay_order_id);
@@ -834,9 +944,9 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
               .from('appointments')
               .update(updatePayload)
               .eq('id', draftId)
-              .select()
+              .select('*')  // Select ALL fields to ensure complete data for email
               .maybeSingle();
-            if (!e1) dbAppt = u1;
+            if (!e1 && u1) dbAppt = u1;
           }
           if (!dbAppt) {
             // Try update by order_id (in case mapping lost)
@@ -844,12 +954,42 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
               .from('appointments')
               .update(updatePayload)
               .eq('order_id', razorpay_order_id)
-              .select()
+              .select('*')  // Select ALL fields to ensure complete data for email
               .maybeSingle();
-            if (!e2) dbAppt = u2;
+            if (!e2 && u2) dbAppt = u2;
+          }
+          if (!dbAppt && appt?.id) {
+            // CRITICAL FIX: Try to find existing appointment by ID from Flutter (most reliable)
+            console.log('[PAYMENT] Attempting to find appointment by appt.id:', appt.id);
+            const { data: u3, error: e3 } = await supabase
+              .from('appointments')
+              .update(updatePayload)
+              .eq('id', appt.id)
+              .select('*')
+              .maybeSingle();
+            if (!e3 && u3) {
+              dbAppt = u3;
+              console.log('[PAYMENT] ✅ Found and updated appointment by appt.id:', u3.id);
+            }
           }
           if (!dbAppt) {
-            // Final fallback: insert a fresh row as before
+            // Final fallback: insert a fresh row ONLY if appt has complete data
+            // WARNING: This should NOT execute for registration payments (draft should exist)
+            console.warn('[PAYMENT] ⚠️ WARNING: No existing appointment found, attempting fresh insert');
+            console.warn('[PAYMENT] Appt data available:', {
+              has_full_name: !!appt.full_name,
+              has_age: !!appt.age,
+              has_phone: !!appt.phone,
+              appt_keys: Object.keys(appt)
+            });
+            
+            // Only insert if we have minimum required data
+            if (!appt.full_name || !appt.phone) {
+              console.error('[PAYMENT] ❌ CRITICAL: Cannot insert appointment - missing required fields!');
+              console.error('[PAYMENT] This indicates the draft appointment was not created during order creation');
+              throw new Error('Appointment data incomplete - draft should have been created during order creation');
+            }
+            
             const basePayload = {
               patient_id: appt.patient_id,
               full_name: appt.full_name,
@@ -864,24 +1004,81 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
               patient_type: appt.patient_type,
               duration_hours: appt.duration_hours ?? null,
               amount_rupees: appt.amount_rupees ?? null,
+              patient_email: appt.patient_email || appt.email || null,
+              aadhar_number: appt.aadhar_number || null,
+              primary_doctor_name: appt.primary_doctor_name || null,
+              primary_doctor_phone: appt.primary_doctor_phone || null,
+              primary_doctor_location: appt.primary_doctor_location || null,
               status: 'pending',
               created_at: new Date().toISOString(),
               order_id: razorpay_order_id,
               payment_id: razorpay_payment_id,
-              patient_email: appt.patient_email || appt.email || null,
             };
             const { data: d3, error: e3 } = await supabase.from('appointments').insert(basePayload).select().maybeSingle();
             if (!e3) {
               dbAppt = d3;
+              console.log('[PAYMENT] ✅ Fresh appointment inserted with ID:', d3?.id);
               if (dbAppt?.id && basePayload.patient_email) appointmentEmailById.set(String(dbAppt.id), basePayload.patient_email);
+            } else {
+              console.error('[PAYMENT] ❌ Failed to insert appointment:', e3.message);
             }
           }
           appt.persisted = true;
 
-          // Send payment emails using DB row if present (has IDs), else fallback to appt object
+          // Send payment emails using COMPLETE data - FETCH from database to ensure all fields
           try {
-            const emailAppt = dbAppt || { ...appt, order_id: razorpay_order_id, payment_id: razorpay_payment_id };
-            await sendPaymentEmails({ appointment: emailAppt, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
+            // CRITICAL: Always fetch COMPLETE appointment data from database using appointment ID
+            let completeAppt = null;
+            
+            // Try to get the appointment ID from dbAppt or appt
+            const appointmentId = dbAppt?.id || appt?.id;
+            
+            if (appointmentId && supabase) {
+              console.log('[EMAIL] Fetching complete appointment data for ID:', appointmentId);
+              const { data: fullAppt, error: fetchError } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('id', appointmentId)
+                .maybeSingle();
+              
+              if (!fetchError && fullAppt) {
+                completeAppt = { ...fullAppt, order_id: razorpay_order_id, payment_id: razorpay_payment_id };
+                console.log('[EMAIL] ✅ Fetched complete appointment data:', {
+                  id: completeAppt.id,
+                  full_name: completeAppt.full_name,
+                  age: completeAppt.age,
+                  phone: completeAppt.phone,
+                  email: completeAppt.patient_email,
+                  address: completeAppt.address,
+                  problem: completeAppt.problem
+                });
+              } else {
+                console.error('[EMAIL] ❌ CRITICAL: Could not fetch complete appointment from database!', {
+                  appointmentId,
+                  error: fetchError?.message || 'No data returned'
+                });
+              }
+            } else {
+              console.error('[EMAIL] ❌ CRITICAL: No appointment ID available!', {
+                dbAppt_id: dbAppt?.id,
+                appt_id: appt?.id,
+                appt_keys: appt ? Object.keys(appt) : []
+              });
+            }
+            
+            // CRITICAL: Only send email if we have complete appointment data
+            // Never send emails with incomplete/fallback data to prevent empty fields
+            if (!completeAppt || !completeAppt.full_name) {
+              console.error('[EMAIL] ❌ SKIPPING email send - incomplete appointment data!', {
+                has_completeAppt: !!completeAppt,
+                has_full_name: completeAppt?.full_name,
+                completeAppt_keys: completeAppt ? Object.keys(completeAppt) : []
+              });
+              throw new Error('Cannot send email with incomplete appointment data');
+            }
+            
+            console.log('[EMAIL] Sending payment emails with complete data...');
+            await sendPaymentEmails({ appointment: completeAppt, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
           } catch (e) {
             console.warn('[WARN] payment email skipped/failed:', e.message);
           }
@@ -890,36 +1087,80 @@ app.post('/api/pg/razorpay/verify', async (req, res) => {
         }
       }
     }
-    // Fallback: if no in-memory appointment (server restart), at least upsert a minimal record so healthcare seeker sees it
+    // Fallback: if no in-memory appointment (server restart), try to find existing appointment by order_id
     else if (supabase) {
       try {
-        const { data: d4 } = await supabase.from('appointments').insert({
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          order_id: razorpay_order_id,
-          payment_id: razorpay_payment_id
-        }).select().maybeSingle();
-        try {
-          const emailAppt = d4 || { order_id: razorpay_order_id, payment_id: razorpay_payment_id };
+        // First try to find existing appointment by order_id
+        const { data: existingAppt, error: findError } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('order_id', razorpay_order_id)
+          .maybeSingle();
+        
+        if (existingAppt) {
+          // Update existing appointment with payment_id
+          const { data: updated } = await supabase
+            .from('appointments')
+            .update({ 
+              status: 'pending', 
+              payment_id: razorpay_payment_id 
+            })
+            .eq('id', existingAppt.id)
+            .select('*')
+            .maybeSingle();
+          
+          console.log('[FALLBACK] Found existing appointment, sending email with full data:', {
+            id: existingAppt.id,
+            full_name: existingAppt.full_name,
+            age: existingAppt.age,
+            phone: existingAppt.phone
+          });
+          
+          const emailAppt = updated || existingAppt;
           await sendPaymentEmails({ appointment: emailAppt, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
-        } catch (e) { console.warn('[WARN] payment email skipped/failed:', e.message); }
+        } else {
+          // No existing appointment found - create minimal record
+          console.warn('[FALLBACK] No appointment data found for order:', razorpay_order_id);
+          const { data: d4 } = await supabase.from('appointments').insert({
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            order_id: razorpay_order_id,
+            payment_id: razorpay_payment_id
+          }).select('*').maybeSingle();
+          
+          if (d4) {
+            await sendPaymentEmails({ appointment: d4, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount: null });
+          }
+        }
       } catch (e) {
-        console.error('Supabase fallback insert failed', e.message);
+        console.error('[FALLBACK] Error processing payment email:', e.message);
       }
     }
 
+    // Log successful payment verification
+    const ip = req.ip || req.connection.remoteAddress;
+    console.log(`[PAYMENT] ✅ Verified: Order ${razorpay_order_id} | Payment ${razorpay_payment_id} | IP: ${ip}`);
+
     res.json({ verified: true, orderId: razorpay_order_id, paymentId: razorpay_payment_id });
   } catch (err) {
-    console.error('verify error', err.message);
+    const ip = req.ip || req.connection.remoteAddress;
+    console.error(`[PAYMENT] ❌ Verification error | IP: ${ip} |`, err.message);
     res.status(500).json({ error: 'Internal error', message: err.message });
   }
 });
 
 // Optional: simple status endpoint for polling by orderId
-app.get('/api/pg/razorpay/status/:orderId', (req, res) => {
+app.get('/api/pg/razorpay/status/:orderId', checkRateLimit, (req, res) => {
   const appt = pendingAppointments.get(req.params.orderId);
   if (!appt) return res.status(404).json({ error: 'Not found' });
-  res.json(appt);
+  // Only return safe, non-sensitive information
+  res.json({
+    orderId: appt.order_id,
+    status: appt.status,
+    amount: appt.amount,
+    currency: appt.currency,
+    created_at: appt.created_at
+  });
 });
 
 // Root endpoint - Welcome message
@@ -1303,17 +1544,26 @@ app.post('/api/notify-registration-payment', async (req, res) => {
     // Fetch full appointment details from DB
     let appointment = null;
     try {
-      const { data } = await supabase
+      console.log(`[DEBUG] Fetching appointment with ID: ${appointmentId}`);
+      const { data, error } = await supabase
         .from('appointments')
         .select('*')
         .eq('id', appointmentId)
         .maybeSingle();
+      
+      if (error) {
+        console.error('[ERROR] Supabase query error:', error);
+        return res.status(500).json({ error: 'Database error', details: error.message });
+      }
+      
       appointment = data;
+      console.log('[DEBUG] Raw appointment data from DB:', JSON.stringify(appointment, null, 2));
     } catch (err) {
       console.error('[ERROR] Could not fetch appointment:', err.message);
       return res.status(404).json({ error: 'Appointment not found' });
     }
     if (!appointment) {
+      console.error('[ERROR] No appointment found with ID:', appointmentId);
       return res.status(404).json({ error: 'Appointment not found' });
     }
     const patientEmail = appointment.patient_email;
@@ -1378,30 +1628,36 @@ app.post('/api/notify-registration-payment', async (req, res) => {
       </div>
     `;
 
-    // Email to Nurse/Admin
-    const nurseHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2260FF;">New Registration Payment Received</h2>
-        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Appointment ID:</strong> #${appointmentId}</p>
-          <p><strong>Healthcare seeker:</strong> ${patientName || '-'} (${patientPhone || '-'})</p>
-          <p><strong>Email:</strong> ${patientEmail}</p>
-          <p><strong>Amount Paid:</strong> ₹${amount || 10}</p>
-          <p><strong>Payment ID:</strong> ${paymentId}</p>
-          <p><strong>Date:</strong> ${date || '-'}</p>
-          <p><strong>Time:</strong> ${time || '-'}</p>
-        </div>
-        <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0; color: #856404;">
-            <strong>Next Action:</strong> Please contact the healthcare seeker and set the total service amount in the healthcare provider dashboard.
-          </p>
-        </div>
-  <a href="carehive://nurse/manage-appointments" 
-           style="display: inline-block; background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">
-          Manage Appointments
-        </a>
-      </div>
-    `;
+    // CRITICAL FIX: Use comprehensive admin notification instead of simple email
+    // This ensures ALL appointment details are included in admin emails
+    console.log('[EMAIL] Sending comprehensive admin notification with complete appointment data');
+    console.log('[EMAIL] Appointment details:', {
+      id: appointment.id,
+      full_name: appointment.full_name,
+      age: appointment.age,
+      gender: appointment.gender,
+      phone: appointment.phone,
+      email: appointment.patient_email,
+      address: appointment.address,
+      problem: appointment.problem
+    });
+    
+    // Check if critical fields are missing
+    const missingFields = [];
+    if (!appointment.full_name) missingFields.push('full_name');
+    if (!appointment.age) missingFields.push('age');
+    if (!appointment.gender) missingFields.push('gender');
+    if (!appointment.phone) missingFields.push('phone');
+    if (!appointment.patient_email) missingFields.push('patient_email');
+    if (!appointment.address) missingFields.push('address');
+    if (!appointment.problem) missingFields.push('problem');
+    
+    if (missingFields.length > 0) {
+      console.error('[WARNING] ⚠️ Missing fields in appointment data:', missingFields.join(', '));
+      console.error('[WARNING] This means data was not saved properly in the database during appointment creation!');
+    } else {
+      console.log('[SUCCESS] ✅ All critical fields present in appointment data');
+    }
 
     // Send emails
     const emailPromises = [
@@ -1411,15 +1667,20 @@ app.post('/api/notify-registration-payment', async (req, res) => {
         html: patientHtml 
       })
     ];
-    if (nurseEmail) {
-      emailPromises.push(
-        sendEmail({ 
-          to: nurseEmail, 
-          subject: `Registration Payment Received - Appointment #${appointmentId}`, 
-          html: nurseHtml 
-        })
-      );
-    }
+    
+    // Send comprehensive admin notification to ALL admin emails
+    // This includes complete patient details, medical info, contact details, etc.
+    emailPromises.push(
+      sendAdminNotification({
+        appointment: appointment,
+        type: 'REGISTRATION_PAYMENT',
+        paymentDetails: {
+          amount: amount || 10,
+          paymentId: paymentId,
+          orderId: receiptId
+        }
+      })
+    );
 
     // Send SMS to healthcare seeker
     if (twilioClient && patientPhone) {

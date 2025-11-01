@@ -1224,13 +1224,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         patientEmail: user?.email ?? appointment['patient_email'] ?? '',
         patientPhone: appointment['phone'] ?? '',
         onSuccess: () {
-          _loadAppointments(); // Reload appointments
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Registration payment successful!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          // Just reload appointments - dialog will show success message
+          _loadAppointments();
         },
       ),
     );
