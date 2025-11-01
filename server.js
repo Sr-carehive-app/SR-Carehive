@@ -1997,7 +1997,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
               </div>
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">PRE-VISIT (50%)</p>
-                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${((totalPaid - 10 - amount) || 0).toFixed(0)}</p>
+                <p style="font-size: 20px; font-weight: bold; color: #009688; margin: 5px 0;">₹${Math.max(0, (totalPaid - 10 - amount)).toFixed(0)}</p>
               </div>
               <div style="text-align: center; margin: 10px;">
                 <p style="color: #666; margin: 0; font-size: 12px;">FINAL (50%)</p>

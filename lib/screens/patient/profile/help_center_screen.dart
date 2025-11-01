@@ -240,6 +240,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                       question: 'Is my personal information secure?',
                       answer: 'Yes, we use industry-standard security measures to protect your personal information. All data is encrypted and stored securely in our database. We never share your information with third parties without your consent.',
                     ),
+                    FAQItem(
+                      question: 'How do I delete my account?',
+                      answer: 'You can delete your account directly from the Profile page. Tap on the "Delete Account" button and confirm your decision. Please note that account deletion is permanent and all your data will be removed from our system.',
+                    ),
                   ],
                 ),
                 
@@ -260,6 +264,10 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                     FAQItem(
                       question: 'What if I need to cancel an appointment?',
                       answer: 'Currently, appointment cancellation can be done by contacting our support team through the Contact Us form. Please provide your appointment details and reason for cancellation.',
+                    ),
+                    FAQItem(
+                      question: 'How do I request a refund?',
+                      answer: 'You can request a refund directly from the Profile page. Tap on "Request Refund" button and fill in the required details including your appointment ID, payment ID, and reason for refund. Our team will process your request, and refunds are typically completed within 5-7 business days.',
                     ),
                     FAQItem(
                       question: 'Are the healthcare providers qualified and verified?',

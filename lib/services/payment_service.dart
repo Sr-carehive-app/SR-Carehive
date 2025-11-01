@@ -19,7 +19,7 @@ class PaymentService {
   static const String FINAL_PAYMENT = 'final_payment';
   
   // Fixed registration amount - Production value
-  static const double REGISTRATION_AMOUNT = 1.0;  // Registration fee: ₹10
+  static const double REGISTRATION_AMOUNT = 10.0;  // Registration fee: ₹10
 
   // High-level API: create Razorpay order, open checkout, verify signature.
   static Future<Map<String, dynamic>> payWithRazorpay({
