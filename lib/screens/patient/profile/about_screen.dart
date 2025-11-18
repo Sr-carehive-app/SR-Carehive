@@ -56,9 +56,9 @@ class AboutScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     
                     // Welcome Section
-                    _h('Welcome to Serechi – Your Trusted Healthcare Companion by SR CareHive'),
+                    _h('Welcome to Serechi – Your Trusted Healthcare Companion'),
                     const SizedBox(height: 12),
-                    _p('Serechi is an innovative digital platform by SR CareHive Pvt. Ltd., designed to seamlessly connect healthcare seekers and healthcare providers across communities. Rooted in the philosophy "Through the people, for the people, and by the people," Serechi brings compassionate, professional, and reliable care to your doorstep.'),
+                    _p('Serechi is an innovative digital platform, designed to seamlessly connect healthcare seekers and healthcare providers across communities. Rooted in the philosophy "Through the people, for the people, and by the people," Serechi brings compassionate, professional, and reliable care to your doorstep.'),
                     const SizedBox(height: 20),
                     
                     // For Healthcare Seekers
@@ -87,7 +87,7 @@ class AboutScreen extends StatelessWidget {
                     // Closing Statement
                     _h('Our Vision'),
                     const SizedBox(height: 8),
-                    _p('Serechi is more than a service app — it is a healthcare ecosystem uniting people who care and those who need care. Whether you seek support or wish to serve, Serechi by SR CareHive is your trusted bridge to a connected, ethical, and human-centered healthcare future.'),
+                    _p('Serechi is more than a service app — it is a healthcare ecosystem uniting people who care and those who need care. Whether you seek support or wish to serve, Serechi is your trusted bridge to a connected, ethical, and human-centered healthcare future.'),
                     const SizedBox(height: 20),
                     
                     // Tagline

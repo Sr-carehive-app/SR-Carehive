@@ -1,5 +1,5 @@
 
-# Serechi by SR CareHive
+# Serechi
 
 A Flutter + Node (Express) application for the SR CareHive patient & provider platform.
 

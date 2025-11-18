@@ -377,7 +377,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
           <li><b>Duration:</b> ${appointment?.duration_hours ?? '-'} hr</li>
         </ul>
         <p>Receipt attached.</p>
-        <p>— Serechi By SR CareHive</p>
+        <p>— Serechi</p>
       </div>`;
 
     if (patientEmail) await sendEmail({ to: patientEmail, subject, html, attachments: attach });
@@ -425,7 +425,7 @@ async function sendApprovalEmail(appointment) {
         <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹10 to confirm your booking.</p>
         <p>You can pay and view your appointment in the app by clicking the button below:</p>
   <a href="${(process.env.WEB_FRONTEND_URL || `carehive://appointments?aid=${appointment.id}`)}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
-        <p>— Serechi By SR CareHive</p>
+        <p>— Serechi</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
   } catch (e) {
@@ -456,7 +456,7 @@ async function sendRejectionEmail(appointment) {
         <p>Hi ${appointment.full_name || 'Healthcare seeker'},</p>
         <p>We’re sorry to inform you that your healthcare provider request was <b>rejected</b> at this time.</p>
         <p><b>Reason:</b> ${appointment.rejection_reason || '-'}</p>
-        <p>— Serechi By SR CareHive</p>
+        <p>— Serechi</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment was rejected', html, attachments });
   } catch (e) {
@@ -1180,8 +1180,8 @@ app.get('/api/email/test', async (req, res) => {
     if (!to) return res.status(400).json({ error: 'Provide ?to=email@example.com' });
     const info = await sendEmail({
       to,
-      subject: 'Serechi By SR CareHive email test',
-      html: '<p>This is a test email from Serechi By SR CareHive server. SMTP is working</p>'
+      subject: 'Serechi email test',
+      html: '<p>This is a test email from Serechi server. SMTP is working</p>'
     });
     res.json({ ok: true, to, messageId: info?.messageId || null });
   } catch (e) {
@@ -1377,7 +1377,6 @@ app.post('/api/send-otp-email', async (req, res) => {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #2260FF; padding: 20px; text-align: center;">
           <h1 style="color: white; margin: 0;">Serechi</h1>
-          <p style="color: white; margin: 5px 0;">by SR CareHive Pvt. Ltd.</p>
         </div>
         <div style="padding: 30px; background: #f9f9f9;">
           <h2 style="color: #333;">Your Verification Code</h2>
@@ -1732,7 +1731,7 @@ app.post('/api/notify-amount-set', async (req, res) => {
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
             Need clarification on the service charges? Please contact your healthcare provider.
-            <br>Serechi By SR CareHive | srcarehive@gmail.com
+            <br>Serechi | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -1854,7 +1853,7 @@ app.post('/api/notify-pre-payment', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            Serechi By SR CareHive | srcarehive@gmail.com
+            Serechi | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -2040,7 +2039,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
             Need assistance? Contact us at srcarehive@gmail.com
-            <br>Serechi By SR CareHive - Quality Home Care Services
+            <br>Serechi - Quality Home Care Services
           </p>
         </div>
       </div>
@@ -2206,7 +2205,7 @@ app.post('/api/notify-visit-completed', async (req, res) => {
           </div>
 
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-           Serechi By SR CareHive | srcarehive@gmail.com
+           Serechi | srcarehive@gmail.com
           </p>
         </div>
       </div>
@@ -2326,7 +2325,7 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
             </a>
           </div>
           <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-           Serechi By SR CareHive | srcarehive@gmail.com | Thank you for choosing us!
+           Serechi | srcarehive@gmail.com | Thank you for choosing us!
           </p>
         </div>
       </div>

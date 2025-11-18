@@ -255,7 +255,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
                   [
                     FAQItem(
                       question: 'What is Serechi?',
-                      answer: 'Serechi is a healthcare platform by SR CareHive Pvt. Ltd. that connects healthcare seekers with professional healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
+                      answer: 'Serechi is a healthcare platform that connects healthcare seekers with professional healthcare providers for home care services. We provide convenient, reliable, and personalized healthcare solutions right at your doorstep.',
                     ),
                     FAQItem(
                       question: 'How do I contact support?',

@@ -34,7 +34,7 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 // Subtitle
                 const Text(
-                  'Welcome to Serechi By SR CareHive',
+                  'Welcome to Serechi',
                   style: TextStyle(
                     fontSize: 20,
                     color: Color(0xFF2260FF),

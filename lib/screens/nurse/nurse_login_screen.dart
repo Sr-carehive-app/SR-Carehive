@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'appointments_manage_screen.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class NurseLoginScreen extends StatefulWidget {
   const NurseLoginScreen({Key? key}) : super(key: key);
@@ -78,58 +77,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
     setState(() => _isLoading = true);
     
-    // **TEMPORARY OTP BYPASS FOR GOOGLE PLAY REVIEWERS**
-    // Check if credentials match the ENV variables (for Google reviewers)
-    final bypassEmail = dotenv.env['NURSE_ADMIN_EMAIL']?.trim() ?? '';
-    final bypassPassword = dotenv.env['NURSE_ADMIN_PASSWORD']?.trim() ?? '';
     final enteredEmail = emailController.text.trim();
     final enteredPassword = passwordController.text.trim();
     
-    if (bypassEmail.isNotEmpty && 
-        bypassPassword.isNotEmpty &&
-        enteredEmail.toLowerCase() == bypassEmail.toLowerCase() && 
-        enteredPassword == bypassPassword) {
-      // Direct login without OTP for Google reviewers
-      print('🔓 OTP BYPASS: Google reviewer detected, logging in directly...');
-      
-      final ok = await NurseApiService.login(
-        email: enteredEmail,
-        password: enteredPassword,
-      );
-      
-      if (ok) {
-        // Bypass OTP verification completely - navigate directly to dashboard
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Login successful! (OTP bypassed for reviewer access)'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        
-        // Small delay for user to see the success message
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
-        );
-        return;
-      } else {
-        setState(() => _isLoading = false);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login failed! Please check credentials')),
-        );
-        return;
-      }
-    }
-    
-    // **NORMAL FLOW FOR ALL OTHER USERS**
+    // Normal login flow for all users with OTP verification
     final ok = await NurseApiService.login(
       email: enteredEmail,
       password: enteredPassword,
@@ -197,7 +148,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Welcome to Serechi by SR CareHive',
+          'Welcome to Serechi',
           style: TextStyle(
             fontSize: 20,
             color: Color(0xFF2260FF),

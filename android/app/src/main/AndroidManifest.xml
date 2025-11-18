@@ -27,7 +27,8 @@
             </intent-filter>
             
             <!-- Deep Link for OAuth Callback -->
-            <intent-filter android:autoVerify="true">
+            <!-- Removed android:autoVerify="true" - only needed for HTTPS links, not custom schemes -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>

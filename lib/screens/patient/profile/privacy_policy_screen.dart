@@ -37,7 +37,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     _p('SR Carehive Network is committed to protecting your privacy. This Privacy Policy describes how we collect, use, share, and protect your personal data when you use our website '),
                     const Text('srcarehive.com', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const Text(' and the Serechi app by SR CareHive Pvt. Ltd.'),
+                    const Text(' and the Serechi app'),
                     const SizedBox(height: 20),
                     _h('1. Information We Collect'),
                     _ul([
