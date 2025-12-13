@@ -219,7 +219,7 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const NurseAppointmentsManageScreen(),
+                      builder: (context) => const NurseAppointmentsManageScreen(isSuperAdmin: true),
                     ),
                   );
                 },

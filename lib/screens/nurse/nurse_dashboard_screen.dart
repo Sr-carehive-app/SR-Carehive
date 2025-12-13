@@ -128,7 +128,7 @@ class _NurseDashboardScreenState extends State<NurseDashboardScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
+                        MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen(isSuperAdmin: false)),
                       );
                     },
                     child: _buildSummaryCard(

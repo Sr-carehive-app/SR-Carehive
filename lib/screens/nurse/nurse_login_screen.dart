@@ -345,7 +345,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         // Regular approved provider goes to Appointments Management
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
+          MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen(isSuperAdmin: false)),
         );
       }
     } else {
