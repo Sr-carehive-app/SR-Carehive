@@ -25,6 +25,8 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
     setState(() => _isLoading = true);
 
     try {
+      print('🔍 Loading applications with filter: $_selectedFilter');
+      
       PostgrestFilterBuilder query = supabase
           .from('healthcare_providers')
           .select();
@@ -35,11 +37,23 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
 
       final response = await query.order('created_at', ascending: false);
       
+      print('✅ Applications loaded: ${response.length}');
+      print('✅ Response data: $response');
+      
+      if (response is List && response.isNotEmpty) {
+        print('📋 First application: ${response[0]}');
+        print('📋 Application status: ${response[0]['application_status']}');
+      }
+      
       setState(() {
         _applications = List<Map<String, dynamic>>.from(response);
         _isLoading = false;
       });
-    } catch (e) {
+      
+      print('✅ State updated - Applications count: ${_applications.length}');
+    } catch (e, stackTrace) {
+      print('❌ Error loading applications: $e');
+      print('❌ Stack trace: $stackTrace');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

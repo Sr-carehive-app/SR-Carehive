@@ -27,13 +27,16 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
       final supabase = Supabase.instance.client;
       
       print('🔍 Loading provider statistics...');
+      print('🔍 Supabase client initialized: ${supabase != null}');
       
       // Get total providers count
       final totalResponse = await supabase
           .from('healthcare_providers')
           .select('*');
       
+      print('✅ Total providers response: $totalResponse');
       print('✅ Total providers loaded: ${totalResponse.length}');
+      print('✅ Total providers data type: ${totalResponse.runtimeType}');
       
       // Get pending providers count
       final pendingResponse = await supabase
@@ -41,7 +44,14 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
           .select('*')
           .eq('application_status', 'pending');
       
+      print('✅ Pending providers response: $pendingResponse');
       print('✅ Pending providers loaded: ${pendingResponse.length}');
+      
+      // Debug: Print actual data
+      if (totalResponse is List && totalResponse.isNotEmpty) {
+        print('📋 First provider record: ${totalResponse[0]}');
+        print('📋 Application status field: ${totalResponse[0]['application_status']}');
+      }
       
       if (mounted) {
         setState(() {
@@ -49,9 +59,11 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
           _pendingProvidersCount = pendingResponse.length;
           _isLoadingStats = false;
         });
+        print('✅ State updated - Total: $_totalProvidersCount, Pending: $_pendingProvidersCount');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Error loading statistics: $e');
+      print('❌ Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isLoadingStats = false;
