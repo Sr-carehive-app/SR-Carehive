@@ -739,7 +739,7 @@ app.post('/api/nurse/login', async (req, res) => {
 // Send approval email to provider
 app.post('/api/provider/send-approval-email', async (req, res) => {
   try {
-    const { userEmail, userName, professionalRole } = req.body || {};
+    const { userEmail, userName, professionalRole, adminComments } = req.body || {};
     if (!userEmail || !userName) {
       return res.status(400).json({ error: 'userEmail and userName required' });
     }
@@ -747,6 +747,13 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
     if (!mailer) {
       return res.status(500).json({ error: 'Email service not configured' });
     }
+
+    const commentsSection = adminComments 
+      ? `<div style="background: #e7f3ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+           <h3 style="margin-top: 0; color: #2260FF;">📝 Message from Admin:</h3>
+           <p style="margin: 0; color: #333; line-height: 1.6;">${adminComments}</p>
+         </div>`
+      : '';
 
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -759,6 +766,8 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             We are pleased to inform you that your application for <strong>${professionalRole}</strong> has been <span style="color: #28a745; font-weight: bold;">APPROVED</span>! 
           </p>
+          
+          ${commentsSection}
           
           <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #2260FF;">Your Login Credentials:</h3>

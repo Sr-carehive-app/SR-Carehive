@@ -72,6 +72,7 @@ class ProviderEmailService {
     required String userEmail,
     required String userName,
     required String professionalRole,
+    String? adminComments,
   }) async {
     try {
       final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
@@ -83,6 +84,7 @@ class ProviderEmailService {
           'userEmail': userEmail,
           'userName': userName,
           'professionalRole': professionalRole,
+          'adminComments': adminComments,
         }),
       );
       

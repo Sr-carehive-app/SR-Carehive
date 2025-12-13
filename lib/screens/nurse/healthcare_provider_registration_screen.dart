@@ -977,18 +977,22 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
                             strokeWidth: 2.5,
                           ),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.send_rounded, color: Colors.white, size: 22),
-                            SizedBox(width: 12),
-                            Text(
-                              'Apply to Join SR CareHive Network',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 0.3,
+                            const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                'Apply to Join SR CareHive Network',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.3,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -1078,13 +1082,15 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],

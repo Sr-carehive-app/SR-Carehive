@@ -18,14 +18,16 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
   final supabase = Supabase.instance.client;
   bool _isProcessing = false;
   final TextEditingController _reasonController = TextEditingController();
+  final TextEditingController _commentsController = TextEditingController();
 
   @override
   void dispose() {
     _reasonController.dispose();
+    _commentsController.dispose();
     super.dispose();
   }
 
-  Future<void> _updateApplicationStatus(String status, {String? reason}) async {
+  Future<void> _updateApplicationStatus(String status, {String? reason, String? comments}) async {
     setState(() => _isProcessing = true);
 
     try {
@@ -58,6 +60,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           userEmail: userEmail,
           userName: userName,
           professionalRole: professionalRole,
+          adminComments: comments,
         ).catchError((e) {
           // Silent error - don't expose email details
           return false;
@@ -102,26 +105,64 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 12),
-            Text('Approve Application'),
+            const Icon(Icons.check_circle, color: Colors.green, size: 28),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Approve Application',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to approve this healthcare provider application? They will be able to login and start providing services.',
-          style: TextStyle(fontSize: 15),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Are you sure you want to approve this healthcare provider application? They will be able to login and start providing services.',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Admin Comments (Optional):',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF2260FF)),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _commentsController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Add any comments or welcome message for the provider...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              _commentsController.clear();
+              Navigator.pop(context);
+            },
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
+              final comments = _commentsController.text.trim();
               Navigator.pop(context);
-              _updateApplicationStatus('approved');
+              _updateApplicationStatus('approved', comments: comments);
+              _commentsController.clear();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -140,11 +181,16 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.cancel, color: Colors.red, size: 28),
-            SizedBox(width: 12),
-            Text('Reject Application'),
+            const Icon(Icons.cancel, color: Colors.red, size: 28),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Reject Application',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: Column(
