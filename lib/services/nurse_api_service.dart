@@ -125,12 +125,17 @@ class NurseApiService {
         
         // Check if login was successful (approved user)
         if (json['success'] == true) {
-          // Normal approved login
+          // Normal approved login or super admin
           final token = json['token'] as String?;
+          final isSuperAdmin = json['isSuperAdmin'] == true;
+          
           if (token != null) {
             await _saveToken(token);
             print('✅ Login successful - Token saved');
-            return {'success': true};
+            return {
+              'success': true,
+              'isSuperAdmin': isSuperAdmin,
+            };
           } else {
             print('⚠️ Login success but no token received');
             return {'success': false, 'error': 'Authentication error. Please try again.'};

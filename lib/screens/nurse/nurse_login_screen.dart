@@ -21,6 +21,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   int _resendCooldown = 0;
   Timer? _resendTimer;
   bool _otpSent = false; // Flag to prevent duplicate OTP sends
+  bool _isSuperAdmin = false; // Track if logged in as super admin
 
   @override
   void initState() {
@@ -132,6 +133,9 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     // Check if login was successful (approved user)
     if (result['success'] == true) {
       print('✅ Login successful - Requesting OTP');
+      
+      // Store super admin flag
+      _isSuperAdmin = result['isSuperAdmin'] == true;
       
       // Request OTP only once
       if (!_otpSent) {
@@ -327,10 +331,20 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final result = await NurseApiService.verifyOtp(
       email: emailController.text.trim(),
       otp: _otpController.text.trim(),
-    );
-    setState(() => _isOtpLoading = false);
-    if (result == true) {
-      Navigator.pushReplacement(
+    );// Navigate based on user type
+      if (_isSuperAdmin) {
+        // Super admin goes to Admin Dashboard
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
+        );
+      } else {
+        // Regular approved provider goes to Appointments Management
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
+        );
+      }vigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
       );

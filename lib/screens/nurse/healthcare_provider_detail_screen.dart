@@ -125,9 +125,10 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Approve'),
+            child: const Text('Approve', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
