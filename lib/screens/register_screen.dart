@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'nurse/nurse_login_screen.dart';
+import 'nurse/healthcare_provider_selection_screen.dart';
 import 'patient/healthcare_seeker_selection_screen.dart';
 
 class RegisterScreen extends StatelessWidget {
@@ -81,7 +81,7 @@ class RegisterScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const NurseLoginScreen()),
+                        MaterialPageRoute(builder: (_) => const HealthcareProviderSelectionScreen()),
                       );
                     },
                     style: ElevatedButton.styleFrom(

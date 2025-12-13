@@ -627,18 +627,194 @@ function isAuthed(req) {
   return true;
 }
 
-app.post('/api/nurse/login', (req, res) => {
+app.post('/api/nurse/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    
+    // Check if super admin credentials
     if (!NURSE_EMAIL || !NURSE_PASSWORD) return res.status(500).json({ error: 'Server healthcare provider creds not configured' });
     if (email.toLowerCase() === NURSE_EMAIL && password === NURSE_PASSWORD) {
       const token = createSession();
-      return res.json({ success: true, token });
+      return res.json({ success: true, token, isSuperAdmin: true });
     }
-    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    
+    // Check healthcare_providers table for regular providers
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+    
+    const { data: providers, error } = await supabase
+      .from('healthcare_providers')
+      .select('*')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error fetching provider:', error);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!providers) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+    
+    // Verify password (assuming hashed password stored in DB)
+    const crypto = require('crypto');
+    const hashedInputPassword = crypto.createHash('sha256').update(password).digest('hex');
+    
+    if (providers.password !== hashedInputPassword) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+    
+    // Check application status
+    const status = providers.application_status || 'pending';
+    
+    if (status === 'rejected') {
+      return res.json({ 
+        rejected: true, 
+        providerData: providers 
+      });
+    }
+    
+    if (status === 'pending' || status === 'under_review' || status === 'on_hold') {
+      return res.json({ 
+        pending: true, 
+        providerData: providers 
+      });
+    }
+    
+    if (status === 'approved') {
+      const token = createSession();
+      return res.json({ success: true, token, providerData: providers });
+    }
+    
+    return res.status(401).json({ success: false, error: 'Invalid application status' });
+    
   } catch (e) {
+    console.error('Login error:', e);
     res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// Send approval email to provider
+app.post('/api/provider/send-approval-email', async (req, res) => {
+  try {
+    const { userEmail, userName, professionalRole } = req.body || {};
+    if (!userEmail || !userName) {
+      return res.status(400).json({ error: 'userEmail and userName required' });
+    }
+
+    if (!mailer) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1A4FCC 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🎉 Congratulations!</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${userName}</strong>,</p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            We are pleased to inform you that your application for <strong>${professionalRole}</strong> has been <span style="color: #28a745; font-weight: bold;">APPROVED</span>! 
+          </p>
+          
+          <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #2260FF;">Your Login Credentials:</h3>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${userEmail}</p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> Use the password you set during registration</p>
+          </div>
+
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            You can now login to the <strong>Healthcare Provider Dashboard</strong> using your registered email and password. After entering your credentials, you will receive an OTP for verification.
+          </p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://srcarehive.com/provider-login" style="background: #2260FF; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Dashboard</a>
+          </div>
+
+          <p style="font-size: 14px; color: #666; line-height: 1.6;">
+            Welcome to SR CareHive! We look forward to working with you to provide quality healthcare services.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="font-size: 13px; color: #999;">
+            For any questions or support, contact us at <a href="mailto:contact@srcarehive.com" style="color: #2260FF;">contact@srcarehive.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: userEmail,
+      subject: '✅ Your SR CareHive Application Has Been Approved!',
+      html: emailHtml
+    });
+
+    res.json({ success: true, message: 'Approval email sent' });
+  } catch (e) {
+    console.error('Error sending approval email:', e);
+    res.status(500).json({ error: 'Failed to send approval email' });
+  }
+});
+
+// Send rejection email to provider
+app.post('/api/provider/send-rejection-email', async (req, res) => {
+  try {
+    const { userEmail, userName, rejectionReason } = req.body || {};
+    if (!userEmail || !userName) {
+      return res.status(400).json({ error: 'userEmail and userName required' });
+    }
+
+    if (!mailer) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const reasonSection = rejectionReason 
+      ? `<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+           <h3 style="margin-top: 0; color: #856404;">Reason for Rejection:</h3>
+           <p style="margin: 0; color: #856404;">${rejectionReason}</p>
+         </div>`
+      : '';
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #dc3545; padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Application Status Update</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${userName}</strong>,</p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Thank you for your interest in joining SR CareHive. After careful review of your application, we regret to inform you that we are unable to approve your application at this time.
+          </p>
+
+          ${reasonSection}
+
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            We appreciate the time and effort you put into your application. If you believe this was an error or would like to reapply in the future, please don't hesitate to contact our support team.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="font-size: 13px; color: #999;">
+            For any questions or support, contact us at <a href="mailto:contact@srcarehive.com" style="color: #dc3545;">contact@srcarehive.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: userEmail,
+      subject: 'SR CareHive Application Status Update',
+      html: emailHtml
+    });
+
+    res.json({ success: true, message: 'Rejection email sent' });
+  } catch (e) {
+    console.error('Error sending rejection email:', e);
+    res.status(500).json({ error: 'Failed to send rejection email' });
   }
 });
 

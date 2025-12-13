@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
+import 'package:care12/screens/nurse/provider_application_status_screen.dart';
+import 'package:care12/screens/nurse/admin_dashboard_selection_screen.dart';
 import 'appointments_manage_screen.dart';
 
 class NurseLoginScreen extends StatefulWidget {
@@ -80,14 +82,47 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final enteredEmail = emailController.text.trim();
     final enteredPassword = passwordController.text.trim();
     
-    // Normal login flow for all users with OTP verification
-    final ok = await NurseApiService.login(
+    // Login with status check
+    final result = await NurseApiService.login(
       email: enteredEmail,
       password: enteredPassword,
     );
     setState(() => _isLoading = false);
     
-    if (ok) {
+    // Check if application was rejected
+    if (result['rejected'] == true) {
+      if (!mounted) return;
+      
+      // Navigate to rejection status screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProviderApplicationStatusScreen(
+            providerData: result['providerData'] as Map<String, dynamic>? ?? {},
+          ),
+        ),
+      );
+      return;
+    }
+    
+    // Check if application is still pending
+    if (result['pending'] == true) {
+      if (!mounted) return;
+      
+      // Navigate to application status screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProviderApplicationStatusScreen(
+            providerData: result['providerData'] as Map<String, dynamic>? ?? {},
+          ),
+        ),
+      );
+      return;
+    }
+    
+    // Check if login was successful (approved user)
+    if (result['success'] == true) {
       // Request OTP only once
       if (!_otpSent) {
         setState(() {
@@ -113,6 +148,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         }
       }
     } else {
+      // Login failed
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Login failed! Please check credentials')),
       );
@@ -139,7 +175,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       children: [
         const SizedBox(height: 20),
         const Text(
-          'Hello Healthcare Provider!',
+          'Welcome Back!',
           style: TextStyle(
             fontSize: 28,
             color: Color(0xFF2260FF),
@@ -148,7 +184,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'Welcome to Serechi',
+          'Log in below to manage your appointments',
           style: TextStyle(
             fontSize: 20,
             color: Color(0xFF2260FF),
@@ -269,7 +305,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     if (result == true) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
+        MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
       );
     } else {
       setState(() => _otpError = result is String ? result : 'Invalid OTP');

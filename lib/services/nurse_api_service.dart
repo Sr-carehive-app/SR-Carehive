@@ -82,21 +82,49 @@ class NurseApiService {
   // Check if user is authenticated
   static bool get isAuthenticated => _token != null;
 
-  static Future<bool> login({required String email, required String password}) async {
+  /// Login method that checks application_status
+  /// Returns: 
+  /// - {'success': true} if approved and login successful
+  /// - {'pending': true, 'providerData': {...}} if application is pending/under_review/on_hold
+  /// - {'rejected': true, 'providerData': {...}} if application is rejected
+  /// - {'success': false} if credentials are wrong or other error
+  static Future<Map<String, dynamic>> login({required String email, required String password}) async {
     final resp = await http.post(
       Uri.parse('$_base/api/nurse/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'password': password}),
     );
+    
     if (resp.statusCode == 200) {
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      
+      // Check if application is rejected
+      if (json['rejected'] == true) {
+        print('❌ Application has been rejected');
+        return {
+          'rejected': true,
+          'providerData': json['providerData'] ?? {},
+        };
+      }
+      
+      // Check if application is pending
+      if (json['pending'] == true) {
+        print('⏳ Application still under review');
+        return {
+          'pending': true,
+          'providerData': json['providerData'] ?? {},
+        };
+      }
+      
+      // Normal approved login
       final token = json['token'] as String?;
       if (token != null) {
         await _saveToken(token);
-        return true;
+        return {'success': true};
       }
     }
-    return false;
+    
+    return {'success': false};
   }
 
   static Map<String, String> _authHeaders() => {
