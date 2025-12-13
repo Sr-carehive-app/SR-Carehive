@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
 import 'package:care12/screens/nurse/healthcare_provider_applications_screen.dart';
+import 'package:care12/services/nurse_api_service.dart';
 
 class AdminDashboardSelectionScreen extends StatefulWidget {
   const AdminDashboardSelectionScreen({Key? key}) : super(key: key);
