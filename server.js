@@ -694,14 +694,7 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.json({ 
         success: false,
         rejected: true, 
-        providerData: {
-          id: provider.id,
-          full_name: provider.full_name,
-          email: provider.email,
-          application_status: provider.application_status,
-          rejection_reason: provider.rejection_reason,
-          created_at: provider.created_at
-        }
+        providerData: provider  // ✅ Send COMPLETE provider data
       });
     }
     
@@ -711,15 +704,7 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.json({ 
         success: false,
         pending: true, 
-        providerData: {
-          id: provider.id,
-          full_name: provider.full_name,
-          email: provider.email,
-          application_status: provider.application_status,
-          professional_role: provider.professional_role,
-          city: provider.city,
-          created_at: provider.created_at
-        }
+        providerData: provider  // ✅ Send COMPLETE provider data
       });
     }
     
