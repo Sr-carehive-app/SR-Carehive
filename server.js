@@ -630,12 +630,15 @@ function isAuthed(req) {
 app.post('/api/nurse/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
+    console.log('🔐 Healthcare Provider Login Attempt:', { email, hasPassword: !!password });
+    
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     
     // Check if super admin credentials
     if (!NURSE_EMAIL || !NURSE_PASSWORD) return res.status(500).json({ error: 'Server healthcare provider creds not configured' });
     if (email.toLowerCase() === NURSE_EMAIL && password === NURSE_PASSWORD) {
       const token = createSession();
+      console.log('✅ Super Admin Login Successful');
       return res.json({ success: true, token, isSuperAdmin: true });
     }
     
@@ -649,13 +652,21 @@ app.post('/api/nurse/login', async (req, res) => {
       .maybeSingle();
     
     if (error) {
-      console.error('Error fetching provider:', error);
+      console.error('❌ Error fetching provider:', error);
       return res.status(500).json({ error: 'Database error' });
     }
     
     if (!providers) {
+      console.log('❌ Provider not found in database');
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
+    
+    console.log('📋 Provider Found:', {
+      email: providers.email,
+      status: providers.application_status,
+      hasPasswordHash: !!providers.password_hash,
+      hasPassword: !!providers.password
+    });
     
     // Verify password (assuming hashed password stored in DB)
     const crypto = require('crypto');
@@ -663,14 +674,25 @@ app.post('/api/nurse/login', async (req, res) => {
     
     // Check password_hash field (not 'password')
     const storedPasswordHash = providers.password_hash || providers.password;
+    
+    console.log('🔑 Password Verification:', {
+      hasStoredHash: !!storedPasswordHash,
+      inputHashLength: hashedInputPassword.length,
+      storedHashLength: storedPasswordHash ? storedPasswordHash.length : 0,
+      match: storedPasswordHash === hashedInputPassword
+    });
+    
     if (!storedPasswordHash || storedPasswordHash !== hashedInputPassword) {
+      console.log('❌ Password mismatch');
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
     
     // Check application status
     const status = providers.application_status || 'pending';
+    console.log('✅ Password Verified. Application Status:', status);
     
     if (status === 'rejected') {
+      console.log('❌ Application is REJECTED');
       return res.json({ 
         rejected: true, 
         providerData: providers 
@@ -678,6 +700,7 @@ app.post('/api/nurse/login', async (req, res) => {
     }
     
     if (status === 'pending' || status === 'under_review' || status === 'on_hold') {
+      console.log('⏳ Application is PENDING/UNDER_REVIEW');
       return res.json({ 
         pending: true, 
         providerData: providers 
@@ -685,14 +708,16 @@ app.post('/api/nurse/login', async (req, res) => {
     }
     
     if (status === 'approved') {
+      console.log('✅ Application is APPROVED - Creating session');
       const token = createSession();
       return res.json({ success: true, token, providerData: providers });
     }
     
+    console.log('⚠️ Unknown application status:', status);
     return res.status(401).json({ success: false, error: 'Invalid application status' });
     
   } catch (e) {
-    console.error('Login error:', e);
+    console.error('❌ Login error:', e);
     res.status(500).json({ error: 'Internal error' });
   }
 });
