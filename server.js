@@ -750,7 +750,7 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
 
     const commentsSection = adminComments 
       ? `<div style="background: #e7f3ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
-           <h3 style="margin-top: 0; color: #2260FF;">📝 Message from Admin:</h3>
+           <h3 style="margin-top: 0; color: #2260FF;">Message from Hiring Team:</h3>
            <p style="margin: 0; color: #333; line-height: 1.6;">${adminComments}</p>
          </div>`
       : '';

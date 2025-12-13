@@ -38,6 +38,9 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
 
       if (status == 'approved') {
         updateData['approved_at'] = DateTime.now().toIso8601String();
+        if (comments != null && comments.isNotEmpty) {
+          updateData['approval_comments'] = comments;
+        }
       }
 
       if (reason != null && reason.isNotEmpty) {
@@ -354,6 +357,84 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
               if (widget.applicationData['rejection_reason'] != null)
                 _buildDetailRow('Rejection Reason', widget.applicationData['rejection_reason']),
             ]),
+
+            // Admin Comments Section (if approved with comments)
+            if (widget.applicationData['approval_comments'] != null && 
+                widget.applicationData['approval_comments'].toString().trim().isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF2260FF).withOpacity(0.1),
+                          const Color(0xFF2260FF).withOpacity(0.05),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF2260FF).withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2260FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.comment,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Flexible(
+                              child: Text(
+                                'Admin Comments',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2260FF),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            widget.applicationData['approval_comments'].toString(),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1A1A1A),
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
 
             const SizedBox(height: 32),
 
