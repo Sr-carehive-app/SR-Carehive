@@ -59,7 +59,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           userName: userName,
           professionalRole: professionalRole,
         ).catchError((e) {
-          print('Failed to send approval email: $e');
+          // Silent error - don't expose email details
           return false;
         });
       } else if (status == 'rejected') {
@@ -69,7 +69,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           userName: userName,
           rejectionReason: reason,
         ).catchError((e) {
-          print('Failed to send rejection email: $e');
+          // Silent error - don't expose email details
           return false;
         });
       }
@@ -207,6 +207,8 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
   @override
   Widget build(BuildContext context) {
     final status = widget.applicationData['application_status'] ?? 'pending';
+    final isApproved = status == 'approved';
+    final isRejected = status == 'rejected';
     final isPending = status == 'pending' || status == 'under_review';
 
     return Scaffold(
@@ -308,41 +310,59 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
 
             const SizedBox(height: 32),
 
-            // Action Buttons
-            if (isPending && !_isProcessing)
+            // Action Buttons - Always show both, disable based on status
+            if (!_isProcessing)
               Column(
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _showApproveDialog,
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text('Approve Application'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // Approve Button
+                  Opacity(
+                    opacity: isApproved ? 0.5 : 1.0,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isApproved ? null : _showApproveDialog,
+                        icon: Icon(
+                          isApproved ? Icons.check_circle : Icons.check_circle_outline,
                         ),
-                        elevation: 0,
+                        label: Text(isApproved ? 'Already Approved' : 'Approve Application'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.green.withOpacity(0.6),
+                          disabledForegroundColor: Colors.white.withOpacity(0.7),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: isApproved ? 0 : 2,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _showRejectDialog,
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Reject Application'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // Reject Button
+                  Opacity(
+                    opacity: isRejected ? 0.5 : 1.0,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: isRejected ? null : _showRejectDialog,
+                        icon: Icon(
+                          isRejected ? Icons.cancel : Icons.cancel_outlined,
                         ),
-                        side: const BorderSide(color: Colors.red, width: 2),
+                        label: Text(isRejected ? 'Already Rejected' : 'Reject Application'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          disabledForegroundColor: Colors.red.withOpacity(0.5),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(
+                            color: isRejected ? Colors.red.withOpacity(0.3) : Colors.red,
+                            width: 2,
+                          ),
+                        ),
                       ),
                     ),
                   ),

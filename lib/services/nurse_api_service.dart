@@ -90,7 +90,7 @@ class NurseApiService {
   /// - {'success': false, 'error': 'message'} if credentials are wrong or other error
   static Future<Map<String, dynamic>> login({required String email, required String password}) async {
     try {
-      print('🔐 Attempting login for: $email');
+      print('🔐 Login attempt');
       
       final resp = await http.post(
         Uri.parse('$_base/api/nurse/login'),
@@ -98,8 +98,7 @@ class NurseApiService {
         body: jsonEncode({'email': email, 'password': password}),
       );
       
-      print('📡 Login response status: ${resp.statusCode}');
-      print('📡 Login response body: ${resp.body}');
+      print('📡 Response received: ${resp.statusCode}');
       
       if (resp.statusCode == 200) {
         final json = jsonDecode(resp.body) as Map<String, dynamic>;

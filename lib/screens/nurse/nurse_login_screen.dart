@@ -85,7 +85,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final enteredEmail = emailController.text.trim();
     final enteredPassword = passwordController.text.trim();
     
-    print('🔐 Attempting login with email: $enteredEmail');
+    print('🔐 Attempting login...');
     
     // Login with status check
     final result = await NurseApiService.login(
@@ -97,7 +97,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     
     if (!mounted) return;
     
-    print('📋 Login result: $result');
+    print('📋 Login completed');
     
     // Check if application was rejected
     if (result['rejected'] == true) {
