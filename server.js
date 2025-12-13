@@ -661,7 +661,9 @@ app.post('/api/nurse/login', async (req, res) => {
     const crypto = require('crypto');
     const hashedInputPassword = crypto.createHash('sha256').update(password).digest('hex');
     
-    if (providers.password !== hashedInputPassword) {
+    // Check password_hash field (not 'password')
+    const storedPasswordHash = providers.password_hash || providers.password;
+    if (!storedPasswordHash || storedPasswordHash !== hashedInputPassword) {
       return res.status(401).json({ success: false, error: 'Invalid credentials' });
     }
     

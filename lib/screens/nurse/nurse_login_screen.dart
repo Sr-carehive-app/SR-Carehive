@@ -148,9 +148,14 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         }
       }
     } else {
-      // Login failed
+      // Login failed - Invalid credentials (user doesn't exist or wrong password)
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed! Please check credentials')),
+        const SnackBar(
+          content: Text('Invalid credentials! Email or password is incorrect.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
       );
     }
   }
