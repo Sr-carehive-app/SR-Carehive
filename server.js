@@ -632,93 +632,122 @@ app.post('/api/nurse/login', async (req, res) => {
     const { email, password } = req.body || {};
     console.log('🔐 Healthcare Provider Login Attempt:', { email, hasPassword: !!password });
     
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!email || !password) {
+      console.log('❌ Missing email or password');
+      return res.status(400).json({ success: false, error: 'Email and password required' });
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
     
     // Check if super admin credentials
-    if (!NURSE_EMAIL || !NURSE_PASSWORD) return res.status(500).json({ error: 'Server healthcare provider creds not configured' });
-    if (email.toLowerCase() === NURSE_EMAIL && password === NURSE_PASSWORD) {
+    if (NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
       const token = createSession();
       console.log('✅ Super Admin Login Successful');
       return res.json({ success: true, token, isSuperAdmin: true });
     }
     
     // Check healthcare_providers table for regular providers
-    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+    if (!supabase) {
+      console.error('❌ Supabase not configured');
+      return res.status(500).json({ success: false, error: 'Database not configured' });
+    }
     
-    const { data: providers, error } = await supabase
+    const { data: provider, error } = await supabase
       .from('healthcare_providers')
       .select('*')
-      .eq('email', email.toLowerCase().trim())
+      .eq('email', normalizedEmail)
       .maybeSingle();
     
     if (error) {
-      console.error('❌ Error fetching provider:', error);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('❌ Error fetching provider:', error.message);
+      return res.status(500).json({ success: false, error: 'Database error' });
     }
     
-    if (!providers) {
-      console.log('❌ Provider not found in database');
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!provider) {
+      console.log('❌ Provider not found');
+      return res.status(401).json({ success: false, error: 'Invalid credentials! Email or password is incorrect.' });
     }
     
-    console.log('📋 Provider Found:', {
-      email: providers.email,
-      status: providers.application_status,
-      hasPasswordHash: !!providers.password_hash,
-      hasPassword: !!providers.password
-    });
+    console.log('📋 Provider found - verifying credentials');
     
-    // Verify password (assuming hashed password stored in DB)
-    const crypto = require('crypto');
+    // Verify password (hash the input and compare)
     const hashedInputPassword = crypto.createHash('sha256').update(password).digest('hex');
+    const storedPasswordHash = provider.password_hash;
     
-    // Check password_hash field (not 'password')
-    const storedPasswordHash = providers.password_hash || providers.password;
-    
-    console.log('🔑 Password Verification:', {
-      hasStoredHash: !!storedPasswordHash,
-      inputHashLength: hashedInputPassword.length,
-      storedHashLength: storedPasswordHash ? storedPasswordHash.length : 0,
-      match: storedPasswordHash === hashedInputPassword
-    });
-    
-    if (!storedPasswordHash || storedPasswordHash !== hashedInputPassword) {
-      console.log('❌ Password mismatch');
-      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!storedPasswordHash) {
+      console.error('❌ No password hash stored');
+      return res.status(500).json({ success: false, error: 'Account configuration error. Please contact support.' });
     }
     
-    // Check application status
-    const status = providers.application_status || 'pending';
+    if (storedPasswordHash !== hashedInputPassword) {
+      console.log('❌ Password mismatch');
+      return res.status(401).json({ success: false, error: 'Invalid credentials! Email or password is incorrect.' });
+    }
+    
+    // Password is correct - check application status
+    const status = provider.application_status || 'pending';
     console.log('✅ Password Verified. Application Status:', status);
     
+    // Status: REJECTED
     if (status === 'rejected') {
       console.log('❌ Application is REJECTED');
       return res.json({ 
+        success: false,
         rejected: true, 
-        providerData: providers 
+        providerData: {
+          id: provider.id,
+          full_name: provider.full_name,
+          email: provider.email,
+          application_status: provider.application_status,
+          rejection_reason: provider.rejection_reason,
+          created_at: provider.created_at
+        }
       });
     }
     
+    // Status: PENDING, UNDER_REVIEW, ON_HOLD
     if (status === 'pending' || status === 'under_review' || status === 'on_hold') {
-      console.log('⏳ Application is PENDING/UNDER_REVIEW');
+      console.log('⏳ Application is PENDING/UNDER_REVIEW/ON_HOLD');
       return res.json({ 
+        success: false,
         pending: true, 
-        providerData: providers 
+        providerData: {
+          id: provider.id,
+          full_name: provider.full_name,
+          email: provider.email,
+          application_status: provider.application_status,
+          professional_role: provider.professional_role,
+          city: provider.city,
+          created_at: provider.created_at
+        }
       });
     }
     
+    // Status: APPROVED
     if (status === 'approved') {
       console.log('✅ Application is APPROVED - Creating session');
       const token = createSession();
-      return res.json({ success: true, token, providerData: providers });
+      return res.json({ 
+        success: true, 
+        token, 
+        providerData: {
+          id: provider.id,
+          full_name: provider.full_name,
+          email: provider.email,
+          application_status: provider.application_status,
+          professional_role: provider.professional_role,
+          city: provider.city
+        }
+      });
     }
     
+    // Unknown status
     console.log('⚠️ Unknown application status:', status);
-    return res.status(401).json({ success: false, error: 'Invalid application status' });
+    return res.status(500).json({ success: false, error: 'Invalid application status. Please contact support.' });
     
   } catch (e) {
-    console.error('❌ Login error:', e);
-    res.status(500).json({ error: 'Internal error' });
+    console.error('❌ Login error:', e.message, e.stack);
+    return res.status(500).json({ success: false, error: 'Internal server error. Please try again later.' });
   }
 });
 

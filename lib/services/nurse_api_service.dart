@@ -87,44 +87,94 @@ class NurseApiService {
   /// - {'success': true} if approved and login successful
   /// - {'pending': true, 'providerData': {...}} if application is pending/under_review/on_hold
   /// - {'rejected': true, 'providerData': {...}} if application is rejected
-  /// - {'success': false} if credentials are wrong or other error
+  /// - {'success': false, 'error': 'message'} if credentials are wrong or other error
   static Future<Map<String, dynamic>> login({required String email, required String password}) async {
-    final resp = await http.post(
-      Uri.parse('$_base/api/nurse/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    
-    if (resp.statusCode == 200) {
-      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+    try {
+      print('🔐 Attempting login for: $email');
       
-      // Check if application is rejected
-      if (json['rejected'] == true) {
-        print('❌ Application has been rejected');
-        return {
-          'rejected': true,
-          'providerData': json['providerData'] ?? {},
-        };
-      }
+      final resp = await http.post(
+        Uri.parse('$_base/api/nurse/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
       
-      // Check if application is pending
-      if (json['pending'] == true) {
-        print('⏳ Application still under review');
-        return {
-          'pending': true,
-          'providerData': json['providerData'] ?? {},
-        };
-      }
+      print('📡 Login response status: ${resp.statusCode}');
+      print('📡 Login response body: ${resp.body}');
       
-      // Normal approved login
-      final token = json['token'] as String?;
-      if (token != null) {
-        await _saveToken(token);
-        return {'success': true};
+      if (resp.statusCode == 200) {
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        
+        // Check if application is rejected
+        if (json['rejected'] == true) {
+          print('❌ Application has been rejected');
+          return {
+            'rejected': true,
+            'success': false,
+            'providerData': json['providerData'] ?? {},
+          };
+        }
+        
+        // Check if application is pending
+        if (json['pending'] == true) {
+          print('⏳ Application still under review');
+          return {
+            'pending': true,
+            'success': false,
+            'providerData': json['providerData'] ?? {},
+          };
+        }
+        
+        // Check if login was successful (approved user)
+        if (json['success'] == true) {
+          // Normal approved login
+          final token = json['token'] as String?;
+          if (token != null) {
+            await _saveToken(token);
+            print('✅ Login successful - Token saved');
+            return {'success': true};
+          } else {
+            print('⚠️ Login success but no token received');
+            return {'success': false, 'error': 'Authentication error. Please try again.'};
+          }
+        }
+        
+        // If success is explicitly false, return the error
+        if (json['success'] == false) {
+          final errorMsg = json['error'] as String? ?? 'Login failed';
+          print('❌ Login failed: $errorMsg');
+          return {'success': false, 'error': errorMsg};
+        }
+        
+        // Unknown response format
+        print('⚠️ Unknown response format');
+        return {'success': false, 'error': 'Unexpected server response'};
+      } else if (resp.statusCode == 401) {
+        // Unauthorized - invalid credentials
+        final json = resp.body.isNotEmpty ? jsonDecode(resp.body) as Map<String, dynamic> : {};
+        final errorMsg = json['error'] as String? ?? 'Invalid credentials! Email or password is incorrect.';
+        print('❌ Unauthorized: $errorMsg');
+        return {'success': false, 'error': errorMsg};
+      } else if (resp.statusCode == 400) {
+        // Bad request
+        final json = resp.body.isNotEmpty ? jsonDecode(resp.body) as Map<String, dynamic> : {};
+        final errorMsg = json['error'] as String? ?? 'Invalid request';
+        print('❌ Bad request: $errorMsg');
+        return {'success': false, 'error': errorMsg};
+      } else if (resp.statusCode == 500) {
+        // Server error
+        final json = resp.body.isNotEmpty ? jsonDecode(resp.body) as Map<String, dynamic> : {};
+        final errorMsg = json['error'] as String? ?? 'Server error. Please try again later.';
+        print('❌ Server error: $errorMsg');
+        return {'success': false, 'error': errorMsg};
+      } else {
+        // Other errors
+        print('❌ Unexpected status code: ${resp.statusCode}');
+        return {'success': false, 'error': 'Network error. Please try again.'};
       }
+    } catch (e) {
+      print('❌ Exception during login: $e');
+      return {'success': false, 'error': 'Connection error. Please check your internet and try again.'};
     }
-    
-    return {'success': false};
   }
 
   static Map<String, String> _authHeaders() => {

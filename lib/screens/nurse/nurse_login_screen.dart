@@ -69,7 +69,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   Future<void> _handleLogin() async {
     if (emailController.text.isEmpty || passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+        const SnackBar(
+          content: Text('Please enter email and password'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -82,18 +85,24 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final enteredEmail = emailController.text.trim();
     final enteredPassword = passwordController.text.trim();
     
+    print('🔐 Attempting login with email: $enteredEmail');
+    
     // Login with status check
     final result = await NurseApiService.login(
       email: enteredEmail,
       password: enteredPassword,
     );
+    
     setState(() => _isLoading = false);
+    
+    if (!mounted) return;
+    
+    print('📋 Login result: $result');
     
     // Check if application was rejected
     if (result['rejected'] == true) {
-      if (!mounted) return;
+      print('❌ Navigating to rejection status screen');
       
-      // Navigate to rejection status screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -107,9 +116,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     
     // Check if application is still pending
     if (result['pending'] == true) {
-      if (!mounted) return;
+      print('⏳ Navigating to pending status screen');
       
-      // Navigate to application status screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -123,6 +131,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     
     // Check if login was successful (approved user)
     if (result['success'] == true) {
+      print('✅ Login successful - Requesting OTP');
+      
       // Request OTP only once
       if (!_otpSent) {
         setState(() {
@@ -134,27 +144,39 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         
         try {
           await NurseApiService.sendOtp(email: enteredEmail);
+          print('✅ OTP sent successfully');
         } catch (e) {
+          print('❌ Failed to send OTP: $e');
           // Handle rate limiting error
           if (e.toString().contains('429') || e.toString().contains('wait')) {
-            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Too many requests. Please wait 2 minutes before trying again.'),
+                backgroundColor: Colors.orange,
                 duration: Duration(seconds: 5),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to send OTP: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
               ),
             );
           }
         }
       }
     } else {
-      // Login failed - Invalid credentials (user doesn't exist or wrong password)
-      if (!mounted) return;
+      // Login failed - Show error message from server
+      final errorMsg = result['error'] as String? ?? 'Invalid credentials! Email or password is incorrect.';
+      print('❌ Login failed: $errorMsg');
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid credentials! Email or password is incorrect.'),
+        SnackBar(
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
