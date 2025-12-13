@@ -922,41 +922,41 @@ app.post('/api/provider/send-registration-notification', async (req, res) => {
           
           <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #2260FF;">📋 Basic Information</h3>
-            <p style="margin: 5px 0;"><strong>Full Name:</strong> ${full_name}</p>
-            <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
-            <p style="margin: 5px 0;"><strong>Mobile:</strong> ${mobile_number}</p>
-            <p style="margin: 5px 0;"><strong>Alternative Mobile:</strong> ${alternative_mobile}</p>
-            <p style="margin: 5px 0;"><strong>City:</strong> ${city}</p>
+            <p style="margin: 5px 0;"><strong>Full Name:</strong> ${full_name || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${email || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Mobile:</strong> ${mobile_number || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Alternative Mobile:</strong> ${alternative_mobile || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>City:</strong> ${city || 'Not provided'}</p>
           </div>
 
           <div style="background: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #f57c00;">👨‍⚕️ Professional Details</h3>
-            <p style="margin: 5px 0;"><strong>Role:</strong> ${professional_role}</p>
-            ${professional_role === 'Other Allied Health Professional' ? `<p style="margin: 5px 0;"><strong>Other Profession:</strong> ${other_profession}</p>` : ''}
-            ${professional_role === 'Doctor' ? `<p style="margin: 5px 0;"><strong>Specialty:</strong> ${doctor_specialty}</p>` : ''}
-            <p style="margin: 5px 0;"><strong>Qualification:</strong> ${highest_qualification}</p>
-            <p style="margin: 5px 0;"><strong>Completion Year:</strong> ${completion_year}</p>
-            <p style="margin: 5px 0;"><strong>Registration Number:</strong> ${registration_number}</p>
-            <p style="margin: 5px 0;"><strong>Current Role:</strong> ${current_work_role}</p>
-            <p style="margin: 5px 0;"><strong>Workplace:</strong> ${workplace}</p>
-            <p style="margin: 5px 0;"><strong>Experience:</strong> ${years_of_experience} years</p>
+            <p style="margin: 5px 0;"><strong>Role:</strong> ${professional_role || 'Not provided'}</p>
+            ${professional_role === 'Other Allied Health Professional' ? `<p style="margin: 5px 0;"><strong>Other Profession:</strong> ${other_profession || 'Not provided'}</p>` : ''}
+            ${professional_role === 'Doctor' ? `<p style="margin: 5px 0;"><strong>Specialty:</strong> ${doctor_specialty || 'Not provided'}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Qualification:</strong> ${highest_qualification || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Completion Year:</strong> ${completion_year || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Registration Number:</strong> ${registration_number || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Current Role:</strong> ${current_work_role || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Workplace:</strong> ${workplace || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Experience:</strong> ${years_of_experience || 'Not provided'} years</p>
           </div>
 
           <div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #2e7d32;">💼 Service Information</h3>
-            <p style="margin: 5px 0;"><strong>Services Offered:</strong> ${Array.isArray(services_offered) ? services_offered.join(', ') : services_offered}</p>
-            <p style="margin: 5px 0;"><strong>Availability:</strong> ${Array.isArray(availability_days) ? availability_days.join(', ') : availability_days}</p>
-            <p style="margin: 5px 0;"><strong>Time Slots:</strong> ${Array.isArray(time_slots) ? time_slots.join(', ') : time_slots}</p>
-            <p style="margin: 5px 0;"><strong>Languages:</strong> ${Array.isArray(languages) ? languages.join(', ') : languages}</p>
-            <p style="margin: 5px 0;"><strong>Service Areas:</strong> ${service_areas}</p>
-            <p style="margin: 5px 0;"><strong>Home Visit Fee:</strong> ${home_visit_fee}</p>
-            <p style="margin: 5px 0;"><strong>Teleconsultation Fee:</strong> ${teleconsultation_fee}</p>
+            <p style="margin: 5px 0;"><strong>Services Offered:</strong> ${Array.isArray(services_offered) ? services_offered.join(', ') : (services_offered || 'Not provided')}</p>
+            <p style="margin: 5px 0;"><strong>Availability:</strong> ${Array.isArray(availability_days) ? availability_days.join(', ') : (availability_days || 'Not provided')}</p>
+            <p style="margin: 5px 0;"><strong>Time Slots:</strong> ${Array.isArray(time_slots) ? time_slots.join(', ') : (time_slots || 'Not provided')}</p>
+            <p style="margin: 5px 0;"><strong>Languages:</strong> ${Array.isArray(languages) ? languages.join(', ') : (languages || 'Not provided')}</p>
+            <p style="margin: 5px 0;"><strong>Service Areas:</strong> ${service_areas || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Home Visit Fee:</strong> ₹${home_visit_fee || 'Not provided'}</p>
+            <p style="margin: 5px 0;"><strong>Teleconsultation Fee:</strong> ₹${teleconsultation_fee || 'Not provided'}</p>
             ${community_experience && community_experience !== 'Not provided' ? `<p style="margin: 5px 0;"><strong>Community Experience:</strong> ${community_experience}</p>` : ''}
           </div>
 
           <div style="background: #fce4ec; border-left: 4px solid #e91e63; padding: 15px; margin: 20px 0;">
-            <p style="margin: 5px 0; color: #c2185b;"><strong>⏰ Submitted At:</strong> ${submitted_at}</p>
-            <p style="margin: 5px 0; color: #c2185b;"><strong>📧 Provider Email:</strong> ${email}</p>
+            <p style="margin: 5px 0; color: #c2185b;"><strong>⏰ Submitted At:</strong> ${submitted_at || 'Not available'}</p>
+            <p style="margin: 5px 0; color: #c2185b;"><strong>📧 Provider Email:</strong> ${email || 'Not provided'}</p>
           </div>
 
           <div style="text-align: center; margin: 30px 0;">

@@ -16,8 +16,43 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
   Future<void> _resendNotification() async {
     setState(() => _isResending = true);
     
+    // Format provider data properly before sending (match registration format)
+    final formattedData = {
+      'full_name': widget.providerData['full_name'] ?? 'Not provided',
+      'mobile_number': widget.providerData['mobile_number'] ?? 'Not provided',
+      'alternative_mobile': (widget.providerData['alternative_mobile']?.toString().trim().isEmpty ?? true)
+          ? 'Not provided'
+          : widget.providerData['alternative_mobile'],
+      'email': widget.providerData['email'] ?? 'Not provided',
+      'city': widget.providerData['city'] ?? 'Not provided',
+      'professional_role': widget.providerData['professional_role'] ?? 'Not provided',
+      'other_profession': widget.providerData['other_profession'] ?? 'N/A',
+      'doctor_specialty': widget.providerData['doctor_specialty'] ?? 'N/A',
+      'highest_qualification': widget.providerData['highest_qualification'] ?? 'Not provided',
+      'completion_year': widget.providerData['completion_year']?.toString() ?? 'Not provided',
+      'registration_number': widget.providerData['registration_number'] ?? 'Not provided',
+      'current_work_role': widget.providerData['current_work_role'] ?? 'Not provided',
+      'workplace': widget.providerData['workplace'] ?? 'Not provided',
+      'years_of_experience': widget.providerData['years_of_experience']?.toString() ?? 'Not provided',
+      'services_offered': widget.providerData['services_offered'] ?? [],
+      'availability_days': widget.providerData['availability_days'] ?? [],
+      'time_slots': widget.providerData['time_slots'] ?? [],
+      'community_experience': (widget.providerData['community_experience']?.toString().trim().isEmpty ?? true)
+          ? 'Not provided'
+          : widget.providerData['community_experience'],
+      'languages': widget.providerData['languages'] ?? [],
+      'service_areas': widget.providerData['service_areas'] ?? 'Not provided',
+      'home_visit_fee': (widget.providerData['home_visit_fee'] != null)
+          ? '₹${widget.providerData['home_visit_fee']}'
+          : 'Not specified',
+      'teleconsultation_fee': (widget.providerData['teleconsultation_fee'] != null)
+          ? '₹${widget.providerData['teleconsultation_fee']}'
+          : 'Not specified',
+      'submitted_at': widget.providerData['created_at'] ?? widget.providerData['submitted_at'] ?? DateTime.now().toIso8601String(),
+    };
+    
     final success = await ProviderEmailService.sendProviderRegistrationEmail(
-      providerData: widget.providerData,
+      providerData: formattedData,
     );
     
     if (mounted) {
@@ -46,7 +81,7 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                   backgroundColor: const Color(0xFF2260FF),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('OK'),
+                child: const Text('OK', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
