@@ -818,6 +818,191 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
   }
 });
 
+// Send registration notification to admin emails
+app.post('/api/provider/send-registration-notification', async (req, res) => {
+  try {
+    const { providerData, adminEmails } = req.body || {};
+    
+    if (!providerData) {
+      return res.status(400).json({ error: 'providerData is required' });
+    }
+
+    if (!mailer) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const {
+      full_name,
+      mobile_number,
+      alternative_mobile,
+      email,
+      city,
+      professional_role,
+      other_profession,
+      doctor_specialty,
+      highest_qualification,
+      completion_year,
+      registration_number,
+      current_work_role,
+      workplace,
+      years_of_experience,
+      services_offered,
+      availability_days,
+      time_slots,
+      community_experience,
+      languages,
+      service_areas,
+      home_visit_fee,
+      teleconsultation_fee,
+      submitted_at
+    } = providerData;
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1A4FCC 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🆕 New Healthcare Provider Registration</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          
+          <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #2260FF;">📋 Basic Information</h3>
+            <p style="margin: 5px 0;"><strong>Full Name:</strong> ${full_name}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 5px 0;"><strong>Mobile:</strong> ${mobile_number}</p>
+            <p style="margin: 5px 0;"><strong>Alternative Mobile:</strong> ${alternative_mobile}</p>
+            <p style="margin: 5px 0;"><strong>City:</strong> ${city}</p>
+          </div>
+
+          <div style="background: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #f57c00;">👨‍⚕️ Professional Details</h3>
+            <p style="margin: 5px 0;"><strong>Role:</strong> ${professional_role}</p>
+            ${professional_role === 'Other Allied Health Professional' ? `<p style="margin: 5px 0;"><strong>Other Profession:</strong> ${other_profession}</p>` : ''}
+            ${professional_role === 'Doctor' ? `<p style="margin: 5px 0;"><strong>Specialty:</strong> ${doctor_specialty}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Qualification:</strong> ${highest_qualification}</p>
+            <p style="margin: 5px 0;"><strong>Completion Year:</strong> ${completion_year}</p>
+            <p style="margin: 5px 0;"><strong>Registration Number:</strong> ${registration_number}</p>
+            <p style="margin: 5px 0;"><strong>Current Role:</strong> ${current_work_role}</p>
+            <p style="margin: 5px 0;"><strong>Workplace:</strong> ${workplace}</p>
+            <p style="margin: 5px 0;"><strong>Experience:</strong> ${years_of_experience} years</p>
+          </div>
+
+          <div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #2e7d32;">💼 Service Information</h3>
+            <p style="margin: 5px 0;"><strong>Services Offered:</strong> ${Array.isArray(services_offered) ? services_offered.join(', ') : services_offered}</p>
+            <p style="margin: 5px 0;"><strong>Availability:</strong> ${Array.isArray(availability_days) ? availability_days.join(', ') : availability_days}</p>
+            <p style="margin: 5px 0;"><strong>Time Slots:</strong> ${Array.isArray(time_slots) ? time_slots.join(', ') : time_slots}</p>
+            <p style="margin: 5px 0;"><strong>Languages:</strong> ${Array.isArray(languages) ? languages.join(', ') : languages}</p>
+            <p style="margin: 5px 0;"><strong>Service Areas:</strong> ${service_areas}</p>
+            <p style="margin: 5px 0;"><strong>Home Visit Fee:</strong> ${home_visit_fee}</p>
+            <p style="margin: 5px 0;"><strong>Teleconsultation Fee:</strong> ${teleconsultation_fee}</p>
+            ${community_experience && community_experience !== 'Not provided' ? `<p style="margin: 5px 0;"><strong>Community Experience:</strong> ${community_experience}</p>` : ''}
+          </div>
+
+          <div style="background: #fce4ec; border-left: 4px solid #e91e63; padding: 15px; margin: 20px 0;">
+            <p style="margin: 5px 0; color: #c2185b;"><strong>⏰ Submitted At:</strong> ${submitted_at}</p>
+            <p style="margin: 5px 0; color: #c2185b;"><strong>📧 Provider Email:</strong> ${email}</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <p style="font-size: 14px; color: #666;">
+              Please review this application in the admin dashboard and approve/reject accordingly.
+            </p>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="font-size: 13px; color: #999; text-align: center;">
+            This is an automated notification from SR CareHive Provider Registration System
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Send to admin emails
+    const emails = adminEmails && Array.isArray(adminEmails) ? adminEmails : ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
+    
+    for (const adminEmail of emails) {
+      await sendEmail({
+        to: adminEmail,
+        subject: `🆕 New Healthcare Provider Registration - ${full_name}`,
+        html: emailHtml
+      });
+    }
+
+    res.json({ success: true, message: 'Registration notification sent to admins' });
+  } catch (e) {
+    console.error('Error sending registration notification:', e);
+    res.status(500).json({ error: 'Failed to send registration notification' });
+  }
+});
+
+// Send confirmation email to user after registration
+app.post('/api/provider/send-user-confirmation', async (req, res) => {
+  try {
+    const { userEmail, userName } = req.body || {};
+    
+    if (!userEmail || !userName) {
+      return res.status(400).json({ error: 'userEmail and userName are required' });
+    }
+
+    if (!mailer) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1A4FCC 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">✅ Registration Successful!</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${userName}</strong>,</p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Thank you for registering as a healthcare provider with <strong>SR CareHive</strong>! 🎉
+          </p>
+          
+          <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #2260FF;">📝 What's Next?</h3>
+            <ol style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+              <li>Our team will review your application</li>
+              <li>You will receive an email notification once your application is reviewed</li>
+              <li>If approved, you can login to the provider dashboard using your registered credentials</li>
+              <li>The review process typically takes 1-2 business days</li>
+            </ol>
+          </div>
+
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #856404;">
+              <strong>⏳ Current Status:</strong> <span style="color: #ff6f00; font-weight: bold;">PENDING REVIEW</span>
+            </p>
+          </div>
+
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            We appreciate your interest in joining our platform and look forward to working with you to provide quality healthcare services.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="font-size: 13px; color: #999; text-align: center;">
+            For any questions, contact us at <a href="mailto:srcarehive@gmail.com" style="color: #2260FF;">srcarehive@gmail.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: userEmail,
+      subject: '✅ SR CareHive - Registration Received!',
+      html: emailHtml
+    });
+
+    res.json({ success: true, message: 'Confirmation email sent to user' });
+  } catch (e) {
+    console.error('Error sending user confirmation email:', e);
+    res.status(500).json({ error: 'Failed to send user confirmation email' });
+  }
+});
+
 // List all appointments (admin view). Protected.
 // Only returns appointments where nurse_visible is not explicitly false (includes null for backward compatibility)
 app.get('/api/nurse/appointments', async (req, res) => {

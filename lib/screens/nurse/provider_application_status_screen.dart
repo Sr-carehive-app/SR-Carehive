@@ -406,10 +406,14 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                           height: 18,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
-                      : const Icon(Icons.notifications),
-                  label: Text(_isResending ? 'Sending...' : 'Send Reminder'),
+                      : const Icon(Icons.notifications, color: Colors.white),
+                  label: Text(
+                    _isResending ? 'Sending...' : 'Send Reminder',
+                    style: const TextStyle(color: Colors.white),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2260FF),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
