@@ -18,6 +18,7 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
   
   // Section A: Basic Information
   final TextEditingController fullNameController = TextEditingController();
@@ -204,6 +205,11 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
   }
 
   Future<void> _submitForm() async {
+    // Enable auto-validation after first attempt
+    setState(() {
+      _autovalidateMode = AutovalidateMode.onUserInteraction;
+    });
+    
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -513,6 +519,7 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
       ),
       body: Form(
         key: _formKey,
+        autovalidateMode: _autovalidateMode,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
