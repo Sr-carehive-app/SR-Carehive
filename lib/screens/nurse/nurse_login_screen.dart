@@ -331,7 +331,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final result = await NurseApiService.verifyOtp(
       email: emailController.text.trim(),
       otp: _otpController.text.trim(),
-    );// Navigate based on user type
+    );
+    setState(() => _isOtpLoading = false);
+    if (result == true) {
+      // Navigate based on user type
       if (_isSuperAdmin) {
         // Super admin goes to Admin Dashboard
         Navigator.pushReplacement(
@@ -344,10 +347,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
           context,
           MaterialPageRoute(builder: (_) => const NurseAppointmentsManageScreen()),
         );
-      }vigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
-      );
+      }
     } else {
       setState(() => _otpError = result is String ? result : 'Invalid OTP');
     }
