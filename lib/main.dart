@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'config/api_config.dart';
 import 'utils/web_utils.dart';
+import 'package:upgrader/upgrader.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -420,21 +421,26 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'Serechi',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+    return UpgradeAlert(
+      upgrader: Upgrader(
+        durationUntilAlertAgain: const Duration(days: 1),
       ),
-      routes: {
-        '/home': (_) => const PatientDashboardScreen(),
-        // Keep legacy route but prefer using /home with initialIndex
-        '/appointments': (_) => const patient_pages.AppointmentsScreen(),
-        '/schedule': (_) => const ScheduleNurseScreen(),
-        '/profile': (_) => const ProfileScreen(),
-      },
-      home: _homeWidget,
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        title: 'Serechi',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+        ),
+        routes: {
+          '/home': (_) => const PatientDashboardScreen(),
+          // Keep legacy route but prefer using /home with initialIndex
+          '/appointments': (_) => const patient_pages.AppointmentsScreen(),
+          '/schedule': (_) => const ScheduleNurseScreen(),
+          '/profile': (_) => const ProfileScreen(),
+        },
+        home: _homeWidget,
+      ),
     );
   }
 }
