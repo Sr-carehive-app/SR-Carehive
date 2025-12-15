@@ -109,6 +109,7 @@ import https from 'https';
 import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import twilio from 'twilio';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -3724,7 +3725,6 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
     }
 
     // Hash the new password using bcrypt
-    const bcrypt = require('bcryptjs');
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
