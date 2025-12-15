@@ -3256,17 +3256,17 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
     
-    // Check if healthcare provider exists - use ilike for case-insensitive match
-    const { data: providers, error: providerError } = await supabase
+    // Check if healthcare provider exists - using same pattern as successful login
+    const { data: provider, error: providerError } = await supabase
       .from('healthcare_providers')
       .select('id, email, name, application_status, password_hash')
-      .ilike('email', normalizedEmail);
+      .eq('email', normalizedEmail)
+      .maybeSingle();
 
-    console.log(`[PROVIDER-RESET] Query result - Data:`, providers);
+    console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
-    console.log(`[PROVIDER-RESET] Number of providers found:`, providers?.length || 0);
 
-    // Check for actual database errors only (empty results are not errors)
+    // Check for actual database errors
     if (providerError) {
       console.error(`[PROVIDER-RESET] Database error:`, providerError);
       return res.status(500).json({ 
@@ -3276,8 +3276,6 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     // Check if provider was found
-    const provider = providers && providers.length > 0 ? providers[0] : null;
-
     if (!provider) {
       console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
       
