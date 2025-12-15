@@ -288,11 +288,24 @@ class NurseApiService {
         body: jsonEncode({'email': email}),
       );
       
+      print('📡 Response status: ${resp.statusCode}');
+      print('📡 Response body: ${resp.body}');
+      
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         return {
-          'success': true,
+          'success': data['success'] ?? true,
           'message': data['message'] ?? 'OTP sent successfully',
+        };
+      }
+      
+      // Handle 404 - Email not found
+      if (resp.statusCode == 404) {
+        final data = resp.body.isNotEmpty ? jsonDecode(resp.body) : {};
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Email not registered as healthcare provider',
+          'notFound': true,
         };
       }
       
@@ -302,6 +315,16 @@ class NurseApiService {
             ? jsonDecode(resp.body)['error'] ?? 'Too many requests' 
             : 'Too many requests';
         throw Exception('429: $error');
+      }
+      
+      // Handle 500 - Server/Email service error
+      if (resp.statusCode == 500) {
+        final data = resp.body.isNotEmpty ? jsonDecode(resp.body) : {};
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Email service unavailable. Please try again later.',
+          'serviceError': true,
+        };
       }
       
       // Handle other errors

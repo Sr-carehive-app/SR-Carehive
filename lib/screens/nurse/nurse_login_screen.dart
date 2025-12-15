@@ -307,22 +307,34 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         final result = await NurseApiService.sendPasswordResetOtp(email: email);
                         final success = result['success'] ?? false;
                         final message = result['message'] ?? 'OTP sent successfully';
+                        final notFound = result['notFound'] ?? false;
+                        final serviceError = result['serviceError'] ?? false;
                         
                         print('🔍 Backend response success: $success');
                         print('🔍 Backend response message: "$message"');
+                        print('🔍 Backend response notFound: $notFound');
+                        print('🔍 Backend response serviceError: $serviceError');
                         
                         setDialogState(() => isDialogLoading = false);
                         
                         if (!mounted) return;
                         
-                        // Check success flag - if false, email not found
+                        // Check success flag - if false, show specific error
                         if (!success) {
-                          // Email doesn't exist - show error and don't navigate
+                          String errorMsg = message;
+                          
+                          // Customize error message based on error type
+                          if (notFound) {
+                            errorMsg = '❌ This email is not registered as a healthcare provider.\n\nPlease check your email or contact support.';
+                          } else if (serviceError) {
+                            errorMsg = '❌ Email service is temporarily unavailable.\n\nPlease try again in a few minutes.';
+                          }
+                          
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('❌ Email not found. Please check and try again.'),
+                            SnackBar(
+                              content: Text(errorMsg),
                               backgroundColor: Colors.red,
-                              duration: Duration(seconds: 4),
+                              duration: const Duration(seconds: 5),
                             ),
                           );
                           return; // Don't close dialog, don't navigate
@@ -343,10 +355,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         
                         // Show success message
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✅ OTP sent successfully! Check your email.'),
+                          SnackBar(
+                            content: Text('✅ $message'),
                             backgroundColor: Colors.green,
-                            duration: Duration(seconds: 3),
+                            duration: const Duration(seconds: 4),
                           ),
                         );
                       } catch (e) {

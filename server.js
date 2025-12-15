@@ -241,8 +241,30 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
 }
 
 let mailer = null;
-if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+let mailerReady = false;
+
+// Initialize mailer with proper verification
+async function initializeMailer() {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.error('[INIT] ❌ SMTP NOT CONFIGURED!');
+    console.error('[INIT] ⚠️  Missing environment variables:');
+    console.error('[INIT]    SMTP_HOST:', SMTP_HOST ? '✓' : '✗ MISSING');
+    console.error('[INIT]    SMTP_PORT:', SMTP_PORT ? '✓' : '✗ MISSING');  
+    console.error('[INIT]    SMTP_USER:', SMTP_USER ? '✓' : '✗ MISSING');
+    console.error('[INIT]    SMTP_PASS:', SMTP_PASS ? '✓' : '✗ MISSING');
+    console.error('[INIT] 📝 Set these in Vercel environment variables!');
+    return false;
+  }
+
   try {
+    console.log('[INIT] 🔧 Configuring email transport...');
+    console.log('[INIT] SMTP_HOST:', SMTP_HOST);
+    console.log('[INIT] SMTP_PORT:', SMTP_PORT);
+    console.log('[INIT] SMTP_USER:', SMTP_USER);
+    console.log('[INIT] SMTP_SECURE:', SMTP_SECURE);
+    console.log('[INIT] SENDER_EMAIL:', SENDER_EMAIL);
+    console.log('[INIT] SENDER_NAME:', SENDER_NAME);
+    
     mailer = nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
@@ -252,26 +274,39 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
         pass: SMTP_PASS 
       },
       tls: {
-        rejectUnauthorized: false // For Gmail with app password
+        rejectUnauthorized: false
       },
-      debug: true, // Enable debug logs
-      logger: true // Enable logging
+      debug: false,
+      logger: false
     });
     
-    // Verify connection
-    mailer.verify((error, success) => {
-      if (error) {
-        console.error('[ERROR] Email transport verification failed:', error.message);
-      } else {
-        console.log('[INIT] Email transport configured and verified successfully');
-      }
-    });
+    // Verify connection synchronously
+    console.log('[INIT] 🔍 Verifying SMTP connection...');
+    await mailer.verify();
+    
+    console.log('[INIT] ✅ Email transport verified and ready!');
+    console.log('[INIT] ✅ Emails will be sent from:', SENDER_EMAIL);
+    mailerReady = true;
+    return true;
+    
   } catch (e) {
-    console.warn('[WARN] Failed to configure email transport:', e.message);
+    console.error('[INIT] ❌ Email transport verification FAILED!');
+    console.error('[INIT] ❌ Error:', e.message);
+    console.error('[INIT] ⚠️  Emails will NOT be sent!');
+    mailer = null;
+    mailerReady = false;
+    return false;
   }
-} else {
-  console.warn('[WARN] SMTP not fully configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS to enable emails.');
 }
+
+// Initialize mailer on startup
+initializeMailer().then(success => {
+  if (success) {
+    console.log('[INIT] 📧 Email service is READY');
+  } else {
+    console.error('[INIT] 📧 Email service is NOT available');
+  }
+});
 
 function generateReceiptPdfBuffer({
   title = 'Payment Receipt',
@@ -326,26 +361,36 @@ function generateReceiptPdfBuffer({
 
 async function sendEmail({ to, subject, html, attachments = [] }) {
   if (!mailer) {
-    console.warn('[EMAIL] Transport not configured. Skipping send to', to);
-    return { skipped: true };
+    const error = new Error('Email transport not configured. Please contact administrator.');
+    console.error('[EMAIL] ❌ Transport not configured. Cannot send to:', to);
+    throw error;
   }
   
   try {
     const from = `${SENDER_NAME} <${SENDER_EMAIL}>`;
-    console.log(`[EMAIL] Attempting to send email to: ${to}`);
+    console.log(`[EMAIL] 📧 Attempting to send email...`);
+    console.log(`[EMAIL] To: ${to}`);
     console.log(`[EMAIL] Subject: ${subject}`);
     console.log(`[EMAIL] From: ${from}`);
+    console.log(`[EMAIL] SMTP Host: ${SMTP_HOST}`);
+    console.log(`[EMAIL] SMTP Port: ${SMTP_PORT}`);
+    console.log(`[EMAIL] SMTP User: ${SMTP_USER}`);
+    console.log(`[EMAIL] SMTP Secure: ${SMTP_SECURE}`);
     
     const info = await mailer.sendMail({ from, to, subject, html, attachments });
     
-    console.log(`[EMAIL]  Email sent successfully!`);
+    console.log(`[EMAIL] ✅ Email sent successfully!`);
     console.log(`[EMAIL] Message ID: ${info.messageId}`);
     console.log(`[EMAIL] Response: ${info.response}`);
+    console.log(`[EMAIL] Accepted: ${info.accepted}`);
+    console.log(`[EMAIL] Rejected: ${info.rejected}`);
     
     return info;
   } catch (error) {
-    console.error(`[EMAIL]  Failed to send email to ${to}`);
-    console.error(`[EMAIL] Error: ${error.message}`);
+    console.error(`[EMAIL] ❌ Failed to send email to ${to}`);
+    console.error(`[EMAIL] Error name: ${error.name}`);
+    console.error(`[EMAIL] Error message: ${error.message}`);
+    console.error(`[EMAIL] Error code: ${error.code}`);
     console.error(`[EMAIL] Full error:`, error);
     throw error; // Re-throw to handle it in calling function
   }
@@ -3281,11 +3326,11 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     // If provider not found, return error (don't navigate to OTP page)
     if (!provider) {
-      console.log(`[PROVIDER-RESET] Provider NOT found: ${normalizedEmail}`);
-      return res.json({ 
+      console.log(`[PROVIDER-RESET] ❌ Provider NOT found: ${normalizedEmail}`);
+      return res.status(404).json({ 
         success: false, 
-        message: 'If this email is registered as a healthcare provider, an OTP has been sent.',
-        canResendAfter: 120
+        error: 'This email is not registered as a healthcare provider. Please check your email address or contact support.',
+        notFound: true
       });
     }
 
@@ -3309,11 +3354,17 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Generated OTP: ${otp} (expires in 10 min)`);
 
-    // Send OTP email
+    // Check if email service is configured BEFORE storing OTP
     if (!mailer) {
-      console.error('[ERROR] Email service not configured');
-      return res.status(500).json({ error: 'Email service not available' });
+      console.error('[PROVIDER-RESET] ❌ Email service not configured');
+      return res.status(500).json({ 
+        success: false,
+        error: 'Email service is currently unavailable. Please contact administrator.',
+        serviceUnavailable: true
+      });
     }
+
+    console.log(`[PROVIDER-RESET] 📧 Preparing to send OTP email to: ${normalizedEmail}`);
 
     const otpEmailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -3369,25 +3420,36 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     `;
 
     try {
-      await sendEmail({
+      console.log(`[PROVIDER-RESET] 📤 Sending OTP email via sendEmail function...`);
+      
+      const emailResult = await sendEmail({
         to: normalizedEmail,
         subject: 'Password Reset OTP - SR CareHive Healthcare Provider',
         html: otpEmailHtml
       });
 
       console.log(`[PROVIDER-RESET] ✅ OTP email sent successfully to ${normalizedEmail}`);
+      console.log(`[PROVIDER-RESET] Email Result:`, emailResult);
 
       res.json({ 
         success: true, 
-        message: 'OTP sent successfully. Please check your email.',
+        message: 'OTP sent successfully! Please check your email inbox and spam folder.',
         expiresIn: 600, // 10 minutes
         canResendAfter: 120 // 2 minutes
       });
 
     } catch (emailError) {
-      console.error('[ERROR] Failed to send OTP email:', emailError);
+      // Remove OTP from memory if email failed
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      
+      console.error('[PROVIDER-RESET] ❌ Failed to send OTP email:', emailError.message);
+      console.error('[PROVIDER-RESET] ❌ Error details:', emailError);
+      
       res.status(500).json({ 
-        error: 'Failed to send OTP email. Please try again.' 
+        success: false,
+        error: 'Failed to send OTP email. Please check your email address and try again.',
+        details: emailError.message,
+        emailFailed: true
       });
     }
 
@@ -3838,4 +3900,73 @@ app.post('/api/notify-appointment-cancelled', async (req, res) => {
   }
 });
 
+// ============================================================================
+// EMAIL TESTING ENDPOINT (For debugging)
+// ============================================================================
+app.get('/api/test-email', async (req, res) => {
+  try {
+    console.log('[TEST-EMAIL] Received test email request');
+    console.log('[TEST-EMAIL] Mailer status:', mailer ? 'Initialized' : 'Not initialized');
+    console.log('[TEST-EMAIL] Mailer ready:', mailerReady);
+    
+    if (!mailer || !mailerReady) {
+      return res.status(500).json({ 
+        success: false,
+        error: 'Email service not configured or not ready',
+        mailer: mailer ? 'exists' : 'null',
+        mailerReady: mailerReady,
+        smtp: {
+          host: SMTP_HOST || 'not set',
+          port: SMTP_PORT || 'not set',
+          user: SMTP_USER || 'not set',
+          hasPassword: !!SMTP_PASS
+        }
+      });
+    }
+
+    const testEmail = req.query.email || 'srcarehive@gmail.com';
+    
+    console.log('[TEST-EMAIL] Sending test email to:', testEmail);
+    
+    await sendEmail({
+      to: testEmail,
+      subject: '✅ SR CareHive Email Test - ' + new Date().toLocaleString(),
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #f0f4ff; border-radius: 10px;">
+          <h2 style="color: #2260FF;">✅ Email Service Working!</h2>
+          <p>This is a test email from SR CareHive backend.</p>
+          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+          <p><strong>SMTP Host:</strong> ${SMTP_HOST}</p>
+          <p><strong>SMTP User:</strong> ${SMTP_USER}</p>
+          <p>If you received this email, your SMTP configuration is correct! 🎉</p>
+        </div>
+      `
+    });
+
+    console.log('[TEST-EMAIL] ✅ Test email sent successfully');
+    
+    res.json({ 
+      success: true,
+      message: 'Test email sent successfully! Check inbox and spam folder.',
+      sentTo: testEmail,
+      smtp: {
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        user: SMTP_USER
+      }
+    });
+
+  } catch (e) {
+    console.error('[TEST-EMAIL] ❌ Failed:', e);
+    res.status(500).json({ 
+      success: false,
+      error: e.message,
+      details: e.toString()
+    });
+  }
+});
+
+// ============================================================================
+// START SERVER
+// ============================================================================
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));
