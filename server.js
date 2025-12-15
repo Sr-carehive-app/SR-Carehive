@@ -3203,6 +3203,363 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// ============================================================================
+// HEALTHCARE PROVIDER (NURSE) PASSWORD RESET SYSTEM
+// ============================================================================
+
+// In-memory OTP storage for healthcare provider password reset
+const providerPasswordResetOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt, verified, providerId }
+
+// Send OTP via email for healthcare provider password reset
+app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
+  try {
+    const { email, resend = false } = req.body;
+    
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[PROVIDER-RESET] ${resend ? 'Resend' : 'New'} request for email: ${normalizedEmail}`);
+
+    // Validate email format
+    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check for resend cooldown (2 minutes)
+    const existingOTP = providerPasswordResetOTPs.get(normalizedEmail);
+    if (existingOTP && existingOTP.lastSentAt) {
+      const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
+      const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
+      
+      if (timeSinceLastSend < cooldownPeriod) {
+        const remainingTime = Math.ceil((cooldownPeriod - timeSinceLastSend) / 1000); // seconds
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        
+        console.log(`[PROVIDER-RESET] Cooldown active for ${normalizedEmail}. Remaining: ${minutes}m ${seconds}s`);
+        
+        return res.status(429).json({ 
+          error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
+          remainingSeconds: remainingTime,
+          canResendAt: existingOTP.lastSentAt + cooldownPeriod
+        });
+      }
+    }
+
+    if (!supabase) {
+      console.error('[ERROR] Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
+    
+    // Check if healthcare provider exists and is approved
+    const { data: provider, error: providerError } = await supabase
+      .from('healthcare_providers')
+      .select('id, email, name, application_status, password_hash')
+      .eq('email', normalizedEmail)
+      .single();
+
+    console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
+    console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
+
+    if (providerError || !provider) {
+      console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
+      
+      // Return success to prevent email enumeration (security best practice)
+      return res.json({ 
+        success: true, 
+        message: 'If this email is registered as a healthcare provider, an OTP has been sent.',
+        canResendAfter: 120 // 2 minutes
+      });
+    }
+
+    // Allow password reset for ALL registered providers (approved, pending, rejected)
+    // This allows rejected/pending providers to login and view their application status
+    console.log(`[PROVIDER-RESET] Provider found: ${provider.name} <${provider.email}> (Status: ${provider.application_status})`);
+
+    // Generate 6-digit OTP
+    const otp = generateOTP();
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
+    const lastSentAt = Date.now();
+
+    // Store OTP in memory
+    providerPasswordResetOTPs.set(normalizedEmail, {
+      otp,
+      expiresAt,
+      attempts: 0,
+      providerId: provider.id,
+      lastSentAt,
+      verified: false
+    });
+
+    console.log(`[PROVIDER-RESET] Generated OTP for ${normalizedEmail}: ${otp} (expires in 10 min)`);
+
+    // Send OTP email
+    if (!mailer) {
+      console.error('[ERROR] Email service not configured');
+      return res.status(500).json({ error: 'Email service not available' });
+    }
+
+    const otpEmailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Password Reset OTP</h1>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+            Hello <strong>${provider.name}</strong>,
+          </p>
+          
+          <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+            You requested to reset your password for your SR CareHive healthcare provider account. 
+            Use the OTP below to verify your identity:
+          </p>
+          
+          <div style="background: #f0f4ff; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0;">
+            <p style="font-size: 14px; color: #666; margin: 0 0 10px 0;">Your OTP Code:</p>
+            <p style="font-size: 36px; font-weight: bold; color: #2260FF; letter-spacing: 8px; margin: 0;">
+              ${otp}
+            </p>
+          </div>
+          
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 14px; color: #856404;">
+              ⏰ <strong>Important:</strong> This OTP will expire in <strong>10 minutes</strong>
+            </p>
+          </div>
+          
+          <div style="background: #d1ecf1; border-left: 4px solid #0c5460; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #0c5460;">
+              <strong>Security Tips:</strong>
+            </p>
+            <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #0c5460;">
+              <li>Never share this OTP with anyone</li>
+              <li>SR CareHive will never ask for your OTP via phone or email</li>
+              <li>If you didn't request this, please ignore this email</li>
+            </ul>
+          </div>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">
+            Best regards,<br>
+            <strong>SR CareHive Team</strong>
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; padding: 20px; font-size: 12px; color: #999;">
+          <p style="margin: 0;">© ${new Date().getFullYear()} SR CareHive. All rights reserved.</p>
+          <p style="margin: 5px 0 0 0;">This is an automated message, please do not reply.</p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        to: normalizedEmail,
+        subject: 'Password Reset OTP - SR CareHive Healthcare Provider',
+        html: otpEmailHtml
+      });
+
+      console.log(`[PROVIDER-RESET] ✅ OTP email sent successfully to ${normalizedEmail}`);
+
+      res.json({ 
+        success: true, 
+        message: 'OTP sent successfully. Please check your email.',
+        expiresIn: 600, // 10 minutes
+        canResendAfter: 120 // 2 minutes
+      });
+
+    } catch (emailError) {
+      console.error('[ERROR] Failed to send OTP email:', emailError);
+      res.status(500).json({ 
+        error: 'Failed to send OTP email. Please try again.' 
+      });
+    }
+
+  } catch (e) {
+    console.error('[ERROR] send-password-reset-otp (provider):', e);
+    res.status(500).json({ 
+      error: 'Failed to process request', 
+      details: e.message 
+    });
+  }
+});
+
+// Verify OTP for healthcare provider password reset
+app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and OTP are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[PROVIDER-RESET] Verifying OTP for: ${normalizedEmail}`);
+
+    const otpData = providerPasswordResetOTPs.get(normalizedEmail);
+
+    if (!otpData) {
+      console.log(`[PROVIDER-RESET] No OTP found for: ${normalizedEmail}`);
+      return res.status(400).json({ 
+        error: 'No OTP found. Please request a new OTP.' 
+      });
+    }
+
+    // Check if OTP is expired
+    if (Date.now() > otpData.expiresAt) {
+      console.log(`[PROVIDER-RESET] OTP expired for: ${normalizedEmail}`);
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.' 
+      });
+    }
+
+    // Check max attempts
+    if (otpData.attempts >= 5) {
+      console.log(`[PROVIDER-RESET] Max attempts reached for: ${normalizedEmail}`);
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      return res.status(429).json({ 
+        error: 'Too many failed attempts. Please request a new OTP.' 
+      });
+    }
+
+    // Verify OTP
+    if (otp !== otpData.otp) {
+      otpData.attempts += 1;
+      providerPasswordResetOTPs.set(normalizedEmail, otpData);
+      
+      const remainingAttempts = 5 - otpData.attempts;
+      console.log(`[PROVIDER-RESET] Invalid OTP for: ${normalizedEmail}. ${remainingAttempts} attempts remaining`);
+      
+      return res.status(400).json({ 
+        error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
+        remainingAttempts 
+      });
+    }
+
+    // Mark OTP as verified
+    otpData.verified = true;
+    providerPasswordResetOTPs.set(normalizedEmail, otpData);
+
+    console.log(`[PROVIDER-RESET] ✅ OTP verified for: ${normalizedEmail}`);
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. You can now reset your password.',
+      providerId: otpData.providerId
+    });
+
+  } catch (e) {
+    console.error('[ERROR] verify-password-reset-otp (provider):', e);
+    res.status(500).json({ 
+      error: 'Failed to verify OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// Reset password for healthcare provider with OTP (final step)
+app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[PROVIDER-RESET] Password reset attempt for: ${normalizedEmail}`);
+
+    const otpData = providerPasswordResetOTPs.get(normalizedEmail);
+
+    if (!otpData || !otpData.verified) {
+      console.log(`[PROVIDER-RESET] OTP not verified for: ${normalizedEmail}`);
+      return res.status(400).json({ 
+        error: 'OTP not verified. Please verify OTP first.' 
+      });
+    }
+
+    // Check if OTP is still valid
+    if (Date.now() > otpData.expiresAt) {
+      console.log(`[PROVIDER-RESET] OTP expired for: ${normalizedEmail}`);
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.' 
+      });
+    }
+
+    // Validate password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    if (!supabase) {
+      console.error('[ERROR] Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Hash the new password using bcrypt
+    const bcrypt = require('bcryptjs');
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password in healthcare_providers table
+    const { data, error } = await supabase
+      .from('healthcare_providers')
+      .update({ password_hash: hashedPassword })
+      .eq('id', otpData.providerId)
+      .select();
+
+    if (error) {
+      console.error('[ERROR] Failed to update provider password:', error.message);
+      return res.status(500).json({ 
+        error: 'Failed to update password', 
+        details: error.message 
+      });
+    }
+
+    console.log(`[PROVIDER-RESET] ✅ Password reset successfully for: ${normalizedEmail}`);
+
+    // Delete OTP after successful password reset
+    providerPasswordResetOTPs.delete(normalizedEmail);
+
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully! You can now login with your new password.' 
+    });
+
+  } catch (e) {
+    console.error('[ERROR] reset-password-with-otp (provider):', e);
+    res.status(500).json({ 
+      error: 'Failed to reset password', 
+      details: e.message 
+    });
+  }
+});
+
+// Clean up expired provider password reset OTPs every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  
+  for (const [email, data] of providerPasswordResetOTPs.entries()) {
+    if (now > data.expiresAt) {
+      providerPasswordResetOTPs.delete(email);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`[PROVIDER-RESET-CLEANUP] Removed ${cleaned} expired provider OTP(s)`);
+  }
+}, 5 * 60 * 1000);
 
 // Contact form submission endpoint
 app.post('/api/contact', async (req, res) => {

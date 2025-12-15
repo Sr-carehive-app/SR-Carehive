@@ -272,4 +272,107 @@ class NurseApiService {
     // to avoid backend dependency
     throw UnimplementedError('Use Supabase client directly in UI layer');
   }
+
+  // ============================================================================
+  // FORGOT PASSWORD METHODS
+  // ============================================================================
+
+  /// Send password reset OTP to healthcare provider email
+  /// Returns true if OTP sent successfully
+  /// Throws exception on rate limiting (429) or other errors
+  static Future<bool> sendPasswordResetOtp({required String email}) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$_base/api/nurse/send-password-reset-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      
+      if (resp.statusCode == 200) {
+        return true;
+      }
+      
+      // Handle rate limiting (429 Too Many Requests)
+      if (resp.statusCode == 429) {
+        final error = resp.body.isNotEmpty 
+            ? jsonDecode(resp.body)['error'] ?? 'Too many requests' 
+            : 'Too many requests';
+        throw Exception('429: $error');
+      }
+      
+      // Handle other errors
+      final error = resp.body.isNotEmpty 
+          ? jsonDecode(resp.body)['error'] ?? 'Failed to send OTP' 
+          : 'Failed to send OTP';
+      throw Exception(error);
+    } catch (e) {
+      print('❌ Error sending password reset OTP: $e');
+      rethrow;
+    }
+  }
+
+  /// Verify password reset OTP
+  /// Returns true if OTP is valid
+  /// Throws exception with error message on failure
+  static Future<bool> verifyPasswordResetOtp({
+    required String email,
+    required String otp,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$_base/api/nurse/verify-password-reset-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp}),
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['success'] == true;
+      }
+      
+      // Handle error
+      final error = resp.body.isNotEmpty 
+          ? jsonDecode(resp.body)['error'] ?? 'Invalid OTP' 
+          : 'Invalid OTP';
+      throw Exception(error);
+    } catch (e) {
+      print('❌ Error verifying password reset OTP: $e');
+      rethrow;
+    }
+  }
+
+  /// Reset password with verified OTP
+  /// Returns true if password reset successfully
+  /// Throws exception with error message on failure
+  static Future<bool> resetPasswordWithOtp({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$_base/api/nurse/reset-password-with-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+          'newPassword': newPassword,
+        }),
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['success'] == true;
+      }
+      
+      // Handle error
+      final error = resp.body.isNotEmpty 
+          ? jsonDecode(resp.body)['error'] ?? 'Failed to reset password' 
+          : 'Failed to reset password';
+      throw Exception(error);
+    } catch (e) {
+      print('❌ Error resetting password: $e');
+      rethrow;
+    }
+  }
 }

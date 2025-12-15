@@ -421,26 +421,34 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final materialApp = MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'Serechi',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      routes: {
+        '/home': (_) => const PatientDashboardScreen(),
+        // Keep legacy route but prefer using /home with initialIndex
+        '/appointments': (_) => const patient_pages.AppointmentsScreen(),
+        '/schedule': (_) => const ScheduleNurseScreen(),
+        '/profile': (_) => const ProfileScreen(),
+      },
+      home: _homeWidget,
+    );
+
+    // Only show upgrade alert on mobile platforms (Android/iOS)
+    // Skip on web to avoid compatibility issues
+    if (kIsWeb) {
+      return materialApp;
+    }
+
     return UpgradeAlert(
       upgrader: Upgrader(
         durationUntilAlertAgain: const Duration(days: 1),
       ),
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        title: 'Serechi',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        routes: {
-          '/home': (_) => const PatientDashboardScreen(),
-          // Keep legacy route but prefer using /home with initialIndex
-          '/appointments': (_) => const patient_pages.AppointmentsScreen(),
-          '/schedule': (_) => const ScheduleNurseScreen(),
-          '/profile': (_) => const ProfileScreen(),
-        },
-        home: _homeWidget,
-      ),
+      child: materialApp,
     );
   }
 }

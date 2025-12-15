@@ -5,6 +5,7 @@ import 'package:care12/services/nurse_api_service.dart';
 import 'package:care12/screens/nurse/provider_application_status_screen.dart';
 import 'package:care12/screens/nurse/admin_dashboard_selection_screen.dart';
 import 'appointments_manage_screen.dart';
+import 'nurse_forgot_password_otp_screen.dart';
 
 class NurseLoginScreen extends StatefulWidget {
   const NurseLoginScreen({Key? key}) : super(key: key);
@@ -186,6 +187,195 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     }
   }
 
+  Future<void> _handleForgotPassword() async {
+    final forgotPasswordEmailController = TextEditingController();
+    bool isDialogLoading = false;
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.lock_reset, color: Color(0xFF2260FF)),
+              SizedBox(width: 12),
+              Text('Forgot Password'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter your registered email address to receive a password reset OTP.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              ),
+              SizedBox(height: 20),
+              TextField(
+                controller: forgotPasswordEmailController,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'your.email@example.com',
+                  prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF2260FF)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
+                  ),
+                ),
+              ),
+              SizedBox(height: 12),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 18, color: Color(0xFF2260FF)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'A 6-digit OTP will be sent to your email',
+                        style: TextStyle(fontSize: 12, color: Colors.blue[900]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isDialogLoading ? null : () {
+                forgotPasswordEmailController.dispose();
+                Navigator.pop(dialogContext);
+              },
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isDialogLoading
+                  ? null
+                  : () async {
+                      final email = forgotPasswordEmailController.text.trim();
+                      
+                      if (email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter your email address'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Validate email format
+                      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                      if (!emailRegex.hasMatch(email)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid email address'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isDialogLoading = true);
+
+                      try {
+                        print('📧 Sending password reset OTP to: $email');
+                        
+                        await NurseApiService.sendPasswordResetOtp(email: email);
+                        
+                        setDialogState(() => isDialogLoading = false);
+                        
+                        if (!mounted) return;
+                        
+                        // Close dialog
+                        forgotPasswordEmailController.dispose();
+                        Navigator.pop(dialogContext);
+                        
+                        // Navigate to OTP verification screen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => NurseForgotPasswordOTPScreen(email: email),
+                          ),
+                        );
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('✅ OTP sent! Check your email.'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      } catch (e) {
+                        setDialogState(() => isDialogLoading = false);
+                        
+                        if (!mounted) return;
+                        
+                        String errorMessage = 'Failed to send OTP. Please try again.';
+                        
+                        // Handle rate limiting error
+                        if (e.toString().contains('429') || e.toString().contains('wait')) {
+                          errorMessage = 'Too many requests. Please wait 2 minutes before trying again.';
+                        } else if (e.toString().contains('Exception:')) {
+                          errorMessage = e.toString().replaceFirst('Exception: ', '');
+                        }
+                        
+                        print('❌ Error sending password reset OTP: $e');
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(errorMessage),
+                            backgroundColor: Colors.red,
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF2260FF),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: isDialogLoading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text('Send OTP'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -256,7 +446,23 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
+        // Forgot Password Link
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _isLoading ? null : _handleForgotPassword,
+            child: const Text(
+              'Forgot Password?',
+              style: TextStyle(
+                color: Color(0xFF2260FF),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
         _isLoading
             ? const Center(child: CircularProgressIndicator(color: Color(0xFF2260FF)))
             : ElevatedButton(
