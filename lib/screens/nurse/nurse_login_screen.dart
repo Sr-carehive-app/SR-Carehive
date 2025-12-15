@@ -266,7 +266,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                 forgotPasswordEmailController.dispose();
                 Navigator.pop(dialogContext);
               },
-              child: Text('Cancel'),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.black),
+              ),
             ),
             ElevatedButton(
               onPressed: isDialogLoading

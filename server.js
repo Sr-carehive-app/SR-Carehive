@@ -3256,27 +3256,23 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
     
-    // Check if healthcare provider exists - using same pattern as successful login
+    // Check if healthcare provider exists - DON'T select password_hash (RLS protected)
     const { data: provider, error: providerError } = await supabase
       .from('healthcare_providers')
-      .select('id, email, name, application_status, password_hash')
+      .select('id, email, name, application_status')
       .eq('email', normalizedEmail)
       .maybeSingle();
 
     console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
 
-    // Check for actual database errors
+    // If there's any error, treat as "not found" for security (prevent enumeration)
     if (providerError) {
-      console.error(`[PROVIDER-RESET] Database error:`, providerError);
-      return res.status(500).json({ 
-        error: 'Database error occurred',
-        details: providerError.message
-      });
+      console.log(`[PROVIDER-RESET] Query error (treating as not found):`, providerError.message);
     }
 
     // Check if provider was found
-    if (!provider) {
+    if (!provider || providerError) {
       console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
       
       // For security, still send generic success message and OTP
