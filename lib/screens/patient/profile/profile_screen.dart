@@ -403,7 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception('Failed to delete user from auth: ${response.body}');
       }
       
-      // Close loading dialog
+     
       Navigator.of(context).pop();
       
       // Show success message
