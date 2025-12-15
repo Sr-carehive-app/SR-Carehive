@@ -3256,23 +3256,21 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
     
-    // Check if healthcare provider exists - DON'T select password_hash (RLS protected)
+    // Try to get provider - use minimal select to avoid RLS issues
     const { data: provider, error: providerError } = await supabase
       .from('healthcare_providers')
-      .select('id, email, name, application_status')
+      .select('id, email, name')
       .eq('email', normalizedEmail)
-      .maybeSingle();
+      .single();
 
     console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
+    console.log(`[PROVIDER-RESET] Error code:`, providerError?.code);
+    console.log(`[PROVIDER-RESET] Error message:`, providerError?.message);
 
-    // If there's any error, treat as "not found" for security (prevent enumeration)
-    if (providerError) {
-      console.log(`[PROVIDER-RESET] Query error (treating as not found):`, providerError.message);
-    }
-
-    // Check if provider was found
-    if (!provider || providerError) {
+    // Check if it's a "not found" error (PGRST116) vs actual error
+    if (providerError && providerError.code === 'PGRST116') {
+      // Not found - return generic message for security
       console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
       
       // For security, still send generic success message and OTP
@@ -3303,9 +3301,17 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       });
     }
 
-    // Allow password reset for ALL registered providers (approved, pending, rejected)
-    // This allows rejected/pending providers to login and view their application status
-    console.log(`[PROVIDER-RESET] Provider found: ${provider.name} <${provider.email}> (Status: ${provider.application_status})`);
+    // If there's any other error (RLS, permissions, etc), return error
+    if (providerError) {
+      console.error(`[PROVIDER-RESET] Database error:`, providerError);
+      return res.status(500).json({ 
+        error: 'Database error occurred',
+        details: providerError.message
+      });
+    }
+
+    // Provider found successfully
+    console.log(`[PROVIDER-RESET] Provider found: ${provider.name} <${provider.email}>`);
 
     // Generate 6-digit OTP
     const otp = generateOTP();
