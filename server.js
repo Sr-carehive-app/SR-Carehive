@@ -211,7 +211,6 @@ if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || proces
   console.error('[INIT]    SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓' : '✗ MISSING');
   console.error('[INIT]    SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✓' : '✗ MISSING');
 }
-}
 
 // In-memory pending appointment store: orderId -> appointment payload (for dev only)
 const pendingAppointments = new Map();
@@ -3449,12 +3448,6 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
           mailerExists: !!mailer,
           mailerReady: mailerReady
         }
-      });
-    }
-      return res.status(500).json({ 
-        success: false,
-        error: 'Email service is currently unavailable. Please contact administrator.',
-        serviceUnavailable: true
       });
     }
 
