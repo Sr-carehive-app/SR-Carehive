@@ -3463,31 +3463,6 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     console.log(`[PROVIDER-RESET] ⏰ Expires at: ${new Date(expiresAt).toLocaleString()}`);
     console.log(`[PROVIDER-RESET] 💾 OTP stored in memory for: ${normalizedEmail}`);
 
-    // Check if email service is ready
-    console.log(`[PROVIDER-RESET] 📬 Checking email service status...`);
-    console.log(`[PROVIDER-RESET] 📬 Mailer exists: ${!!mailer}`);
-    console.log(`[PROVIDER-RESET] 📬 Mailer ready: ${mailerReady}`);
-    
-    if (!mailer || !mailerReady) {
-      // Remove OTP since email can't be sent
-      providerPasswordResetOTPs.delete(normalizedEmail);
-      
-      console.error('[PROVIDER-RESET] ❌ Email service NOT READY!');
-      console.error('[PROVIDER-RESET] ❌ Mailer:', mailer ? 'exists' : 'NULL');
-      console.error('[PROVIDER-RESET] ❌ Mailer ready flag:', mailerReady);
-      console.error('[PROVIDER-RESET] ⚠️  Check SMTP environment variables in Vercel!');
-      
-      return res.status(500).json({ 
-        success: false,
-        error: 'Email service is currently unavailable. Please contact administrator.',
-        serviceUnavailable: true,
-        debug: {
-          mailerExists: !!mailer,
-          mailerReady: mailerReady
-        }
-      });
-    }
-
     console.log(`[PROVIDER-RESET] 📧 Preparing to send OTP email to: ${normalizedEmail}`);
 
     const otpEmailHtml = `
