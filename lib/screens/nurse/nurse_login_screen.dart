@@ -304,6 +304,9 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         final result = await NurseApiService.sendPasswordResetOtp(email: email);
                         final message = result['message'] ?? 'OTP sent successfully';
                         
+                        print('🔍 Backend response message: "$message"');
+                        print('🔍 Message contains "If this email": ${message.contains('If this email')}');
+                        
                         setDialogState(() => isDialogLoading = false);
                         
                         if (!mounted) return;
