@@ -43,15 +43,23 @@ class _ForgotPasswordOTPScreenState extends State<ForgotPasswordOTPScreen> {
 
   @override
   void dispose() {
+    // Cancel timer first to stop any pending setState calls
     _cooldownTimer?.cancel();
+    _cooldownTimer = null;
+    
+    // Dispose all text controllers
     for (var controller in _otpControllers) {
       controller.dispose();
     }
+    
+    // Dispose all focus nodes
     for (var node in _otpFocusNodes) {
       node.dispose();
     }
+    
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    
     super.dispose();
   }
 
