@@ -315,9 +315,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         
                         if (!mounted) return;
                         
-                        // Check if this is a generic security message (email not found)
-                        // The backend returns this message when email doesn't exist to prevent enumeration
-                        if (message.contains('If this email is registered')) {
+                        // Check success flag - if false, email not found
+                        if (!success) {
                           // Email doesn't exist - show error and don't navigate
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(

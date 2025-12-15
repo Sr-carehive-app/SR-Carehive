@@ -3254,68 +3254,47 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       return res.status(500).json({ error: 'Database connection not available' });
     }
 
-    console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
-    
-    // Try to get provider - use minimal select to avoid RLS issues
-    const { data: provider, error: providerError } = await supabase
-      .from('healthcare_providers')
-      .select('id, email, name')
-      .eq('email', normalizedEmail)
-      .single();
+    console.log(`[PROVIDER-RESET] Checking if provider exists: ${normalizedEmail}`);
 
-    console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
-    console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
-    console.log(`[PROVIDER-RESET] Error code:`, providerError?.code);
-    console.log(`[PROVIDER-RESET] Error message:`, providerError?.message);
+    // Query database - Service role key bypasses RLS
+    let provider = null;
+    try {
+      const { data, error } = await supabase
+        .from('healthcare_providers')
+        .select('id, email, name')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
 
-    // Check if it's a "not found" error (PGRST116) vs actual error
-    if (providerError && providerError.code === 'PGRST116') {
-      // Not found - return generic message for security
-      console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
-      
-      // For security, still send generic success message and OTP
-      // This prevents email enumeration attacks
-      const otp = generateOTP();
-      const expiresAt = Date.now() + (10 * 60 * 1000);
-      const lastSentAt = Date.now();
-      
-      // Store fake OTP (won't work but maintains timing consistency)
-      providerPasswordResetOTPs.set(normalizedEmail, {
-        otp,
-        expiresAt,
-        attempts: 0,
-        providerId: null,
-        lastSentAt,
-        verified: false,
-        isFake: true // Mark as fake to prevent actual password reset
-      });
-      
-      console.log(`[PROVIDER-RESET] Generated fake OTP for security: ${otp}`);
-      
-      // DON'T send email for non-existent users (saves resources)
-      // Return success message to prevent enumeration
+      console.log(`[PROVIDER-RESET] DB Query - Data:`, data);
+      console.log(`[PROVIDER-RESET] DB Query - Error:`, error);
+
+      if (error) {
+        console.error(`[PROVIDER-RESET] Database query error:`, error);
+        // Don't fail - continue with null provider
+      } else {
+        provider = data;
+      }
+    } catch (err) {
+      console.error(`[PROVIDER-RESET] Exception during query:`, err);
+      // Continue with null provider
+    }
+
+    // If provider not found, return error (don't navigate to OTP page)
+    if (!provider) {
+      console.log(`[PROVIDER-RESET] Provider NOT found: ${normalizedEmail}`);
       return res.json({ 
-        success: true, 
+        success: false, 
         message: 'If this email is registered as a healthcare provider, an OTP has been sent.',
-        canResendAfter: 120 // 2 minutes
+        canResendAfter: 120
       });
     }
 
-    // If there's any other error (RLS, permissions, etc), return error
-    if (providerError) {
-      console.error(`[PROVIDER-RESET] Database error:`, providerError);
-      return res.status(500).json({ 
-        error: 'Database error occurred',
-        details: providerError.message
-      });
-    }
-
-    // Provider found successfully
-    console.log(`[PROVIDER-RESET] Provider found: ${provider.name} <${provider.email}>`);
+    // Provider found - generate and send OTP
+    console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.name} <${provider.email}>`);
 
     // Generate 6-digit OTP
     const otp = generateOTP();
-    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
     const lastSentAt = Date.now();
 
     // Store OTP in memory
@@ -3328,7 +3307,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       verified: false
     });
 
-    console.log(`[PROVIDER-RESET] Generated OTP for ${normalizedEmail}: ${otp} (expires in 10 min)`);
+    console.log(`[PROVIDER-RESET] Generated OTP: ${otp} (expires in 10 min)`);
 
     // Send OTP email
     if (!mailer) {
