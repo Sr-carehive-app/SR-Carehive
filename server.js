@@ -190,14 +190,27 @@ registerNurseResendOtpRoute(app);
 // Supabase client
 // Prefer service role for server-side inserts (bypasses RLS); fallback to anon for dev read-only/testing.
 let supabase = null;
+let supabaseInitialized = false;
+let usingServiceRole = false;
+
 if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)) {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
   if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.log('[INIT] Supabase using service role key for server-side operations');
+    console.log('[INIT] ✅ Supabase using SERVICE ROLE key (bypasses RLS)');
+    usingServiceRole = true;
   } else {
-    console.warn('[WARN] SUPABASE_SERVICE_ROLE_KEY not set. Using anon key; inserts may fail if RLS denies.');
+    console.warn('[INIT] ⚠️  SUPABASE_SERVICE_ROLE_KEY not set. Using ANON key; queries may fail if RLS blocks!');
+    usingServiceRole = false;
   }
   supabase = createClient(process.env.SUPABASE_URL, supabaseKey);
+  supabaseInitialized = true;
+  console.log('[INIT] ✅ Supabase client initialized');
+} else {
+  console.error('[INIT] ❌ Supabase NOT initialized - missing credentials!');
+  console.error('[INIT]    SUPABASE_URL:', process.env.SUPABASE_URL ? '✓' : '✗ MISSING');
+  console.error('[INIT]    SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓' : '✗ MISSING');
+  console.error('[INIT]    SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✓' : '✗ MISSING');
+}
 }
 
 // In-memory pending appointment store: orderId -> appointment payload (for dev only)
@@ -3295,44 +3308,102 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     if (!supabase) {
-      console.error('[ERROR] Supabase client not initialized');
-      return res.status(500).json({ error: 'Database connection not available' });
+      console.error('[PROVIDER-RESET] ❌ Supabase client not initialized');
+      console.error('[PROVIDER-RESET] ❌ Cannot query database!');
+      return res.status(500).json({ 
+        success: false,
+        error: 'Database connection not available. Please contact administrator.',
+        serviceError: true
+      });
     }
 
-    console.log(`[PROVIDER-RESET] Checking if provider exists: ${normalizedEmail}`);
+    console.log(`[PROVIDER-RESET] 🔍 Database check starting...`);
+    console.log(`[PROVIDER-RESET] 📧 Looking for email: "${normalizedEmail}"`);
+    console.log(`[PROVIDER-RESET] 🔑 Using ${usingServiceRole ? 'SERVICE ROLE' : 'ANON'} key`);
+    console.log(`[PROVIDER-RESET] 🗄️  Supabase initialized: ${supabaseInitialized}`);
 
-    // Query database - Service role key bypasses RLS
+    // Query database - Check healthcare_providers table with detailed logging
     let provider = null;
+    let providerId = null;
+    
     try {
-      const { data, error } = await supabase
+      console.log(`[PROVIDER-RESET] 🔍 Step 1: Querying healthcare_providers table...`);
+      
+      const query = supabase
         .from('healthcare_providers')
         .select('id, email, name')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
+        .ilike('email', normalizedEmail);
+      
+      console.log(`[PROVIDER-RESET] 📝 Query built, executing...`);
+      
+      const { data: hcpData, error: hcpError, status, statusText } = await query.maybeSingle();
 
-      console.log(`[PROVIDER-RESET] DB Query - Data:`, data);
-      console.log(`[PROVIDER-RESET] DB Query - Error:`, error);
+      console.log(`[PROVIDER-RESET] 📊 Query Response Status:`, status);
+      console.log(`[PROVIDER-RESET] 📊 Query Response StatusText:`, statusText);
+      console.log(`[PROVIDER-RESET] 📊 Query Data:`, JSON.stringify(hcpData, null, 2));
+      console.log(`[PROVIDER-RESET] 📊 Query Error:`, hcpError ? JSON.stringify(hcpError, null, 2) : 'None');
 
-      if (error) {
-        console.error(`[PROVIDER-RESET] Database query error:`, error);
-        // Don't fail - continue with null provider
-      } else {
-        provider = data;
+      if (hcpError) {
+        console.error(`[PROVIDER-RESET] ⚠️  Database query returned error:`, hcpError.message);
+        console.error(`[PROVIDER-RESET] ⚠️  Error code:`, hcpError.code);
+        console.error(`[PROVIDER-RESET] ⚠️  Error details:`, hcpError.details);
+        console.error(`[PROVIDER-RESET] ⚠️  Error hint:`, hcpError.hint);
       }
+
+      if (hcpData) {
+        provider = hcpData;
+        providerId = hcpData.id;
+        console.log(`[PROVIDER-RESET] ✅ FOUND in healthcare_providers!`);
+        console.log(`[PROVIDER-RESET] 👤 Provider: ${hcpData.name} (${hcpData.email})`);
+        console.log(`[PROVIDER-RESET] 🆔 Provider ID: ${providerId}`);
+      } else {
+        console.log(`[PROVIDER-RESET] ❌ NOT found in healthcare_providers table`);
+      }
+
+      // If not found, check nurses table as fallback
+      if (!provider) {
+        console.log(`[PROVIDER-RESET] 🔍 Step 2: Checking nurses table as fallback...`);
+        const { data: nurseData, error: nurseError } = await supabase
+          .from('nurses')
+          .select('id, email, name')
+          .ilike('email', normalizedEmail)
+          .maybeSingle();
+
+        console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, JSON.stringify(nurseData, null, 2));
+        console.log(`[PROVIDER-RESET] 📊 Nurses Query Error:`, nurseError ? JSON.stringify(nurseError, null, 2) : 'None');
+
+        if (nurseData) {
+          provider = nurseData;
+          providerId = nurseData.id;
+          console.log(`[PROVIDER-RESET] ✅ FOUND in nurses table!`);
+          console.log(`[PROVIDER-RESET] 👤 Nurse: ${nurseData.name} (${nurseData.email})`);
+        } else {
+          console.log(`[PROVIDER-RESET] ❌ NOT found in nurses table either`);
+        }
+      }
+
     } catch (err) {
-      console.error(`[PROVIDER-RESET] Exception during query:`, err);
-      // Continue with null provider
+      console.error(`[PROVIDER-RESET] ❌ EXCEPTION during database query!`);
+      console.error(`[PROVIDER-RESET] ❌ Error type:`, err.constructor.name);
+      console.error(`[PROVIDER-RESET] ❌ Error message:`, err.message);
+      console.error(`[PROVIDER-RESET] ❌ Error stack:`, err.stack);
     }
 
-    // If provider not found, return error (don't navigate to OTP page)
+    // Final check - if provider not found in BOTH tables
     if (!provider) {
-      console.log(`[PROVIDER-RESET] ❌ Provider NOT found: ${normalizedEmail}`);
+      console.log(`[PROVIDER-RESET] ❌ FINAL RESULT: Email NOT FOUND in any table`);
+      console.log(`[PROVIDER-RESET] 📧 Searched for: "${normalizedEmail}"`);
+      console.log(`[PROVIDER-RESET] 🗄️  Tables checked: healthcare_providers, nurses`);
+      
       return res.status(404).json({ 
         success: false, 
         error: 'This email is not registered as a healthcare provider. Please check your email address or contact support.',
-        notFound: true
+        notFound: true,
+        searchedEmail: normalizedEmail
       });
     }
+
+    console.log(`[PROVIDER-RESET] ✅ SUCCESS: Provider found! Proceeding with OTP generation...`);
 
     // Provider found - generate and send OTP
     console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.name} <${provider.email}>`);
@@ -3347,16 +3418,39 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       otp,
       expiresAt,
       attempts: 0,
-      providerId: provider.id,
+      providerId: providerId,
       lastSentAt,
       verified: false
     });
 
-    console.log(`[PROVIDER-RESET] Generated OTP: ${otp} (expires in 10 min)`);
+    console.log(`[PROVIDER-RESET] 📧 OTP Generated: ${otp}`);
+    console.log(`[PROVIDER-RESET] ⏰ Expires at: ${new Date(expiresAt).toLocaleString()}`);
+    console.log(`[PROVIDER-RESET] 💾 OTP stored in memory for: ${normalizedEmail}`);
 
-    // Check if email service is configured BEFORE storing OTP
-    if (!mailer) {
-      console.error('[PROVIDER-RESET] ❌ Email service not configured');
+    // Check if email service is ready
+    console.log(`[PROVIDER-RESET] 📬 Checking email service status...`);
+    console.log(`[PROVIDER-RESET] 📬 Mailer exists: ${!!mailer}`);
+    console.log(`[PROVIDER-RESET] 📬 Mailer ready: ${mailerReady}`);
+    
+    if (!mailer || !mailerReady) {
+      // Remove OTP since email can't be sent
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      
+      console.error('[PROVIDER-RESET] ❌ Email service NOT READY!');
+      console.error('[PROVIDER-RESET] ❌ Mailer:', mailer ? 'exists' : 'NULL');
+      console.error('[PROVIDER-RESET] ❌ Mailer ready flag:', mailerReady);
+      console.error('[PROVIDER-RESET] ⚠️  Check SMTP environment variables in Vercel!');
+      
+      return res.status(500).json({ 
+        success: false,
+        error: 'Email service is currently unavailable. Please contact administrator.',
+        serviceUnavailable: true,
+        debug: {
+          mailerExists: !!mailer,
+          mailerReady: mailerReady
+        }
+      });
+    }
       return res.status(500).json({ 
         success: false,
         error: 'Email service is currently unavailable. Please contact administrator.',
@@ -3901,6 +3995,93 @@ app.post('/api/notify-appointment-cancelled', async (req, res) => {
 });
 
 // ============================================================================
+// DEBUG ENDPOINTS
+// ============================================================================
+
+// System status endpoint - shows configuration status
+app.get('/api/debug/status', (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    server: 'SR CareHive Backend',
+    status: 'running',
+    services: {
+      database: {
+        initialized: supabaseInitialized,
+        usingServiceRole: usingServiceRole,
+        available: !!supabase
+      },
+      email: {
+        mailerExists: !!mailer,
+        mailerReady: mailerReady,
+        smtp: {
+          host: SMTP_HOST || 'not set',
+          port: SMTP_PORT || 'not set',
+          user: SMTP_USER || 'not set',
+          hasPassword: !!SMTP_PASS,
+          secure: SMTP_SECURE
+        }
+      }
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'development',
+      port: PORT
+    }
+  });
+});
+
+// Check if email exists in database (for debugging)
+app.get('/api/debug/check-email', async (req, res) => {
+  try {
+    const email = req.query.email;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email query parameter required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log(`[DEBUG] Checking email: ${normalizedEmail}`);
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not initialized' });
+    }
+
+    // Check healthcare_providers
+    const { data: hcpData, error: hcpError } = await supabase
+      .from('healthcare_providers')
+      .select('id, email, name')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    // Check nurses
+    const { data: nurseData, error: nurseError } = await supabase
+      .from('nurses')
+      .select('id, email, name')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    res.json({
+      searchedEmail: normalizedEmail,
+      results: {
+        healthcare_providers: {
+          found: !!hcpData,
+          data: hcpData,
+          error: hcpError
+        },
+        nurses: {
+          found: !!nurseData,
+          data: nurseData,
+          error: nurseError
+        }
+      },
+      overallResult: hcpData || nurseData ? 'FOUND' : 'NOT FOUND'
+    });
+
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // EMAIL TESTING ENDPOINT (For debugging)
 // ============================================================================
 app.get('/api/test-email', async (req, res) => {
