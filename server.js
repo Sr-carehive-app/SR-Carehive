@@ -3256,12 +3256,12 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
     
-    // Check if healthcare provider exists and is approved
+    // Check if healthcare provider exists - use ilike for case-insensitive match
     const { data: provider, error: providerError } = await supabase
       .from('healthcare_providers')
       .select('id, email, name, application_status, password_hash')
-      .eq('email', normalizedEmail)
-      .single();
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
 
     console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
