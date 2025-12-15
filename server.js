@@ -3328,10 +3328,10 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     try {
       console.log(`[PROVIDER-RESET] 🔍 Attempt 1: Direct query with explicit schema...`);
       
-      // Attempt 1: Explicit schema + ilike + single()
+      // Query with 'full_name' column from healthcare_providers table
       const { data: attempt1Data, error: attempt1Error, count: attempt1Count } = await supabase
         .from('healthcare_providers')
-        .select('id, email, name', { count: 'exact' })
+        .select('id, email, full_name', { count: 'exact' })
         .ilike('email', normalizedEmail);
 
       console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Count:`, attempt1Count);
@@ -3342,6 +3342,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         provider = attempt1Data[0];
         providerId = attempt1Data[0].id;
         console.log(`[PROVIDER-RESET] ✅ FOUND via Attempt 1!`);
+        console.log(`[PROVIDER-RESET] 👤 Provider: ${provider.email}`);
       }
 
       // If not found, try selecting ALL and filtering (debugging)
@@ -3350,7 +3351,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         
         const { data: allProviders, error: allError, count: totalCount } = await supabase
           .from('healthcare_providers')
-          .select('id, email, name', { count: 'exact' })
+          .select('id, email, full_name', { count: 'exact' })
           .limit(10);
 
         console.log(`[PROVIDER-RESET] 📊 Attempt 2 - Total count in table:`, totalCount);
@@ -3365,6 +3366,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
             providerId = found.id;
             console.log(`[PROVIDER-RESET] ✅ FOUND via manual search in fetched data!`);
             console.log(`[PROVIDER-RESET] ⚠️  Query filter not working but manual search worked!`);
+            console.log(`[PROVIDER-RESET] 👤 Provider email: ${provider.email}`);
           } else {
             console.log(`[PROVIDER-RESET] ❌ Not in first 10 records, checking if email matches any...`);
             const emailList = allProviders.map(p => `"${p.email}"`).join(', ');
@@ -3380,7 +3382,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         
         const { data: nurseData, error: nurseError } = await supabase
           .from('nurses')
-          .select('id, email, name')
+          .select('id, email, full_name')
           .ilike('email', normalizedEmail);
 
         console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, JSON.stringify(nurseData, null, 2));
@@ -3390,7 +3392,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
           provider = nurseData[0];
           providerId = nurseData[0].id;
           console.log(`[PROVIDER-RESET] ✅ FOUND in nurses table!`);
-          console.log(`[PROVIDER-RESET] 👤 Nurse: ${provider.name} (${provider.email})`);
+          console.log(`[PROVIDER-RESET] 👤 Nurse: ${provider.email}`);
         } else {
           console.log(`[PROVIDER-RESET] ❌ NOT found in nurses table either`);
           
@@ -3425,9 +3427,14 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     console.log(`[PROVIDER-RESET] ✅ SUCCESS: Provider found! Proceeding with OTP generation...`);
+    console.log(`[PROVIDER-RESET] 👤 Provider details:`, {
+      id: provider.id,
+      email: provider.email,
+      full_name: provider.full_name
+    });
 
     // Provider found - generate and send OTP
-    console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.name} <${provider.email}>`);
+    console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.email}`);
 
     // Generate 6-digit OTP
     const otp = generateOTP();
@@ -3483,7 +3490,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         
         <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
-            Hello <strong>${provider.name}</strong>,
+            Hello <strong>${provider.full_name}</strong>,
           </p>
           
           <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
