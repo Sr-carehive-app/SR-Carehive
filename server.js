@@ -735,8 +735,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     console.log('📋 Provider found - verifying credentials');
     
-    // Verify password (hash the input and compare)
-    const hashedInputPassword = crypto.createHash('sha256').update(password).digest('hex');
+    // Verify password using bcrypt
     const storedPasswordHash = provider.password_hash;
     
     if (!storedPasswordHash) {
@@ -744,7 +743,10 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Account configuration error. Please contact support.' });
     }
     
-    if (storedPasswordHash !== hashedInputPassword) {
+    // Use bcrypt to compare password
+    const isPasswordValid = await bcrypt.compare(password, storedPasswordHash);
+    
+    if (!isPasswordValid) {
       console.log('❌ Password mismatch');
       return res.status(401).json({ success: false, error: 'Invalid credentials! Email or password is incorrect.' });
     }
