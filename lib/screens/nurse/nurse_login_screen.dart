@@ -301,7 +301,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                       try {
                         print('📧 Sending password reset OTP to: $email');
                         
-                        await NurseApiService.sendPasswordResetOtp(email: email);
+                        final result = await NurseApiService.sendPasswordResetOtp(email: email);
+                        final message = result['message'] ?? 'OTP sent successfully';
                         
                         setDialogState(() => isDialogLoading = false);
                         
@@ -319,11 +320,16 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           ),
                         );
                         
+                        // Show the actual message from server (generic or specific)
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('✅ OTP sent! Check your email.'),
-                            backgroundColor: Colors.green,
-                            duration: Duration(seconds: 3),
+                          SnackBar(
+                            content: Text(message.contains('If this email') 
+                              ? '📧 $message' 
+                              : '✅ $message'),
+                            backgroundColor: message.contains('If this email') 
+                              ? Colors.orange 
+                              : Colors.green,
+                            duration: Duration(seconds: 4),
                           ),
                         );
                       } catch (e) {

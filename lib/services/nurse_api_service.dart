@@ -278,9 +278,9 @@ class NurseApiService {
   // ============================================================================
 
   /// Send password reset OTP to healthcare provider email
-  /// Returns true if OTP sent successfully
+  /// Returns a map with 'success' and 'message' keys
   /// Throws exception on rate limiting (429) or other errors
-  static Future<bool> sendPasswordResetOtp({required String email}) async {
+  static Future<Map<String, dynamic>> sendPasswordResetOtp({required String email}) async {
     try {
       final resp = await http.post(
         Uri.parse('$_base/api/nurse/send-password-reset-otp'),
@@ -289,7 +289,11 @@ class NurseApiService {
       );
       
       if (resp.statusCode == 200) {
-        return true;
+        final data = jsonDecode(resp.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP sent successfully',
+        };
       }
       
       // Handle rate limiting (429 Too Many Requests)
