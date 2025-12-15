@@ -308,6 +308,20 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         
                         if (!mounted) return;
                         
+                        // Check if email doesn't exist (generic security message)
+                        if (message.contains('If this email')) {
+                          // Email doesn't exist - show error and don't navigate
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('❌ Email not found. Please check and try again.'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                          return; // Don't close dialog, don't navigate
+                        }
+                        
+                        // Email exists and OTP sent - proceed
                         // Close dialog
                         forgotPasswordEmailController.dispose();
                         Navigator.pop(dialogContext);
@@ -320,16 +334,12 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           ),
                         );
                         
-                        // Show the actual message from server (generic or specific)
+                        // Show success message
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(message.contains('If this email') 
-                              ? '📧 $message' 
-                              : '✅ $message'),
-                            backgroundColor: message.contains('If this email') 
-                              ? Colors.orange 
-                              : Colors.green,
-                            duration: Duration(seconds: 4),
+                          const SnackBar(
+                            content: Text('✅ OTP sent successfully! Check your email.'),
+                            backgroundColor: Colors.green,
+                            duration: Duration(seconds: 3),
                           ),
                         );
                       } catch (e) {
