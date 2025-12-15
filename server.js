@@ -3327,33 +3327,31 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     
     try {
       console.log(`[PROVIDER-RESET] 🔍 Step 1: Querying healthcare_providers table...`);
+      console.log(`[PROVIDER-RESET] 📝 Using ILIKE for case-insensitive search`);
       
-      const query = supabase
+      // Use .ilike() for case-insensitive search + .limit(1) to get array
+      const { data: hcpData, error: hcpError, status } = await supabase
         .from('healthcare_providers')
         .select('id, email, name')
-        .ilike('email', normalizedEmail);
-      
-      console.log(`[PROVIDER-RESET] 📝 Query built, executing...`);
-      
-      const { data: hcpData, error: hcpError, status, statusText } = await query.maybeSingle();
+        .ilike('email', normalizedEmail)
+        .limit(1);
 
-      console.log(`[PROVIDER-RESET] 📊 Query Response Status:`, status);
-      console.log(`[PROVIDER-RESET] 📊 Query Response StatusText:`, statusText);
+      console.log(`[PROVIDER-RESET] 📊 Query Status:`, status);
+      console.log(`[PROVIDER-RESET] 📊 Query returned ${hcpData ? hcpData.length : 0} rows`);
       console.log(`[PROVIDER-RESET] 📊 Query Data:`, JSON.stringify(hcpData, null, 2));
       console.log(`[PROVIDER-RESET] 📊 Query Error:`, hcpError ? JSON.stringify(hcpError, null, 2) : 'None');
 
       if (hcpError) {
-        console.error(`[PROVIDER-RESET] ⚠️  Database query returned error:`, hcpError.message);
+        console.error(`[PROVIDER-RESET] ⚠️  Database query error:`, hcpError.message);
         console.error(`[PROVIDER-RESET] ⚠️  Error code:`, hcpError.code);
         console.error(`[PROVIDER-RESET] ⚠️  Error details:`, hcpError.details);
-        console.error(`[PROVIDER-RESET] ⚠️  Error hint:`, hcpError.hint);
       }
 
-      if (hcpData) {
-        provider = hcpData;
-        providerId = hcpData.id;
+      if (hcpData && hcpData.length > 0) {
+        provider = hcpData[0];
+        providerId = hcpData[0].id;
         console.log(`[PROVIDER-RESET] ✅ FOUND in healthcare_providers!`);
-        console.log(`[PROVIDER-RESET] 👤 Provider: ${hcpData.name} (${hcpData.email})`);
+        console.log(`[PROVIDER-RESET] 👤 Provider: ${provider.name} (${provider.email})`);
         console.log(`[PROVIDER-RESET] 🆔 Provider ID: ${providerId}`);
       } else {
         console.log(`[PROVIDER-RESET] ❌ NOT found in healthcare_providers table`);
@@ -3362,20 +3360,21 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       // If not found, check nurses table as fallback
       if (!provider) {
         console.log(`[PROVIDER-RESET] 🔍 Step 2: Checking nurses table as fallback...`);
+        
         const { data: nurseData, error: nurseError } = await supabase
           .from('nurses')
           .select('id, email, name')
           .ilike('email', normalizedEmail)
-          .maybeSingle();
+          .limit(1);
 
         console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, JSON.stringify(nurseData, null, 2));
         console.log(`[PROVIDER-RESET] 📊 Nurses Query Error:`, nurseError ? JSON.stringify(nurseError, null, 2) : 'None');
 
-        if (nurseData) {
-          provider = nurseData;
-          providerId = nurseData.id;
+        if (nurseData && nurseData.length > 0) {
+          provider = nurseData[0];
+          providerId = nurseData[0].id;
           console.log(`[PROVIDER-RESET] ✅ FOUND in nurses table!`);
-          console.log(`[PROVIDER-RESET] 👤 Nurse: ${nurseData.name} (${nurseData.email})`);
+          console.log(`[PROVIDER-RESET] 👤 Nurse: ${provider.name} (${provider.email})`);
         } else {
           console.log(`[PROVIDER-RESET] ❌ NOT found in nurses table either`);
         }
@@ -4039,35 +4038,71 @@ app.get('/api/debug/check-email', async (req, res) => {
       return res.status(500).json({ error: 'Supabase not initialized' });
     }
 
-    // Check healthcare_providers
-    const { data: hcpData, error: hcpError } = await supabase
+    // Check healthcare_providers with exact match
+    const { data: hcpExact, error: hcpExactError } = await supabase
+      .from('healthcare_providers')
+      .select('id, email, name')
+      .eq('email', normalizedEmail)
+      .limit(1);
+
+    // Check healthcare_providers with case-insensitive
+    const { data: hcpIlike, error: hcpIlikeError } = await supabase
       .from('healthcare_providers')
       .select('id, email, name')
       .ilike('email', normalizedEmail)
-      .maybeSingle();
+      .limit(1);
 
-    // Check nurses
-    const { data: nurseData, error: nurseError } = await supabase
+    // Check nurses with exact match
+    const { data: nurseExact, error: nurseExactError } = await supabase
+      .from('nurses')
+      .select('id, email, name')
+      .eq('email', normalizedEmail)
+      .limit(1);
+
+    // Check nurses with case-insensitive
+    const { data: nurseIlike, error: nurseIlikeError } = await supabase
       .from('nurses')
       .select('id, email, name')
       .ilike('email', normalizedEmail)
-      .maybeSingle();
+      .limit(1);
 
     res.json({
       searchedEmail: normalizedEmail,
+      usingServiceRole: usingServiceRole,
+      supabaseInitialized: supabaseInitialized,
       results: {
         healthcare_providers: {
-          found: !!hcpData,
-          data: hcpData,
-          error: hcpError
+          exactMatch: {
+            found: !!(hcpExact && hcpExact.length > 0),
+            count: hcpExact ? hcpExact.length : 0,
+            data: hcpExact,
+            error: hcpExactError
+          },
+          caseInsensitive: {
+            found: !!(hcpIlike && hcpIlike.length > 0),
+            count: hcpIlike ? hcpIlike.length : 0,
+            data: hcpIlike,
+            error: hcpIlikeError
+          }
         },
         nurses: {
-          found: !!nurseData,
-          data: nurseData,
-          error: nurseError
+          exactMatch: {
+            found: !!(nurseExact && nurseExact.length > 0),
+            count: nurseExact ? nurseExact.length : 0,
+            data: nurseExact,
+            error: nurseExactError
+          },
+          caseInsensitive: {
+            found: !!(nurseIlike && nurseIlike.length > 0),
+            count: nurseIlike ? nurseIlike.length : 0,
+            data: nurseIlike,
+            error: nurseIlikeError
+          }
         }
       },
-      overallResult: hcpData || nurseData ? 'FOUND' : 'NOT FOUND'
+      overallResult: (hcpExact && hcpExact.length > 0) || (hcpIlike && hcpIlike.length > 0) || 
+                     (nurseExact && nurseExact.length > 0) || (nurseIlike && nurseIlike.length > 0) 
+                     ? 'FOUND' : 'NOT FOUND'
     });
 
   } catch (e) {
