@@ -3256,20 +3256,51 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     console.log(`[PROVIDER-RESET] Querying healthcare_providers table for email: ${normalizedEmail}`);
     
-    // Check if healthcare provider exists - use ilike for case-insensitive match
-    const { data: provider, error: providerError } = await supabase
+    // Check if healthcare provider exists - use eq for exact match on normalized email
+    const { data: providers, error: providerError } = await supabase
       .from('healthcare_providers')
       .select('id, email, name, application_status, password_hash')
-      .ilike('email', normalizedEmail)
-      .maybeSingle();
+      .eq('email', normalizedEmail);
 
-    console.log(`[PROVIDER-RESET] Query result - Data:`, provider);
+    console.log(`[PROVIDER-RESET] Query result - Data:`, providers);
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
+    console.log(`[PROVIDER-RESET] Number of providers found:`, providers?.length || 0);
 
-    if (providerError || !provider) {
+    // Check if provider was found
+    const provider = providers && providers.length > 0 ? providers[0] : null;
+
+    if (providerError) {
+      console.error(`[PROVIDER-RESET] Database error:`, providerError);
+      return res.status(500).json({ 
+        error: 'Database error occurred',
+        details: providerError.message
+      });
+    }
+
+    if (!provider) {
       console.log(`[PROVIDER-RESET] Healthcare provider not found: ${normalizedEmail}`);
       
-      // Return success to prevent email enumeration (security best practice)
+      // For security, still send generic success message and OTP
+      // This prevents email enumeration attacks
+      const otp = generateOTP();
+      const expiresAt = Date.now() + (10 * 60 * 1000);
+      const lastSentAt = Date.now();
+      
+      // Store fake OTP (won't work but maintains timing consistency)
+      providerPasswordResetOTPs.set(normalizedEmail, {
+        otp,
+        expiresAt,
+        attempts: 0,
+        providerId: null,
+        lastSentAt,
+        verified: false,
+        isFake: true // Mark as fake to prevent actual password reset
+      });
+      
+      console.log(`[PROVIDER-RESET] Generated fake OTP for security: ${otp}`);
+      
+      // DON'T send email for non-existent users (saves resources)
+      // Return success message to prevent enumeration
       return res.json({ 
         success: true, 
         message: 'If this email is registered as a healthcare provider, an OTP has been sent.',
@@ -3410,6 +3441,19 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
       });
     }
 
+    // Check if this is a fake OTP (for non-existent users)
+    if (otpData.isFake) {
+      console.log(`[PROVIDER-RESET] Fake OTP attempted for: ${normalizedEmail}`);
+      otpData.attempts += 1;
+      providerPasswordResetOTPs.set(normalizedEmail, otpData);
+      
+      const remainingAttempts = 5 - otpData.attempts;
+      return res.status(400).json({ 
+        error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
+        remainingAttempts 
+      });
+    }
+
     // Check if OTP is expired
     if (Date.now() > otpData.expiresAt) {
       console.log(`[PROVIDER-RESET] OTP expired for: ${normalizedEmail}`);
@@ -3481,6 +3525,15 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
       console.log(`[PROVIDER-RESET] OTP not verified for: ${normalizedEmail}`);
       return res.status(400).json({ 
         error: 'OTP not verified. Please verify OTP first.' 
+      });
+    }
+
+    // Check if this is a fake OTP (for non-existent users)
+    if (otpData.isFake) {
+      console.log(`[PROVIDER-RESET] Password reset blocked - fake OTP for: ${normalizedEmail}`);
+      providerPasswordResetOTPs.delete(normalizedEmail);
+      return res.status(400).json({ 
+        error: 'Invalid request. Please try again.' 
       });
     }
 

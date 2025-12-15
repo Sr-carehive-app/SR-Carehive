@@ -302,17 +302,19 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         print('📧 Sending password reset OTP to: $email');
                         
                         final result = await NurseApiService.sendPasswordResetOtp(email: email);
+                        final success = result['success'] ?? false;
                         final message = result['message'] ?? 'OTP sent successfully';
                         
+                        print('🔍 Backend response success: $success');
                         print('🔍 Backend response message: "$message"');
-                        print('🔍 Message contains "If this email": ${message.contains('If this email')}');
                         
                         setDialogState(() => isDialogLoading = false);
                         
                         if (!mounted) return;
                         
-                        // Check if email doesn't exist (generic security message)
-                        if (message.contains('If this email')) {
+                        // Check if this is a generic security message (email not found)
+                        // The backend returns this message when email doesn't exist to prevent enumeration
+                        if (message.contains('If this email is registered')) {
                           // Email doesn't exist - show error and don't navigate
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -324,7 +326,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           return; // Don't close dialog, don't navigate
                         }
                         
-                        // Email exists and OTP sent - proceed
+                        // Email exists and OTP sent successfully - proceed
                         // Close dialog
                         forgotPasswordEmailController.dispose();
                         Navigator.pop(dialogContext);
