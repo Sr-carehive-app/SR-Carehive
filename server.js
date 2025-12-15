@@ -3266,8 +3266,8 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     console.log(`[PROVIDER-RESET] Query result - Error:`, providerError);
     console.log(`[PROVIDER-RESET] Number of providers found:`, providers?.length || 0);
 
-    // Check for actual database errors (not "no results found")
-    if (providerError && providerError.code !== 'PGRST116') {
+    // Check for actual database errors only (empty results are not errors)
+    if (providerError) {
       console.error(`[PROVIDER-RESET] Database error:`, providerError);
       return res.status(500).json({ 
         error: 'Database error occurred',
