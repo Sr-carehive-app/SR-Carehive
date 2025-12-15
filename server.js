@@ -3321,51 +3321,67 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     console.log(`[PROVIDER-RESET] 🔑 Using ${usingServiceRole ? 'SERVICE ROLE' : 'ANON'} key`);
     console.log(`[PROVIDER-RESET] 🗄️  Supabase initialized: ${supabaseInitialized}`);
 
-    // Query database - Check healthcare_providers table with detailed logging
+    // Query database with MULTIPLE approaches to find the issue
     let provider = null;
     let providerId = null;
     
     try {
-      console.log(`[PROVIDER-RESET] 🔍 Step 1: Querying healthcare_providers table...`);
-      console.log(`[PROVIDER-RESET] 📝 Using ILIKE for case-insensitive search`);
+      console.log(`[PROVIDER-RESET] 🔍 Attempt 1: Direct query with explicit schema...`);
       
-      // Use .ilike() for case-insensitive search + .limit(1) to get array
-      const { data: hcpData, error: hcpError, status } = await supabase
+      // Attempt 1: Explicit schema + ilike + single()
+      const { data: attempt1Data, error: attempt1Error, count: attempt1Count } = await supabase
         .from('healthcare_providers')
-        .select('id, email, name')
-        .ilike('email', normalizedEmail)
-        .limit(1);
+        .select('id, email, name', { count: 'exact' })
+        .ilike('email', normalizedEmail);
 
-      console.log(`[PROVIDER-RESET] 📊 Query Status:`, status);
-      console.log(`[PROVIDER-RESET] 📊 Query returned ${hcpData ? hcpData.length : 0} rows`);
-      console.log(`[PROVIDER-RESET] 📊 Query Data:`, JSON.stringify(hcpData, null, 2));
-      console.log(`[PROVIDER-RESET] 📊 Query Error:`, hcpError ? JSON.stringify(hcpError, null, 2) : 'None');
+      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Count:`, attempt1Count);
+      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Data:`, JSON.stringify(attempt1Data, null, 2));
+      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Error:`, attempt1Error);
 
-      if (hcpError) {
-        console.error(`[PROVIDER-RESET] ⚠️  Database query error:`, hcpError.message);
-        console.error(`[PROVIDER-RESET] ⚠️  Error code:`, hcpError.code);
-        console.error(`[PROVIDER-RESET] ⚠️  Error details:`, hcpError.details);
+      if (attempt1Data && attempt1Data.length > 0) {
+        provider = attempt1Data[0];
+        providerId = attempt1Data[0].id;
+        console.log(`[PROVIDER-RESET] ✅ FOUND via Attempt 1!`);
       }
 
-      if (hcpData && hcpData.length > 0) {
-        provider = hcpData[0];
-        providerId = hcpData[0].id;
-        console.log(`[PROVIDER-RESET] ✅ FOUND in healthcare_providers!`);
-        console.log(`[PROVIDER-RESET] 👤 Provider: ${provider.name} (${provider.email})`);
-        console.log(`[PROVIDER-RESET] 🆔 Provider ID: ${providerId}`);
-      } else {
-        console.log(`[PROVIDER-RESET] ❌ NOT found in healthcare_providers table`);
-      }
-
-      // If not found, check nurses table as fallback
+      // If not found, try selecting ALL and filtering (debugging)
       if (!provider) {
-        console.log(`[PROVIDER-RESET] 🔍 Step 2: Checking nurses table as fallback...`);
+        console.log(`[PROVIDER-RESET] 🔍 Attempt 2: Fetching ALL providers to check if table is accessible...`);
+        
+        const { data: allProviders, error: allError, count: totalCount } = await supabase
+          .from('healthcare_providers')
+          .select('id, email, name', { count: 'exact' })
+          .limit(10);
+
+        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - Total count in table:`, totalCount);
+        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - First 10 emails:`, allProviders ? allProviders.map(p => p.email).join(', ') : 'none');
+        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - Error:`, allError);
+
+        // Manual search in fetched data
+        if (allProviders && allProviders.length > 0) {
+          const found = allProviders.find(p => p.email.toLowerCase() === normalizedEmail);
+          if (found) {
+            provider = found;
+            providerId = found.id;
+            console.log(`[PROVIDER-RESET] ✅ FOUND via manual search in fetched data!`);
+            console.log(`[PROVIDER-RESET] ⚠️  Query filter not working but manual search worked!`);
+          } else {
+            console.log(`[PROVIDER-RESET] ❌ Not in first 10 records, checking if email matches any...`);
+            const emailList = allProviders.map(p => `"${p.email}"`).join(', ');
+            console.log(`[PROVIDER-RESET] 📝 Available emails: ${emailList}`);
+            console.log(`[PROVIDER-RESET] 📝 Searching for: "${normalizedEmail}"`);
+          }
+        }
+      }
+
+      // If still not found, check nurses table
+      if (!provider) {
+        console.log(`[PROVIDER-RESET] 🔍 Attempt 3: Checking nurses table...`);
         
         const { data: nurseData, error: nurseError } = await supabase
           .from('nurses')
           .select('id, email, name')
-          .ilike('email', normalizedEmail)
-          .limit(1);
+          .ilike('email', normalizedEmail);
 
         console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, JSON.stringify(nurseData, null, 2));
         console.log(`[PROVIDER-RESET] 📊 Nurses Query Error:`, nurseError ? JSON.stringify(nurseError, null, 2) : 'None');
@@ -3377,6 +3393,13 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
           console.log(`[PROVIDER-RESET] 👤 Nurse: ${provider.name} (${provider.email})`);
         } else {
           console.log(`[PROVIDER-RESET] ❌ NOT found in nurses table either`);
+          
+          // Fetch all nurses too for comparison
+          const { data: allNurses } = await supabase
+            .from('nurses')
+            .select('email')
+            .limit(5);
+          console.log(`[PROVIDER-RESET] 📝 Sample nurse emails:`, allNurses ? allNurses.map(n => n.email).join(', ') : 'none');
         }
       }
 
