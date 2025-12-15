@@ -312,13 +312,15 @@ async function initializeMailer() {
 }
 
 // Initialize mailer on startup
-initializeMailer().then(success => {
+// Initialize mailer immediately (synchronous for serverless environments)
+(async () => {
+  const success = await initializeMailer();
   if (success) {
     console.log('[INIT] 📧 Email service is READY');
   } else {
     console.error('[INIT] 📧 Email service is NOT available');
   }
-});
+})();
 
 function generateReceiptPdfBuffer({
   title = 'Payment Receipt',
@@ -372,10 +374,15 @@ function generateReceiptPdfBuffer({
 }
 
 async function sendEmail({ to, subject, html, attachments = [] }) {
-  if (!mailer) {
-    const error = new Error('Email transport not configured. Please contact administrator.');
-    console.error('[EMAIL] ❌ Transport not configured. Cannot send to:', to);
-    throw error;
+  // Lazy initialization - ensure mailer is ready before sending
+  if (!mailer || !mailerReady) {
+    console.log('[EMAIL] ⚠️ Mailer not ready, attempting to initialize...');
+    const success = await initializeMailer();
+    if (!success) {
+      const error = new Error('Email transport not configured. Please contact administrator.');
+      console.error('[EMAIL] ❌ Transport initialization failed. Cannot send to:', to);
+      throw error;
+    }
   }
   
   try {
