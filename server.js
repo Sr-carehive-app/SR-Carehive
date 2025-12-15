@@ -735,7 +735,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     console.log('📋 Provider found - verifying credentials');
     
-    // Verify password using bcrypt
+    // Verify password - support both bcrypt and legacy SHA-256
     const storedPasswordHash = provider.password_hash;
     
     if (!storedPasswordHash) {
@@ -743,8 +743,18 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Account configuration error. Please contact support.' });
     }
     
-    // Use bcrypt to compare password
-    const isPasswordValid = await bcrypt.compare(password, storedPasswordHash);
+    let isPasswordValid = false;
+    
+    // Try bcrypt first (for newly reset passwords)
+    if (storedPasswordHash.startsWith('$2a$') || storedPasswordHash.startsWith('$2b$')) {
+      console.log('🔐 Using bcrypt verification');
+      isPasswordValid = await bcrypt.compare(password, storedPasswordHash);
+    } else {
+      // Legacy SHA-256 verification (for existing registrations)
+      console.log('🔐 Using legacy SHA-256 verification');
+      const hashedInputPassword = crypto.createHash('sha256').update(password).digest('hex');
+      isPasswordValid = (storedPasswordHash === hashedInputPassword);
+    }
     
     if (!isPasswordValid) {
       console.log('❌ Password mismatch');
