@@ -310,11 +310,20 @@ class NurseApiService {
       }
       
       // Handle rate limiting (429 Too Many Requests)
+      // OTP is already sent, just inform user to check email
       if (resp.statusCode == 429) {
-        final error = resp.body.isNotEmpty 
-            ? jsonDecode(resp.body)['error'] ?? 'Too many requests' 
-            : 'Too many requests';
-        throw Exception('429: $error');
+        final data = resp.body.isNotEmpty ? jsonDecode(resp.body) : {};
+        final errorMsg = data['error'] ?? 'Too many requests';
+        final remainingSeconds = data['remainingSeconds'];
+        
+        // Return success with special message since OTP was already sent
+        return {
+          'success': true,  // Mark as success because OTP is sent
+          'message': 'OTP already sent! Please check your email.',
+          'rateLimited': true,
+          'remainingSeconds': remainingSeconds,
+          'note': errorMsg,
+        };
       }
       
       // Handle 500 - Server/Email service error

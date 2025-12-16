@@ -189,13 +189,16 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
   Future<void> _handleForgotPassword() async {
     final forgotPasswordEmailController = TextEditingController();
-    bool isDialogLoading = false;
     
-    await showDialog(
+    // Dialog returns a map with email and message, or null
+    final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) {
+        bool isDialogLoading = false;
+        
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -263,7 +266,6 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
           actions: [
             TextButton(
               onPressed: isDialogLoading ? null : () {
-                forgotPasswordEmailController.dispose();
                 Navigator.pop(dialogContext);
               },
               child: Text(
@@ -278,7 +280,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                       final email = forgotPasswordEmailController.text.trim();
                       
                       if (email.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter your email address'),
                             backgroundColor: Colors.orange,
@@ -290,7 +293,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                       // Validate email format
                       final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                       if (!emailRegex.hasMatch(email)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter a valid email address'),
                             backgroundColor: Colors.orange,
@@ -330,7 +334,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                             errorMsg = '❌ Email service is temporarily unavailable.\n\nPlease try again in a few minutes.';
                           }
                           
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
                             SnackBar(
                               content: Text(errorMsg),
                               backgroundColor: Colors.red,
@@ -340,48 +345,42 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           return; // Don't close dialog, don't navigate
                         }
                         
-                        // Email exists and OTP sent successfully - proceed
-                        // Close dialog
-                        forgotPasswordEmailController.dispose();
-                        Navigator.pop(dialogContext);
-                        
-                        // Navigate to OTP verification screen
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => NurseForgotPasswordOTPScreen(email: email),
-                          ),
-                        );
-                        
-                        // Show success message
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('✅ $message'),
-                            backgroundColor: Colors.green,
-                            duration: const Duration(seconds: 4),
-                          ),
-                        );
+                        // Success! Return email and message to show OUTSIDE dialog
+                        Navigator.pop(dialogContext, {
+                          'email': email,
+                          'message': message,
+                        });
                       } catch (e) {
                         setDialogState(() => isDialogLoading = false);
                         
                         if (!mounted) return;
                         
                         String errorMessage = 'Failed to send OTP. Please try again.';
+                        bool isRateLimitError = false;
                         
-                        // Handle rate limiting error
-                        if (e.toString().contains('429') || e.toString().contains('wait')) {
-                          errorMessage = 'Too many requests. Please wait 2 minutes before trying again.';
+                        print('❌ Error sending password reset OTP: $e');
+                        
+                        // Check if it's a 429 rate limit error
+                        if (e.toString().contains('429')) {
+                          isRateLimitError = true;
+                          
+                          // Try to extract time from error message
+                          final errorStr = e.toString();
+                          if (errorStr.contains('minute')) {
+                            errorMessage = '⏳ Please wait before requesting a new OTP.\n\nIf you already received an OTP, please check your email inbox and spam folder.';
+                          } else {
+                            errorMessage = '⏳ OTP already sent! Please check your email.\n\nWait 2 minutes before requesting a new OTP.';
+                          }
                         } else if (e.toString().contains('Exception:')) {
                           errorMessage = e.toString().replaceFirst('Exception: ', '');
                         }
                         
-                        print('❌ Error sending password reset OTP: $e');
-                        
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
                           SnackBar(
                             content: Text(errorMessage),
-                            backgroundColor: Colors.red,
-                            duration: const Duration(seconds: 4),
+                            backgroundColor: isRateLimitError ? Colors.orange : Colors.red,
+                            duration: Duration(seconds: isRateLimitError ? 6 : 4),
                           ),
                         );
                       }
@@ -407,8 +406,38 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
             ),
           ],
         ),
-      ),
+      );
+      },
     );
+    
+    // Wait for dialog close animation to complete before disposing controller
+    await Future.delayed(const Duration(milliseconds: 300));
+    forgotPasswordEmailController.dispose();
+    
+    // If result was returned, show message and navigate (OUTSIDE dialog)
+    if (result != null && mounted) {
+      final email = result['email']!;
+      final message = result['message']!;
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ $message'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      
+      if (!mounted) return;
+      
+      // Now navigate - completely safe!
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => NurseForgotPasswordOTPScreen(email: email),
+        ),
+      );
+    }
   }
 
   @override

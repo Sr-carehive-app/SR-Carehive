@@ -64,6 +64,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
   }
 
   void _startResendCooldown() {
+    if (!mounted) return;
     setState(() {
       _canResend = false;
       _resendCooldown = 120; // 2 minutes
@@ -98,6 +99,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     setState(() {
       _errorMessage = message;
     });
@@ -107,12 +109,14 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
     final otp = _getOTP();
     
     if (otp.length != 6) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Please enter complete 6-digit OTP';
       });
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -179,6 +183,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
 
     // Validation
     if (newPassword.isEmpty || confirmPassword.isEmpty) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Please fill all password fields';
       });
@@ -186,6 +191,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
     }
 
     if (newPassword.length < 6) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Password must be at least 6 characters';
       });
@@ -193,12 +199,14 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
     }
 
     if (newPassword != confirmPassword) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Passwords do not match';
       });
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -262,6 +270,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
   Future<void> _resendOTP() async {
     if (!_canResend) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -303,6 +312,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
       } else if (response.statusCode == 429) {
         // Cooldown active - update remaining time
         final remainingSeconds = data['remainingSeconds'] ?? 120;
+        if (!mounted) return;
         setState(() {
           _resendCooldown = remainingSeconds;
           _canResend = false;
