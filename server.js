@@ -833,6 +833,110 @@ async function isAuthed(req) {
   return true;
 }
 
+// Password Reset OTP Storage Functions
+async function storePasswordResetOTP(email, otpData) {
+  const key = `password-reset-otp:${email}`;
+  const ttl = 600; // 10 minutes in seconds
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(otpData));
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] storePasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  passwordResetOTPs.set(email, otpData);
+  return true;
+}
+
+async function getPasswordResetOTP(email) {
+  const key = `password-reset-otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getPasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  return passwordResetOTPs.get(email) || null;
+}
+
+async function deletePasswordResetOTP(email) {
+  const key = `password-reset-otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      await redis.del(key);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] deletePasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  passwordResetOTPs.delete(email);
+  return true;
+}
+
+// Provider Password Reset OTP Storage Functions
+async function storeProviderPasswordResetOTP(email, otpData) {
+  const key = `provider-password-reset-otp:${email}`;
+  const ttl = 600; // 10 minutes in seconds
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(otpData));
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] storeProviderPasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  providerPasswordResetOTPs.set(email, otpData);
+  return true;
+}
+
+async function getProviderPasswordResetOTP(email) {
+  const key = `provider-password-reset-otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getProviderPasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  return providerPasswordResetOTPs.get(email) || null;
+}
+
+async function deleteProviderPasswordResetOTP(email) {
+  const key = `provider-password-reset-otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      await redis.del(key);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] deleteProviderPasswordResetOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  providerPasswordResetOTPs.delete(email);
+  return true;
+}
+
 app.post('/api/nurse/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -3014,7 +3118,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     }
 
     // Check for resend cooldown (2 minutes)
-    const existingOTP = passwordResetOTPs.get(normalizedEmail);
+    const existingOTP = await getPasswordResetOTP(normalizedEmail);
     if (existingOTP && existingOTP.lastSentAt) {
       const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
       const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
@@ -3085,8 +3189,8 @@ app.post('/send-password-reset-otp', async (req, res) => {
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
     const lastSentAt = Date.now();
 
-    // Store OTP in memory
-    passwordResetOTPs.set(normalizedEmail, {
+    // Store OTP using Redis
+    await storePasswordResetOTP(normalizedEmail, {
       otp,
       expiresAt,
       attempts: 0,
@@ -3236,7 +3340,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedEmail}`);
 
-    const otpData = passwordResetOTPs.get(normalizedEmail);
+    const otpData = await getPasswordResetOTP(normalizedEmail);
 
     if (!otpData) {
       console.log(`[OTP-VERIFY] No OTP found for: ${normalizedEmail}`);
@@ -3248,7 +3352,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
     // Check expiry
     if (Date.now() > otpData.expiresAt) {
       console.log(`[OTP-VERIFY] OTP expired for: ${normalizedEmail}`);
-      passwordResetOTPs.delete(normalizedEmail);
+      await deletePasswordResetOTP(normalizedEmail);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -3257,7 +3361,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
     // Check attempts (max 5 attempts)
     if (otpData.attempts >= 5) {
       console.log(`[OTP-VERIFY] Too many attempts for: ${normalizedEmail}`);
-      passwordResetOTPs.delete(normalizedEmail);
+      await deletePasswordResetOTP(normalizedEmail);
       return res.status(429).json({ 
         error: 'Too many failed attempts. Please request a new OTP.' 
       });
@@ -3266,7 +3370,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
     // Verify OTP
     if (normalizedOTP !== otpData.otp) {
       otpData.attempts += 1;
-      passwordResetOTPs.set(normalizedEmail, otpData);
+      await storePasswordResetOTP(normalizedEmail, otpData);
       
       const remainingAttempts = 5 - otpData.attempts;
       console.log(`[OTP-VERIFY] Invalid OTP for: ${normalizedEmail}. Remaining attempts: ${remainingAttempts}`);
@@ -3281,7 +3385,7 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     // OTP verified - mark as verified but don't delete yet
     otpData.verified = true;
-    passwordResetOTPs.set(normalizedEmail, otpData);
+    await storePasswordResetOTP(normalizedEmail, otpData);
 
     res.json({ 
       success: true, 
@@ -3310,7 +3414,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log(`[PASSWORD-RESET] Reset attempt for: ${normalizedEmail}`);
 
-    const otpData = passwordResetOTPs.get(normalizedEmail);
+    const otpData = await getPasswordResetOTP(normalizedEmail);
 
     if (!otpData || !otpData.verified) {
       console.log(`[PASSWORD-RESET] OTP not verified for: ${normalizedEmail}`);
@@ -3322,7 +3426,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
     // Check if OTP is still valid
     if (Date.now() > otpData.expiresAt) {
       console.log(`[PASSWORD-RESET] OTP expired for: ${normalizedEmail}`);
-      passwordResetOTPs.delete(normalizedEmail);
+      await deletePasswordResetOTP(normalizedEmail);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -3357,7 +3461,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
     console.log(`[SUCCESS] ✅ Password reset successfully for: ${normalizedEmail}`);
 
     // Delete OTP after successful password reset
-    passwordResetOTPs.delete(normalizedEmail);
+    await deletePasswordResetOTP(normalizedEmail);
 
     res.json({ 
       success: true, 
@@ -3373,20 +3477,22 @@ app.post('/reset-password-with-otp', async (req, res) => {
   }
 });
 
-// Clean up expired OTPs every 5 minutes
+// Clean up expired OTPs every 5 minutes (Redis auto-expires, this is for fallback)
 setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-  
-  for (const [email, data] of passwordResetOTPs.entries()) {
-    if (now > data.expiresAt) {
-      passwordResetOTPs.delete(email);
-      cleaned++;
+  if (!redisEnabled) {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [email, data] of passwordResetOTPs.entries()) {
+      if (now > data.expiresAt) {
+        passwordResetOTPs.delete(email);
+        cleaned++;
+      }
     }
-  }
-  
-  if (cleaned > 0) {
-    console.log(`[OTP-CLEANUP] Removed ${cleaned} expired OTP(s)`);
+    
+    if (cleaned > 0) {
+      console.log(`[OTP-CLEANUP] Removed ${cleaned} expired OTP(s)`);
+    }
   }
 }, 5 * 60 * 1000);
 
@@ -3416,7 +3522,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     // Check for resend cooldown (2 minutes)
-    const existingOTP = providerPasswordResetOTPs.get(normalizedEmail);
+    const existingOTP = await getProviderPasswordResetOTP(normalizedEmail);
     if (existingOTP && existingOTP.lastSentAt) {
       const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
       const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
@@ -3571,8 +3677,8 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
     const lastSentAt = Date.now();
 
-    // Store OTP in memory
-    providerPasswordResetOTPs.set(normalizedEmail, {
+    // Store OTP using Redis
+    await storeProviderPasswordResetOTP(normalizedEmail, {
       otp,
       expiresAt,
       attempts: 0,
@@ -3661,7 +3767,7 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     } catch (emailError) {
       // Remove OTP from memory if email failed
-      providerPasswordResetOTPs.delete(normalizedEmail);
+      await deleteProviderPasswordResetOTP(normalizedEmail);
       
       console.error('[PROVIDER-RESET] ❌ Failed to send OTP email:', emailError.message);
       console.error('[PROVIDER-RESET] ❌ Error details:', emailError);
@@ -3695,7 +3801,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log(`[PROVIDER-RESET] Verifying OTP for: ${normalizedEmail}`);
 
-    const otpData = providerPasswordResetOTPs.get(normalizedEmail);
+    const otpData = await getProviderPasswordResetOTP(normalizedEmail);
 
     if (!otpData) {
       console.log(`[PROVIDER-RESET] No OTP found for: ${normalizedEmail}`);
@@ -3708,7 +3814,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
     if (otpData.isFake) {
       console.log(`[PROVIDER-RESET] Fake OTP attempted for: ${normalizedEmail}`);
       otpData.attempts += 1;
-      providerPasswordResetOTPs.set(normalizedEmail, otpData);
+      await storeProviderPasswordResetOTP(normalizedEmail, otpData);
       
       const remainingAttempts = 5 - otpData.attempts;
       return res.status(400).json({ 
@@ -3720,7 +3826,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
     // Check if OTP is expired
     if (Date.now() > otpData.expiresAt) {
       console.log(`[PROVIDER-RESET] OTP expired for: ${normalizedEmail}`);
-      providerPasswordResetOTPs.delete(normalizedEmail);
+      await deleteProviderPasswordResetOTP(normalizedEmail);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -3729,7 +3835,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
     // Check max attempts
     if (otpData.attempts >= 5) {
       console.log(`[PROVIDER-RESET] Max attempts reached for: ${normalizedEmail}`);
-      providerPasswordResetOTPs.delete(normalizedEmail);
+      await deleteProviderPasswordResetOTP(normalizedEmail);
       return res.status(429).json({ 
         error: 'Too many failed attempts. Please request a new OTP.' 
       });
@@ -3738,7 +3844,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
     // Verify OTP
     if (otp !== otpData.otp) {
       otpData.attempts += 1;
-      providerPasswordResetOTPs.set(normalizedEmail, otpData);
+      await storeProviderPasswordResetOTP(normalizedEmail, otpData);
       
       const remainingAttempts = 5 - otpData.attempts;
       console.log(`[PROVIDER-RESET] Invalid OTP for: ${normalizedEmail}. ${remainingAttempts} attempts remaining`);
@@ -3751,7 +3857,7 @@ app.post('/api/nurse/verify-password-reset-otp', async (req, res) => {
 
     // Mark OTP as verified
     otpData.verified = true;
-    providerPasswordResetOTPs.set(normalizedEmail, otpData);
+    await storeProviderPasswordResetOTP(normalizedEmail, otpData);
 
     console.log(`[PROVIDER-RESET] ✅ OTP verified for: ${normalizedEmail}`);
 
@@ -3782,7 +3888,7 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log(`[PROVIDER-RESET] Password reset attempt for: ${normalizedEmail}`);
 
-    const otpData = providerPasswordResetOTPs.get(normalizedEmail);
+    const otpData = await getProviderPasswordResetOTP(normalizedEmail);
 
     if (!otpData || !otpData.verified) {
       console.log(`[PROVIDER-RESET] OTP not verified for: ${normalizedEmail}`);
@@ -3794,7 +3900,7 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
     // Check if this is a fake OTP (for non-existent users)
     if (otpData.isFake) {
       console.log(`[PROVIDER-RESET] Password reset blocked - fake OTP for: ${normalizedEmail}`);
-      providerPasswordResetOTPs.delete(normalizedEmail);
+      await deleteProviderPasswordResetOTP(normalizedEmail);
       return res.status(400).json({ 
         error: 'Invalid request. Please try again.' 
       });
@@ -3803,7 +3909,7 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
     // Check if OTP is still valid
     if (Date.now() > otpData.expiresAt) {
       console.log(`[PROVIDER-RESET] OTP expired for: ${normalizedEmail}`);
-      providerPasswordResetOTPs.delete(normalizedEmail);
+      await deleteProviderPasswordResetOTP(normalizedEmail);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -3843,7 +3949,7 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
     console.log(`[PROVIDER-RESET] ✅ Password reset successfully for: ${normalizedEmail}`);
 
     // Delete OTP after successful password reset
-    providerPasswordResetOTPs.delete(normalizedEmail);
+    await deleteProviderPasswordResetOTP(normalizedEmail);
 
     res.json({ 
       success: true, 
@@ -3859,20 +3965,22 @@ app.post('/api/nurse/reset-password-with-otp', async (req, res) => {
   }
 });
 
-// Clean up expired provider password reset OTPs every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-  
-  for (const [email, data] of providerPasswordResetOTPs.entries()) {
-    if (now > data.expiresAt) {
-      providerPasswordResetOTPs.delete(email);
-      cleaned++;
+// Clean up expired provider password reset OTPs every 5 minutes (Redis auto-expires, this is for fallback)
+setInterval(async () => {
+  if (!redisEnabled) {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [email, data] of providerPasswordResetOTPs.entries()) {
+      if (now > data.expiresAt) {
+        await deleteProviderPasswordResetOTP(email);
+        cleaned++;
+      }
     }
-  }
-  
-  if (cleaned > 0) {
-    console.log(`[PROVIDER-RESET-CLEANUP] Removed ${cleaned} expired provider OTP(s)`);
+    
+    if (cleaned > 0) {
+      console.log(`[PROVIDER-RESET-CLEANUP] Removed ${cleaned} expired provider OTP(s)`);
+       }
   }
 }, 5 * 60 * 1000);
 
