@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@upstash/redis": "^1.35.8",
     "bcrpyt": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",

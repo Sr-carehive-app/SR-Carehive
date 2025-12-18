@@ -13,7 +13,8 @@ function registerNurseOtpRoutes(app) {
       if (!emailRegex.test(normalizedEmail)) {
         return res.status(400).json({ error: 'Invalid email format' });
       }
-      let otpData = nurseLoginOTPs.get(normalizedEmail);
+      
+      let otpData = await getOTP(normalizedEmail);
       const now = Date.now();
       if (otpData && !resend && now < (otpData.lastSentAt + 2 * 60 * 1000)) {
         // Prevent spamming OTP
@@ -23,7 +24,8 @@ function registerNurseOtpRoutes(app) {
       // Generate new OTP
       const otp = generateOTP();
       const expiresAt = now + 5 * 60 * 1000; // 5 min expiry
-      nurseLoginOTPs.set(normalizedEmail, {
+      
+      await storeOTP(normalizedEmail, {
         otp,
         expiresAt,
         attempts: 0,
@@ -55,28 +57,31 @@ function registerNurseOtpRoutes(app) {
   });
 
   // Verify OTP for healthcare provider login
-  app.post('/api/nurse/verify-otp', (req, res) => {
+  app.post('/api/nurse/verify-otp', async (req, res) => {
     try {
       const { email, otp } = req.body;
       if (!email || !otp) return res.status(400).json({ error: 'OTP required' });
       const normalizedEmail = email.toLowerCase().trim();
-      const otpData = nurseLoginOTPs.get(normalizedEmail);
+      
+      const otpData = await getOTP(normalizedEmail);
       if (!otpData) return res.status(400).json({ error: 'No OTP sent or OTP expired.' });
+      
       if (Date.now() > otpData.expiresAt) {
-        nurseLoginOTPs.delete(normalizedEmail);
+        await deleteOTP(normalizedEmail);
         return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
       }
       if (otpData.attempts >= 5) {
-        nurseLoginOTPs.delete(normalizedEmail);
+        await deleteOTP(normalizedEmail);
         return res.status(429).json({ error: 'Too many failed attempts. Please request a new OTP.' });
       }
       if (otp !== otpData.otp) {
         otpData.attempts += 1;
-        nurseLoginOTPs.set(normalizedEmail, otpData);
+        await storeOTP(normalizedEmail, otpData);
         return res.status(400).json({ error: `Invalid OTP. ${5 - otpData.attempts} attempt(s) remaining.` });
       }
+      
       otpData.verified = true;
-      nurseLoginOTPs.set(normalizedEmail, otpData);
+      await storeOTP(normalizedEmail, otpData);
       // Success: return a session token (or flag)
       return res.json({ success: true, message: 'OTP verified.' });
     } catch (e) {
@@ -96,7 +101,7 @@ function registerNurseResendOtpRoute(app){
   });
 }
 // --- healthcare provider OTP Login State ---
-const nurseLoginOTPs = new Map(); // email -> { otp, expiresAt, attempts, lastSentAt, verified }
+// Removed: const nurseLoginOTPs = new Map(); // Now using Redis/fallback
 
 
 import express from 'express';
@@ -110,8 +115,34 @@ import nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import twilio from 'twilio';
 import bcrypt from 'bcryptjs';
+import { Redis } from '@upstash/redis';
 
 dotenv.config();
+
+// ===== UPSTASH REDIS CONFIGURATION =====
+// Using REST API for serverless compatibility (Vercel)
+let redis = null;
+let redisEnabled = false;
+
+try {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+    redisEnabled = true;
+    console.log('✅ [REDIS] Connected to Upstash Redis (REST API)');
+  } else {
+    console.warn('⚠️ [REDIS] Upstash credentials not found - using in-memory fallback');
+  }
+} catch (error) {
+  console.error('❌ [REDIS] Connection failed:', error.message);
+  console.warn('⚠️ [REDIS] Falling back to in-memory storage');
+}
+
+// Fallback in-memory storage (if Redis unavailable)
+const memoryOTPs = new Map();
+const memorySessions = new Map();
 
 const app = express();
 app.use(express.json());
@@ -668,27 +699,124 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
 
 // --- healthcare provider admin auth (env-based) ---
 // We issue a short-lived bearer token kept in memory. No credentials leaked to client code.
-const nurseSessions = new Map(); // token -> { createdAt }
+// Removed: const nurseSessions = new Map(); // Now using Redis/fallback
 const NURSE_EMAIL = (process.env.NURSE_ADMIN_EMAIL || '').trim().toLowerCase();
 const NURSE_PASSWORD = (process.env.NURSE_ADMIN_PASSWORD || '').trim();
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 
-function createSession() {
+// ===== REDIS HELPER FUNCTIONS =====
+
+// OTP Storage Functions
+async function storeOTP(email, otpData) {
+  const key = `otp:${email}`;
+  const ttl = 300; // 5 minutes in seconds
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(otpData));
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] storeOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  memoryOTPs.set(email, otpData);
+  return true;
+}
+
+async function getOTP(email) {
+  const key = `otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  return memoryOTPs.get(email) || null;
+}
+
+async function deleteOTP(email) {
+  const key = `otp:${email}`;
+  
+  try {
+    if (redisEnabled) {
+      await redis.del(key);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] deleteOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  memoryOTPs.delete(email);
+  return true;
+}
+
+// Session Storage Functions
+async function createSession() {
   const token = crypto.randomBytes(32).toString('hex');
-  nurseSessions.set(token, { createdAt: Date.now() });
+  const sessionData = { createdAt: Date.now() };
+  const key = `session:${token}`;
+  const ttl = Math.floor(SESSION_TTL_MS / 1000); // Convert to seconds
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(sessionData));
+      return token;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] createSession failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  memorySessions.set(token, sessionData);
   return token;
 }
 
-function isAuthed(req) {
+async function getSession(token) {
+  const key = `session:${token}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      return data ? (typeof data === 'string' ? JSON.parse(data) : data) : null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getSession failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  const rec = memorySessions.get(token);
+  if (!rec) return null;
+  
+  // Check expiry for in-memory sessions
+  if (Date.now() - rec.createdAt > SESSION_TTL_MS) {
+    memorySessions.delete(token);
+    return null;
+  }
+  
+  return rec;
+}
+
+async function isAuthed(req) {
   const h = req.headers['authorization'] || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   if (!token) return false;
-  const rec = nurseSessions.get(token);
+  
+  const rec = await getSession(token);
   if (!rec) return false;
+  
+  // Redis handles TTL automatically, but check for in-memory fallback
   if (Date.now() - rec.createdAt > SESSION_TTL_MS) {
-    nurseSessions.delete(token);
     return false;
   }
+  
   return true;
 }
 
@@ -706,7 +834,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     // Check if super admin credentials
     if (NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
-      const token = createSession();
+      const token = await createSession();
       console.log('✅ Super Admin Login Successful');
       return res.json({ success: true, token, isSuperAdmin: true });
     }
@@ -788,7 +916,7 @@ app.post('/api/nurse/login', async (req, res) => {
     // Status: APPROVED
     if (status === 'approved') {
       console.log('✅ Application is APPROVED - Creating session');
-      const token = createSession();
+      const token = await createSession();
       return res.json({ 
         success: true, 
         token, 
@@ -1134,7 +1262,7 @@ app.post('/api/provider/send-user-confirmation', async (req, res) => {
 // Only returns appointments where nurse_visible is not explicitly false (includes null for backward compatibility)
 app.get('/api/nurse/appointments', async (req, res) => {
   try {
-    if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isAuthed(req))) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
     
     // Fetch all appointments first
@@ -1157,7 +1285,7 @@ app.get('/api/nurse/appointments', async (req, res) => {
 // Approve appointment with assignment details. Protected.
 app.post('/api/nurse/appointments/:id/approve', async (req, res) => {
   try {
-    if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isAuthed(req))) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
     const id = String(req.params.id);
     if (!id || id.length < 10) return res.status(400).json({ error: 'Invalid id' });
@@ -1202,7 +1330,7 @@ app.post('/api/nurse/appointments/:id/approve', async (req, res) => {
 // Reject appointment with reason. Protected.
 app.post('/api/nurse/appointments/:id/reject', async (req, res) => {
   try {
-    if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isAuthed(req))) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
     const id = String(req.params.id);
     if (!id || id.length < 10) return res.status(400).json({ error: 'Invalid id' });
@@ -1645,7 +1773,7 @@ app.post('/api/notify-new-appointment', async (req, res) => {
 // Query history with optional status filter. Protected.
 app.get('/api/nurse/appointments/history', async (req, res) => {
   try {
-    if (!isAuthed(req)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isAuthed(req))) return res.status(401).json({ error: 'Unauthorized' });
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
     const status = (req.query.status || '').toString().trim().toLowerCase();
     let query = supabase.from('appointments_history').select('*').order('date', { ascending: false });
