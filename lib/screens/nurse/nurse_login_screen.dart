@@ -34,10 +34,30 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     // Load token from storage
     await NurseApiService.init();
     
-    // If already authenticated, try to go to appointments directly
+    // If already authenticated, validate token with backend
     if (NurseApiService.isAuthenticated) {
-      print('✅ Existing nurse session found, checking validity...');
-      // We'll let them continue - if token is invalid, they'll get 401 on appointments screen
+      print('✅ Existing nurse session found, validating token...');
+      
+      try {
+        // Try to fetch appointments - this validates the token
+        final appointments = await NurseApiService.listAppointments();
+        
+        // Token is valid - auto-login to appointments page
+        print('✅ Token valid - Auto-login successful');
+        if (!mounted) return;
+        
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const NurseAppointmentsManageScreen(isSuperAdmin: false),
+          ),
+        );
+      } catch (e) {
+        // Token invalid or expired - clear it and show login screen
+        print('❌ Token validation failed: $e');
+        await NurseApiService.logout();
+        print('🔄 Cleared invalid token - Please login again');
+      }
     }
   }
 

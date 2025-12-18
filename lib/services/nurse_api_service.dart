@@ -130,8 +130,17 @@ class NurseApiService {
           final isSuperAdmin = json['isSuperAdmin'] == true;
           
           if (token != null) {
-            await _saveToken(token);
-            print('✅ Login successful - Token saved');
+            // IMPORTANT: Only save token for regular approved providers
+            // Super admin tokens are NOT persisted (security requirement)
+            if (!isSuperAdmin) {
+              await _saveToken(token);
+              print('✅ Login successful - Token saved (Approved Provider)');
+            } else {
+              // Store in memory only for super admin (no persistence)
+              _token = token;
+              print('✅ Super Admin login successful - Token in memory only (not persisted)');
+            }
+            
             return {
               'success': true,
               'isSuperAdmin': isSuperAdmin,
