@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'healthcare_provider_selection_screen.dart';
 
 class NurseAppointmentsManageScreen extends StatefulWidget {
   final bool isSuperAdmin;
@@ -61,7 +62,10 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Session expired. Please login again.')),
         );
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HealthcareProviderSelectionScreen()),
+          (route) => false,
+        );
         return;
       }
     }
@@ -1159,12 +1163,15 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     );
 
     if (confirmed == true) {
-      // Logout: clear session and navigate to login screen
+      // Logout: clear session and navigate to healthcare provider selection screen
       await NurseApiService.logout();
       if (!mounted) return;
       
-      // Navigate to login screen and clear navigation stack
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      // Navigate to healthcare provider selection screen and clear navigation stack
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HealthcareProviderSelectionScreen()),
+        (route) => false,
+      );
     }
   }
 

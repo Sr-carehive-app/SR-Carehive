@@ -446,7 +446,14 @@ class _MyAppState extends State<MyApp> {
 
     return UpgradeAlert(
       upgrader: Upgrader(
+        countryCode: 'IN',
+        minAppVersion: '1.0.0',
         durationUntilAlertAgain: const Duration(days: 1),
+        
+        // Debug options - set debugDisplayAlways to true for testing
+        debugDisplayAlways: false,
+        debugDisplayOnce: false,
+        debugLogging: true,
       ),
       child: materialApp,
     );
