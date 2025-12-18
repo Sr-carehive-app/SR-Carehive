@@ -33,25 +33,20 @@ function registerNurseOtpRoutes(app) {
         verified: false
       });
       
-      // Ensure mailer is ready (wait for initialization on cold start)
-      await ensureMailerReady();
-      
-      // Send OTP email
-      if (!mailer || !mailerReady) {
-        console.error('[OTP] Email service not ready - mailer:', !!mailer, 'ready:', mailerReady);
-        return res.status(500).json({ error: 'Email service not configured. Please try again in a moment.' });
-      }
-      
-      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive healthcare provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
+      // Send OTP email (sendEmail function handles mailer initialization internally)
+      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Healthcare Provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
       try {
+        console.log('[OTP] Sending OTP email to healthcare provider:', normalizedEmail);
         await sendEmail({
           to: normalizedEmail,
-          subject: 'SR CareHive healthcare provider Login OTP',
+          subject: 'SR CareHive Healthcare Provider Login OTP',
           html: otpEmailHtml
         });
+        console.log('[OTP] OTP email sent successfully to:', normalizedEmail);
         return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
       } catch (e) {
-        return res.status(500).json({ error: 'Failed to send OTP email.' });
+        console.error('[OTP] Failed to send OTP email to healthcare provider:', normalizedEmail, 'Error:', e.message);
+        return res.status(500).json({ error: 'Failed to send OTP email. Please try again.' });
       }
     } catch (e) {
       return res.status(500).json({ error: 'Internal error' });
@@ -967,10 +962,6 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
       return res.status(400).json({ error: 'userEmail and userName required' });
     }
 
-    if (!mailer) {
-      return res.status(500).json({ error: 'Email service not configured' });
-    }
-
     const commentsSection = adminComments 
       ? `<div style="background: #e7f3ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
            <h3 style="margin-top: 0; color: #2260FF;">Message from Hiring Team:</h3>
@@ -1040,10 +1031,6 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
       return res.status(400).json({ error: 'userEmail and userName required' });
     }
 
-    if (!mailer) {
-      return res.status(500).json({ error: 'Email service not configured' });
-    }
-
     const reasonSection = rejectionReason 
       ? `<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
            <h3 style="margin-top: 0; color: #856404;">Reason for Rejection:</h3>
@@ -1098,10 +1085,6 @@ app.post('/api/provider/send-registration-notification', async (req, res) => {
     
     if (!providerData) {
       return res.status(400).json({ error: 'providerData is required' });
-    }
-
-    if (!mailer) {
-      return res.status(500).json({ error: 'Email service not configured' });
     }
 
     const {
@@ -1216,10 +1199,6 @@ app.post('/api/provider/send-user-confirmation', async (req, res) => {
     
     if (!userEmail || !userName) {
       return res.status(400).json({ error: 'userEmail and userName are required' });
-    }
-
-    if (!mailer) {
-      return res.status(500).json({ error: 'Email service not configured' });
     }
 
     const emailHtml = `
@@ -2000,11 +1979,6 @@ app.post('/api/send-otp-email', async (req, res) => {
     
     if (!email || !otp) {
       return res.status(400).json({ error: 'OTP is required' });
-    }
-
-    if (!mailer) {
-      console.error('[ERROR] Email mailer not configured');
-      return res.status(500).json({ error: 'Email service not configured' });
     }
 
     const html = `
@@ -3209,25 +3183,15 @@ app.post('/send-password-reset-otp', async (req, res) => {
       </html>
     `;
 
-    // Send OTP email via Nodemailer
-    if (!mailer) {
-      console.error('[ERROR] Nodemailer not configured');
-      return res.status(500).json({ error: 'Email service not configured' });
-    }
-
+    // Send OTP email (sendEmail handles mailer initialization)
     console.log(`[OTP-RESET] Attempting to send OTP email...`);
     
     try {
-      const emailResult = await sendEmail({
+      await sendEmail({
         to: normalizedEmail,
         subject: 'Your Password Reset OTP - SR CareHive',
         html: otpEmailHtml
       });
-
-      if (emailResult.skipped) {
-        console.error('[ERROR] Email was skipped - mailer not configured');
-        return res.status(500).json({ error: 'Email service not available' });
-      }
 
       console.log(`[SUCCESS] OTP email sent successfully to: ${normalizedEmail}`);
 
