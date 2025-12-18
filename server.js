@@ -32,10 +32,16 @@ function registerNurseOtpRoutes(app) {
         lastSentAt: now,
         verified: false
       });
+      
+      // Ensure mailer is ready (wait for initialization on cold start)
+      await ensureMailerReady();
+      
       // Send OTP email
-      if (!mailer) {
-        return res.status(500).json({ error: 'Email service not configured' });
+      if (!mailer || !mailerReady) {
+        console.error('[OTP] Email service not ready - mailer:', !!mailer, 'ready:', mailerReady);
+        return res.status(500).json({ error: 'Email service not configured. Please try again in a moment.' });
       }
+      
       const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive healthcare provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
       try {
         await sendEmail({
@@ -344,15 +350,27 @@ async function initializeMailer() {
 }
 
 // Initialize mailer on startup
-// Initialize mailer immediately (synchronous for serverless environments)
-(async () => {
-  const success = await initializeMailer();
+// Use top-level await for serverless (blocks until ready)
+let mailerInitPromise = null;
+
+// Start initialization immediately
+mailerInitPromise = initializeMailer().then(success => {
   if (success) {
     console.log('[INIT] 📧 Email service is READY');
   } else {
     console.error('[INIT] 📧 Email service is NOT available');
   }
-})();
+  return success;
+});
+
+// Helper to ensure mailer is ready
+async function ensureMailerReady() {
+  if (mailerInitPromise) {
+    await mailerInitPromise;
+    mailerInitPromise = null; // Clear after first use
+  }
+  return mailerReady;
+}
 
 function generateReceiptPdfBuffer({
   title = 'Payment Receipt',

@@ -61,7 +61,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Session expired. Please login again.')),
         );
-        Navigator.of(context).pop();
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
         return;
       }
     }
@@ -1159,10 +1159,12 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     );
 
     if (confirmed == true) {
-      // Logout: clear session and navigate away
+      // Logout: clear session and navigate to login screen
       await NurseApiService.logout();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      
+      // Navigate to login screen and clear navigation stack
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     }
   }
 
