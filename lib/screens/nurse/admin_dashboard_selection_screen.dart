@@ -207,14 +207,14 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
 
               const SizedBox(height: 20),
 
-              // Card 1: Healthcare Seeker Management (Patient Appointments)
+              // Card 1: Healthcare Seeker Management (Appointments)
               _buildManagementCard(
                 context: context,
                 icon: Icons.people_outline,
                 iconColor: const Color(0xFF2260FF),
                 title: 'Healthcare Seeker Management',
                 description: 'Manage patient appointments, bookings, and service requests',
-                buttonText: 'View Patient Appointments',
+                buttonText: 'View Appointments',
                 onTap: () {
                   Navigator.push(
                     context,
@@ -234,7 +234,7 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
                 iconColor: const Color(0xFF10B981),
                 title: 'Healthcare Provider Applications',
                 description: 'Review and manage healthcare worker registration requests',
-                buttonText: 'View Provider Applications',
+                buttonText: 'View Applications',
                 badgeCount: _pendingProvidersCount,
                 totalCount: _totalProvidersCount,
                 isLoadingStats: _isLoadingStats,
