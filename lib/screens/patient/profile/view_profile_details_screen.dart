@@ -315,7 +315,7 @@ class _ViewProfileDetailsScreenState extends State<ViewProfileDetailsScreen> {
                                           .isNotEmpty)
                                     _buildModernInfoRow(
                                       icon: Icons.home_outlined,
-                                      label: 'House/Flat',
+                                      label: 'House/Flat Number',
                                       value: profileData!['house_number'],
                                       iconBg: const Color(0xFFEF4444),
                                     ),
@@ -325,7 +325,7 @@ class _ViewProfileDetailsScreenState extends State<ViewProfileDetailsScreen> {
                                           .isNotEmpty)
                                     _buildModernInfoRow(
                                       icon: Icons.location_city_outlined,
-                                      label: 'Town/Village',
+                                      label: 'Town/Village/Locality',
                                       value: profileData!['town'],
                                       iconBg: const Color(0xFFDC2626),
                                     ),
