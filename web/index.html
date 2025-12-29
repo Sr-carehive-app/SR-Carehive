@@ -76,10 +76,13 @@
         })
         .then(function(data) {
           var serverVersion = data.version + '+' + data.buildNumber;
-          console.log('📦 Server version: ' + serverVersion + ' | Local: ' + (currentVersion || 'none'));
+          var serverTimestamp = data.timestamp;
+          console.log('📦 Server: v' + serverVersion + ' @ ' + serverTimestamp);
+          console.log('💾 Cached: ' + (currentVersion || 'none'));
           
-          // If version mismatch detected, clear all caches and reload
-          if (currentVersion && currentVersion !== serverVersion) {
+          // Use TIMESTAMP for cache busting (not version number)
+          // This allows frequent web deployments without changing app version
+          if (currentVersion && currentVersion !== serverTimestamp) {
             console.log('🔄 NEW VERSION DETECTED - Clearing caches and reloading...');
             
             // Mark that we're about to reload (prevents infinite loop)
@@ -90,19 +93,19 @@
               caches.keys().then(function(names) {
                 return Promise.all(names.map(function(n) { return caches.delete(n); }));
               }).then(function() {
-                console.log('✅ Caches cleared, updating version and reloading...');
-                localStorage.setItem('app_version', serverVersion);
+                console.log('✅ Caches cleared, updating to: ' + serverTimestamp);
+                localStorage.setItem('app_version', serverTimestamp);
                 // Hard reload bypassing cache
                 window.location.href = window.location.href + '?v=' + Date.now();
               });
             } else {
-              localStorage.setItem('app_version', serverVersion);
+              localStorage.setItem('app_version', serverTimestamp);
               window.location.href = window.location.href + '?v=' + Date.now();
             }
           } else {
-            // Same version or first load
-            localStorage.setItem('app_version', serverVersion);
-            console.log('✅ Version up to date: ' + serverVersion);
+            // Same timestamp or first load
+            localStorage.setItem('app_version', serverTimestamp);
+            console.log('✅ App up to date (v' + serverVersion + ')');
           }
         })
         .catch(function(err) {
