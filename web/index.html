@@ -95,12 +95,12 @@
               }).then(function() {
                 console.log('✅ Caches cleared, updating to: ' + serverTimestamp);
                 localStorage.setItem('app_version', serverTimestamp);
-                // Hard reload bypassing cache
-                window.location.href = window.location.href + '?v=' + Date.now();
+                // Hard reload bypassing cache without polluting URL
+                window.location.reload(true);
               });
             } else {
               localStorage.setItem('app_version', serverTimestamp);
-              window.location.href = window.location.href + '?v=' + Date.now();
+              window.location.reload(true);
             }
           } else {
             // Same timestamp or first load
