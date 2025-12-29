@@ -13,7 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'config/api_config.dart';
 import 'utils/web_utils.dart';
-import 'package:upgrader/upgrader.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -78,6 +78,52 @@ class _MyAppState extends State<MyApp> {
     _initDeepLink();
     _checkAuthState();
     _listenToAuthChanges();
+    
+    // CRITICAL: Delay update check slightly to ensure app is fully initialized
+    // This prevents any race conditions or crashes during startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdate(); // Check for native Play Store updates
+    });
+  }
+
+  // Play Store update check (Android only)
+  // Google Play API automatically shows update dialog - no custom UI needed
+  Future<void> _checkForUpdate() async {
+    // Only works on Android, skip on Web and iOS
+    if (kIsWeb) return;
+    
+    try {
+      print('🔄 Checking for app updates...');
+      final info = await InAppUpdate.checkForUpdate();
+      
+      print('📦 Update availability: ${info.updateAvailability}');
+      
+      // If update available, Google Play shows native update dialog automatically
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        if (info.immediateUpdateAllowed) {
+          print('⚠️ CRITICAL UPDATE - Showing force update dialog...');
+          // Force update - Google shows full-screen update dialog
+          // This is a BLOCKING call - waits for user to complete update
+          // NOTE: After user clicks UPDATE, app is KILLED and RESTARTED by Android
+          // The line below this will NEVER execute - app restarts with new version
+          await InAppUpdate.performImmediateUpdate();
+          // App was killed and restarted - code below never runs
+        } else if (info.flexibleUpdateAllowed) {
+          print('📲 Optional update available - Showing notification...');
+          // Optional update - Google shows notification banner
+          await InAppUpdate.startFlexibleUpdate();
+          print('⬇️ Flexible update download started');
+          // Note: completeFlexibleUpdate should be called AFTER download completes
+          // Google Play will handle the completion notification automatically
+        }
+      } else {
+        print('✅ App is up to date');
+      }
+    } catch (e) {
+      // Continue app flow even if update check fails
+      // Don't crash the app - this is non-critical
+      print('⚠️ Update check failed: $e');
+    }
   }
 
   void _listenToAuthChanges() {
@@ -438,24 +484,7 @@ class _MyAppState extends State<MyApp> {
       home: _homeWidget,
     );
 
-    // Only show upgrade alert on mobile platforms (Android/iOS)
-    // Skip on web to avoid compatibility issues
-    if (kIsWeb) {
-      return materialApp;
-    }
-
-    return UpgradeAlert(
-      upgrader: Upgrader(
-        countryCode: 'IN',
-        minAppVersion: '1.0.0',
-        durationUntilAlertAgain: const Duration(days: 1),
-        
-        // Debug options - set debugDisplayAlways to true for testing
-        debugDisplayAlways: false,
-        debugDisplayOnce: false,
-        debugLogging: true,
-      ),
-      child: materialApp,
-    );
+    // Return materialApp directly
+    return materialApp;
   }
 }

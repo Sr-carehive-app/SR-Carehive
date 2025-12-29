@@ -37,6 +37,82 @@
   <title>Serechi</title>
   <link rel="manifest" href="manifest.json">
   
+  <!-- CRITICAL: Automatic version check with proper cache clearing -->
+  <script>
+    (function() {
+      // STEP 1: Unregister all service workers FIRST to prevent re-caching
+      var swPromise = Promise.resolve();
+      if ('serviceWorker' in navigator) {
+        swPromise = navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          console.log('🔧 Unregistering ' + registrations.length + ' service workers...');
+          return Promise.all(registrations.map(function(r) { return r.unregister(); }));
+        });
+      }
+      
+      // STEP 2: Check version after service workers are unregistered
+      swPromise.then(function() {
+        var currentVersion = localStorage.getItem('app_version');
+        var isReloading = sessionStorage.getItem('version_reload');
+        var versionCheckUrl = 'version.json?cacheBust=' + Date.now();
+        
+        // Prevent infinite reload loop - only reload once per session
+        if (isReloading === 'true') {
+          console.log('✅ Reload completed, clearing reload flag');
+          sessionStorage.removeItem('version_reload');
+          return;
+        }
+        
+        fetch(versionCheckUrl, {
+          cache: 'no-store',
+          headers: { 
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        })
+        .then(function(response) { 
+          if (!response.ok) throw new Error('Version fetch failed');
+          return response.json(); 
+        })
+        .then(function(data) {
+          var serverVersion = data.version + '+' + data.buildNumber;
+          console.log('📦 Server version: ' + serverVersion + ' | Local: ' + (currentVersion || 'none'));
+          
+          // If version mismatch detected, clear all caches and reload
+          if (currentVersion && currentVersion !== serverVersion) {
+            console.log('🔄 NEW VERSION DETECTED - Clearing caches and reloading...');
+            
+            // Mark that we're about to reload (prevents infinite loop)
+            sessionStorage.setItem('version_reload', 'true');
+            
+            // Clear all caches, then reload
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                return Promise.all(names.map(function(n) { return caches.delete(n); }));
+              }).then(function() {
+                console.log('✅ Caches cleared, updating version and reloading...');
+                localStorage.setItem('app_version', serverVersion);
+                // Hard reload bypassing cache
+                window.location.href = window.location.href + '?v=' + Date.now();
+              });
+            } else {
+              localStorage.setItem('app_version', serverVersion);
+              window.location.href = window.location.href + '?v=' + Date.now();
+            }
+          } else {
+            // Same version or first load
+            localStorage.setItem('app_version', serverVersion);
+            console.log('✅ Version up to date: ' + serverVersion);
+          }
+        })
+        .catch(function(err) {
+          console.warn('⚠️ Version check failed:', err);
+          // Continue loading even if version check fails
+        });
+      });
+    })();
+  </script>
+  
   <!-- Auto-redirect non-www to www for consistent localStorage -->
   <script>
     if (window.location.hostname === 'srcarehive.com') {
@@ -45,12 +121,12 @@
   </script>
 </head>
 <body>
-  <!-- Cache busting: Add version parameter to force reload -->
+  <!-- CRITICAL: Cache busting with timestamp for flutter_bootstrap.js -->
+  <!-- The timestamp parameter forces browsers to fetch latest bootstrap -->
   <script>
-    // Generate version based on current timestamp to force cache refresh
-    var version = new Date().getTime();
+    var cacheBustVersion = Date.now();
     var script = document.createElement('script');
-    script.src = 'flutter_bootstrap.js?v=' + version;
+    script.src = 'flutter_bootstrap.js?v=' + cacheBustVersion;
     script.async = true;
     document.body.appendChild(script);
   </script>

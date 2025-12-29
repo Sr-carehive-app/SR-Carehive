@@ -9,9 +9,9 @@ class TermsConditionsScreen extends StatelessWidget {
     const primary = Color(0xFF2260FF);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Terms & Conditions', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text('Terms & Conditions', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: primary,
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       backgroundColor: const Color(0xFFF7F7FB),

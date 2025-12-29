@@ -201,9 +201,9 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
   Widget build(BuildContext context) {
     final primaryColor = const Color(0xFF2260FF);
     return Scaffold(
-      appBar: AppBar(title: const Text('Password Manager', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+      appBar: AppBar(title: const Text('Password Manager', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: primaryColor,
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       body: SingleChildScrollView(

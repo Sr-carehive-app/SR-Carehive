@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'schedule_nurse_screen.dart';
 import 'appointments_screen.dart';
 import 'package:care12/screens/patient/profile/profile_screen.dart';
+import 'package:care12/screens/patient/profile/menu_screen.dart';
 import 'package:care12/screens/patient/profile/settings_screen.dart';
 
 class PatientDashboardScreen extends StatefulWidget {
@@ -102,6 +103,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
             onProfileUpdated: _loadProfileData, // Add callback
             onBackToHome: _handleBackButton, // Use smart back handler
           ),
+          MenuScreen(onBackToHome: _handleBackButton),
         ],
       ),
 
@@ -123,9 +125,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Appointments'),
-          BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Care Requests'),
+          BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Care Schedule'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menu'),
         ],
       ),
     );
@@ -262,7 +265,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
               children: [
                 buildServiceCard(
                   context,
-                  title: 'Hire a healthcare provider',
+                  title: 'Request Care Support',
                   subtitle: 'Professional home care',
                   image: 'assets/images/nurse.png',
                   onTap: () {
@@ -274,8 +277,8 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                 const SizedBox(height: 12),
                 buildServiceCard(
                   context,
-                  title: 'My Appointments',
-                  subtitle: 'View your scheduled appointments',
+                  title: 'My Care Requests',
+                  subtitle: 'View your scheduled care',
                   image: 'assets/images/logo.png',
                   onTap: () {
                     setState(() {

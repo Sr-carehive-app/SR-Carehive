@@ -10,8 +10,8 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
-        backgroundColor: Colors.white,
+        leading: const BackButton(color: Colors.white),
+        backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),
       body: SafeArea(

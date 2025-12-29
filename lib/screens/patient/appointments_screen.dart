@@ -173,15 +173,15 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
-        title: const Text('My Appointments'),
+        title: const Text('My Care Requests', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _loadAppointments,
           ),
         ],

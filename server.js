@@ -5,16 +5,26 @@ function registerNurseOtpRoutes(app) {
     try {
       const { email } = req.body;
       if (!email || !email.trim()) {
-        return res.status(400).json({ error: 'Email is required' });
-      }
-      const normalizedEmail = email.toLowerCase().trim();
-      // Validate email format
-      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-      if (!emailRegex.test(normalizedEmail)) {
-        return res.status(400).json({ error: 'Invalid email format' });
+        return res.status(400).json({ error: 'Email or phone number is required' });
       }
       
-      let otpData = await getOTP(normalizedEmail);
+      const identifier = email.trim();
+      
+      // Detect if input is phone number (10 digits) or email
+      const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+      const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
+      
+      console.log(`[OTP] Input type: ${isPhoneNumber ? 'Phone' : 'Email'}, Identifier: ${normalizedIdentifier}`);
+      
+      // Validate format
+      if (!isPhoneNumber) {
+        const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+        if (!emailRegex.test(normalizedIdentifier)) {
+          return res.status(400).json({ error: 'Invalid email format' });
+        }
+      }
+      
+      let otpData = await getOTP(normalizedIdentifier);
       const now = Date.now();
       if (otpData && !resend && now < (otpData.lastSentAt + 2 * 60 * 1000)) {
         // Prevent spamming OTP
@@ -25,30 +35,51 @@ function registerNurseOtpRoutes(app) {
       const otp = generateOTP();
       const expiresAt = now + 5 * 60 * 1000; // 5 min expiry
       
-      await storeOTP(normalizedEmail, {
+      await storeOTP(normalizedIdentifier, {
         otp,
         expiresAt,
         attempts: 0,
         lastSentAt: now,
-        verified: false
+        verified: false,
+        type: isPhoneNumber ? 'phone' : 'email'  // Store type for verification
       });
       
-      // Send OTP email (sendEmail function handles mailer initialization internally)
-      const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Healthcare Provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
-      try {
-        console.log('[OTP] Sending OTP email to healthcare provider:', normalizedEmail);
-        await sendEmail({
-          to: normalizedEmail,
-          subject: 'SR CareHive Healthcare Provider Login OTP',
-          html: otpEmailHtml
-        });
-        console.log('[OTP] OTP email sent successfully to:', normalizedEmail);
-        return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
-      } catch (e) {
-        console.error('[OTP] Failed to send OTP email to healthcare provider:', normalizedEmail, 'Error:', e.message);
-        return res.status(500).json({ error: 'Failed to send OTP email. Please try again.' });
+      // Send OTP via appropriate channel
+      if (isPhoneNumber) {
+        // Send OTP via SMS
+        console.log(`[OTP] Sending OTP via SMS to: ${normalizedIdentifier}`);
+        const smsSent = await sendOTPViaTubelight(normalizedIdentifier, otp, 'Healthcare Provider');
+        
+        if (smsSent) {
+          console.log(`[OTP] SMS sent successfully to: ${normalizedIdentifier}`);
+          return res.json({ success: true, message: resend ? 'OTP resent to your phone.' : 'OTP sent to your phone.', expiresIn: 300, canResendAfter: 120 });
+        } else {
+          console.error(`[OTP] Failed to send SMS to: ${normalizedIdentifier}`);
+          // Clear stored OTP if SMS failed
+          await deleteOTP(normalizedIdentifier);
+          return res.status(500).json({ error: 'Failed to send SMS. Please try again or use email.' });
+        }
+      } else {
+        // Send OTP email (sendEmail function handles mailer initialization internally)
+        const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Healthcare Provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
+        try {
+          console.log('[OTP] Sending OTP email to healthcare provider:', normalizedIdentifier);
+          await sendEmail({
+            to: normalizedIdentifier,
+            subject: 'SR CareHive Healthcare Provider Login OTP',
+            html: otpEmailHtml
+          });
+          console.log('[OTP] OTP email sent successfully to:', normalizedIdentifier);
+          return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
+        } catch (e) {
+          console.error('[OTP] Failed to send OTP email to healthcare provider:', normalizedIdentifier, 'Error:', e.message);
+          // Clear stored OTP if email failed
+          await deleteOTP(normalizedIdentifier);
+          return res.status(500).json({ error: 'Failed to send OTP email. Please try again.' });
+        }
       }
     } catch (e) {
+      console.error('[OTP] Internal error:', e.message);
       return res.status(500).json({ error: 'Internal error' });
     }
   }
@@ -62,27 +93,30 @@ function registerNurseOtpRoutes(app) {
     try {
       const { email, otp } = req.body;
       if (!email || !otp) return res.status(400).json({ error: 'OTP required' });
-      const normalizedEmail = email.toLowerCase().trim();
       
-      const otpData = await getOTP(normalizedEmail);
+      const identifier = email.trim();
+      const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+      const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
+      
+      const otpData = await getOTP(normalizedIdentifier);
       if (!otpData) return res.status(400).json({ error: 'No OTP sent or OTP expired.' });
       
       if (Date.now() > otpData.expiresAt) {
-        await deleteOTP(normalizedEmail);
+        await deleteOTP(normalizedIdentifier);
         return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
       }
       if (otpData.attempts >= 5) {
-        await deleteOTP(normalizedEmail);
+        await deleteOTP(normalizedIdentifier);
         return res.status(429).json({ error: 'Too many failed attempts. Please request a new OTP.' });
       }
       if (otp !== otpData.otp) {
         otpData.attempts += 1;
-        await storeOTP(normalizedEmail, otpData);
+        await storeOTP(normalizedIdentifier, otpData);
         return res.status(400).json({ error: `Invalid OTP. ${5 - otpData.attempts} attempt(s) remaining.` });
       }
       
       otpData.verified = true;
-      await storeOTP(normalizedEmail, otpData);
+      await storeOTP(normalizedIdentifier, otpData);
       // Success: return a session token (or flag)
       return res.json({ success: true, message: 'OTP verified.' });
     } catch (e) {
@@ -283,6 +317,76 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
   }
 } else {
   console.warn('[WARN] Twilio credentials not set. SMS OTP disabled.');
+}
+
+// ============================================================================
+// TUBELIGHT SMS API (JIO TRUECONNECT) - For Password Reset OTP
+// ============================================================================
+const TUBELIGHT_USERNAME = (process.env.TUBELIGHT_USERNAME || '').trim();
+const TUBELIGHT_PASSWORD = (process.env.TUBELIGHT_PASSWORD || '').trim();
+const TUBELIGHT_SENDER_ID = (process.env.TUBELIGHT_SENDER_ID || '').trim();
+const TUBELIGHT_ENTITY_ID = (process.env.TUBELIGHT_ENTITY_ID || '').trim();
+const TUBELIGHT_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_OTP_TEMPLATE_ID || '').trim();
+
+let tubelightSMSEnabled = false;
+if (TUBELIGHT_USERNAME && TUBELIGHT_PASSWORD && TUBELIGHT_SENDER_ID && TUBELIGHT_ENTITY_ID && TUBELIGHT_OTP_TEMPLATE_ID) {
+  tubelightSMSEnabled = true;
+  console.log(`[INIT] ✅ Tubelight SMS enabled`);
+} else {
+  console.warn('[WARN] ⚠️  Tubelight SMS not configured');
+}
+
+async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User') {
+  if (!tubelightSMSEnabled) {
+    console.log('[TUBELIGHT-SMS] ⚠️  SMS not configured');
+    return false;
+  }
+
+  try {
+    const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
+    if (cleanPhone.length !== 10) {
+      console.error(`[TUBELIGHT-SMS] ❌ Invalid phone: ${phoneNumber}`);
+      return false;
+    }
+
+    const fullPhoneNumber = `91${cleanPhone}`;
+    const message = `Dear ${recipientName}, Your OTP for SR CareHive password reset is ${otp}. Valid for 10 minutes. Do not share this code.`;
+
+    const requestBody = {
+      username: TUBELIGHT_USERNAME,
+      password: TUBELIGHT_PASSWORD,
+      sender: TUBELIGHT_SENDER_ID,
+      mobile: fullPhoneNumber,
+      message: message,
+      templateid: TUBELIGHT_OTP_TEMPLATE_ID,
+      pe_id: TUBELIGHT_ENTITY_ID,
+      dltContentId: TUBELIGHT_OTP_TEMPLATE_ID,
+    };
+
+    console.log(`[TUBELIGHT-SMS] 📤 Sending to: ${fullPhoneNumber}`);
+
+    const response = await fetch('https://portal.tubelightcommunications.com/api/mt/SendSMS', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseData = await response.json();
+    console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
+
+    if (response.status === 200 || response.status === 201) {
+      const status = responseData.status?.toLowerCase();
+      if (status === 'success' || status === 'sent' || responseData.success) {
+        console.log(`[TUBELIGHT-SMS] ✅ SMS sent`);
+        return true;
+      }
+    }
+    console.warn(`[TUBELIGHT-SMS] ⚠️  SMS failed`);
+    return false;
+  } catch (error) {
+    console.error(`[TUBELIGHT-SMS] ❌ Error:`, error.message);
+    return false;
+  }
 }
 
 let mailer = null;
@@ -940,17 +1044,22 @@ async function deleteProviderPasswordResetOTP(email) {
 app.post('/api/nurse/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    console.log('🔐 Healthcare Provider Login Attempt:', { email, hasPassword: !!password });
+    console.log('🔐 Healthcare Provider Login Attempt:', { identifier: email, hasPassword: !!password });
     
     if (!email || !password) {
-      console.log('❌ Missing email or password');
-      return res.status(400).json({ success: false, error: 'Email and password required' });
+      console.log('❌ Missing identifier or password');
+      return res.status(400).json({ success: false, error: 'Email/Phone and password required' });
     }
     
+    const identifier = email.trim();
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Check if super admin credentials
-    if (NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
+    // Detect if input is phone number (10 digits)
+    const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+    console.log('📱 Input type:', isPhoneNumber ? 'Phone Number' : 'Email');
+    
+    // Check if super admin credentials (only for email)
+    if (!isPhoneNumber && NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
       const token = await createSession();
       console.log('✅ Super Admin Login Successful');
       return res.json({ success: true, token, isSuperAdmin: true });
@@ -962,11 +1071,19 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Database not configured' });
     }
     
-    const { data: provider, error } = await supabase
+    // Query by email OR phone number (mobile_number or alternative_mobile)
+    let query = supabase
       .from('healthcare_providers')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
+      .select('*');
+    
+    if (isPhoneNumber) {
+      const cleanPhone = identifier.replace(/[^\d]/g, '');
+      query = query.or(`mobile_number.eq.${cleanPhone},alternative_mobile.eq.${cleanPhone}`);
+    } else {
+      query = query.eq('email', normalizedEmail);
+    }
+    
+    const { data: provider, error } = await query.maybeSingle();
     
     if (error) {
       console.error('❌ Error fetching provider:', error.message);
@@ -975,7 +1092,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     if (!provider) {
       console.log('❌ Provider not found');
-      return res.status(401).json({ success: false, error: 'Invalid credentials! Email or password is incorrect.' });
+      return res.status(401).json({ success: false, error: 'Invalid credentials! Email/Phone or password is incorrect.' });
     }
     
     console.log('📋 Provider found - verifying credentials');
@@ -1003,7 +1120,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     if (!isPasswordValid) {
       console.log('❌ Password mismatch');
-      return res.status(401).json({ success: false, error: 'Invalid credentials! Email or password is incorrect.' });
+      return res.status(401).json({ success: false, error: 'Invalid credentials! Email/Phone or password is incorrect.' });
     }
     
     // Password is correct - check application status
@@ -1041,6 +1158,8 @@ app.post('/api/nurse/login', async (req, res) => {
           id: provider.id,
           full_name: provider.full_name,
           email: provider.email,
+          mobile_number: provider.mobile_number,
+          alternative_mobile: provider.alternative_mobile,
           application_status: provider.application_status,
           professional_role: provider.professional_role,
           city: provider.city
@@ -2076,13 +2195,289 @@ app.post('/api/support/payment-query', async (req, res) => {
   }
 });
 
-// OTP Email endpoint
+// ============================================================================
+// PATIENT SIGNUP OTP ENDPOINTS (With Redis & Multi-Channel Support)
+// ============================================================================
+
+// Signup OTP Storage Functions
+async function storeSignupOTP(identifier, otpData) {
+  const key = `signup-otp:${identifier}`;
+  const ttl = 120; // 2 minutes in seconds (as per existing signup OTP validity)
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(otpData));
+      console.log(`✅ [REDIS] Stored signup OTP for: ${identifier}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] storeSignupOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory (not ideal for signup but better than nothing)
+  console.log(`⚠️ [FALLBACK] Using in-memory for signup OTP: ${identifier}`);
+  if (!global.signupOTPs) global.signupOTPs = new Map();
+  global.signupOTPs.set(identifier, otpData);
+  return true;
+}
+
+async function getSignupOTP(identifier) {
+  const key = `signup-otp:${identifier}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      if (data) {
+        console.log(`✅ [REDIS] Retrieved signup OTP for: ${identifier}`);
+        return typeof data === 'string' ? JSON.parse(data) : data;
+      }
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getSignupOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  if (!global.signupOTPs) global.signupOTPs = new Map();
+  return global.signupOTPs.get(identifier) || null;
+}
+
+async function deleteSignupOTP(identifier) {
+  const key = `signup-otp:${identifier}`;
+  
+  try {
+    if (redisEnabled) {
+      await redis.del(key);
+      console.log(`✅ [REDIS] Deleted signup OTP for: ${identifier}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] deleteSignupOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  if (!global.signupOTPs) global.signupOTPs = new Map();
+  global.signupOTPs.delete(identifier);
+  return true;
+}
+
+// Send Signup OTP (NEW - Multi-Channel with Redis)
+app.post('/api/send-signup-otp', async (req, res) => {
+  try {
+    const { email, phone, alternativePhone, name } = req.body;
+    
+    // At least one contact method required
+    if (!email && !phone && !alternativePhone) {
+      return res.status(400).json({ 
+        error: 'At least one contact method (email, phone, or alternative phone) is required' 
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+    const now = Date.now();
+    const expiresAt = now + (2 * 60 * 1000); // 2 minutes
+    
+    console.log(`[SIGNUP-OTP] 🔑 Generated OTP: ${otp}`);
+    console.log(`[SIGNUP-OTP] 📧 Email: ${email || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP] 📱 Phone: ${phone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP] 📱 Alt Phone: ${alternativePhone || 'Not provided'}`);
+    
+    // Use phone as primary identifier, fallback to email
+    const identifier = phone || alternativePhone || email;
+    
+    // Store OTP in Redis
+    await storeSignupOTP(identifier, {
+      otp,
+      expiresAt,
+      attempts: 0,
+      lastSentAt: now,
+      email: email || null,
+      phone: phone || null,
+      alternativePhone: alternativePhone || null,
+      name: name || 'User'
+    });
+
+    const deliveryChannels = [];
+    let emailSuccess = false;
+    let smsSuccess = false;
+    let altSmsSuccess = false;
+
+    // Send Email if provided
+    if (email && email.trim()) {
+      try {
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #2260FF; padding: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0;">SR CareHive</h1>
+            </div>
+            <div style="padding: 30px; background: #f9f9f9;">
+              <h2 style="color: #333;">Welcome to SR CareHive!</h2>
+              <p style="color: #666; font-size: 16px;">Please use the following OTP to complete your registration:</p>
+              <div style="background: white; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
+                <h1 style="color: #2260FF; font-size: 36px; letter-spacing: 8px; margin: 0;">${otp}</h1>
+              </div>
+              <p style="color: #666;">This code is valid for <strong>2 minutes</strong>.</p>
+              <p style="color: #666;">If you didn't request this code, please ignore this email.</p>
+            </div>
+            <div style="background: #333; padding: 15px; text-align: center; color: #999; font-size: 12px;">
+              <p style="margin: 0;">© 2025 SR CareHive Pvt. Ltd. All rights reserved.</p>
+              <p style="margin: 5px 0;">Compassionate Care, Connected Community</p>
+            </div>
+          </div>
+        `;
+
+        await sendEmail({
+          to: email,
+          subject: 'SR CareHive - Your Verification Code',
+          html: emailHtml
+        });
+
+        console.log(`[SIGNUP-OTP] ✅ Email sent to: ${email}`);
+        emailSuccess = true;
+        deliveryChannels.push('email');
+      } catch (emailError) {
+        console.error(`[SIGNUP-OTP] ❌ Email failed:`, emailError.message);
+      }
+    }
+
+    // Send SMS to primary phone if provided
+    if (phone && phone.trim()) {
+      try {
+        smsSuccess = await sendOTPViaTubelight(phone, otp, name || 'User');
+        if (smsSuccess) {
+          console.log(`[SIGNUP-OTP] ✅ SMS sent to primary phone: ${phone.slice(0,6)}***`);
+          deliveryChannels.push('SMS (primary)');
+        }
+      } catch (smsError) {
+        console.error(`[SIGNUP-OTP] ❌ Primary SMS error:`, smsError.message);
+      }
+    }
+
+    // Send SMS to alternative phone if provided and different from primary
+    if (alternativePhone && alternativePhone.trim() && alternativePhone !== phone) {
+      try {
+        altSmsSuccess = await sendOTPViaTubelight(alternativePhone, otp, name || 'User');
+        if (altSmsSuccess) {
+          console.log(`[SIGNUP-OTP] ✅ SMS sent to alt phone: ${alternativePhone.slice(0,6)}***`);
+          deliveryChannels.push('SMS (alternative)');
+        }
+      } catch (smsError) {
+        console.error(`[SIGNUP-OTP] ❌ Alternative SMS error:`, smsError.message);
+      }
+    }
+
+    // Check if at least one channel succeeded
+    if (deliveryChannels.length === 0) {
+      console.error(`[SIGNUP-OTP] ❌ All delivery channels failed`);
+      return res.status(500).json({ 
+        error: 'Failed to send OTP via any channel. Please try again later.' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `OTP sent to ${deliveryChannels.join(', ')}. Please check.`,
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined, // Only in dev
+      expiresIn: 120, // 2 minutes
+      deliveryChannels: deliveryChannels
+    });
+
+  } catch (e) {
+    console.error('[SIGNUP-OTP] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Failed to send signup OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// Verify Signup OTP (NEW)
+app.post('/api/verify-signup-otp', async (req, res) => {
+  try {
+    const { email, phone, alternativePhone, otp } = req.body;
+    
+    if (!otp) {
+      return res.status(400).json({ error: 'OTP is required' });
+    }
+
+    // Use phone as primary identifier, fallback to email
+    const identifier = phone || alternativePhone || email;
+    
+    if (!identifier) {
+      return res.status(400).json({ 
+        error: 'At least one contact method identifier is required' 
+      });
+    }
+
+    console.log(`[SIGNUP-OTP-VERIFY] 🔍 Verifying OTP for: ${identifier}`);
+
+    const otpData = await getSignupOTP(identifier);
+
+    if (!otpData) {
+      console.log(`[SIGNUP-OTP-VERIFY] ❌ No OTP found for: ${identifier}`);
+      return res.status(400).json({ 
+        error: 'No OTP found or OTP expired. Please request a new one.' 
+      });
+    }
+
+    // Check expiry
+    if (Date.now() > otpData.expiresAt) {
+      console.log(`[SIGNUP-OTP-VERIFY] ❌ OTP expired for: ${identifier}`);
+      await deleteSignupOTP(identifier);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.' 
+      });
+    }
+
+    // Check attempts (max 5)
+    if (otpData.attempts >= 5) {
+      console.log(`[SIGNUP-OTP-VERIFY] ❌ Max attempts exceeded for: ${identifier}`);
+      await deleteSignupOTP(identifier);
+      return res.status(429).json({ 
+        error: 'Maximum verification attempts exceeded. Please request a new OTP.' 
+      });
+    }
+
+    // Verify OTP
+    if (otp.trim() !== otpData.otp) {
+      console.log(`[SIGNUP-OTP-VERIFY] ❌ Invalid OTP for: ${identifier}`);
+      
+      // Increment attempts
+      otpData.attempts += 1;
+      await storeSignupOTP(identifier, otpData);
+      
+      return res.status(400).json({ 
+        error: 'Invalid OTP. Please try again.',
+        attemptsRemaining: 5 - otpData.attempts
+      });
+    }
+
+    // Success! Delete OTP
+    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP verified successfully for: ${identifier}`);
+    await deleteSignupOTP(identifier);
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully'
+    });
+
+  } catch (e) {
+    console.error('[SIGNUP-OTP-VERIFY] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Failed to verify OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// OLD Endpoint (DEPRECATED - Keep for backward compatibility)
 app.post('/api/send-otp-email', async (req, res) => {
   try {
     const { email, otp } = req.body;
     
     if (!email || !otp) {
-      return res.status(400).json({ error: 'OTP is required' });
+      return res.status(400).json({ error: 'Email and OTP are required' });
     }
 
     const html = `
@@ -2106,7 +2501,7 @@ app.post('/api/send-otp-email', async (req, res) => {
       </div>
     `;
 
-    console.log(`[INFO] Sending OTP email to: ${email}`);
+    console.log(`[DEPRECATED] [INFO] Sending OTP email to: ${email}`);
     
     await sendEmail({
       to: email,
@@ -2114,10 +2509,10 @@ app.post('/api/send-otp-email', async (req, res) => {
       html
     });
 
-    console.log(`[SUCCESS] OTP email sent to: ${email}`);
+    console.log(`[DEPRECATED] [SUCCESS] OTP email sent to: ${email}`);
     res.json({ success: true, message: 'OTP sent successfully' });
   } catch (e) {
-    console.error('[ERROR] send-otp-email:', e);
+    console.error('[DEPRECATED] [ERROR] send-otp-email:', e);
     res.status(500).json({ 
       error: 'Failed to send OTP email',
       details: e.message 
@@ -3148,7 +3543,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     
     const { data: patient, error: patientError } = await supabase
   .from('patients')
-  .select('email, name, user_id')
+  .select('email, name, user_id, phone, alternative_phone')
   .eq('email', normalizedEmail)
   .single();
 
@@ -3290,6 +3685,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     // Send OTP email (sendEmail handles mailer initialization)
     console.log(`[OTP-RESET] Attempting to send OTP email...`);
     
+    let smsSuccess = false;
     try {
       await sendEmail({
         to: normalizedEmail,
@@ -3297,15 +3693,30 @@ app.post('/send-password-reset-otp', async (req, res) => {
         html: otpEmailHtml
       });
 
-      console.log(`[SUCCESS] OTP email sent successfully to: ${normalizedEmail}`);
+      console.log(`[SUCCESS] ✅ OTP email sent to: ${normalizedEmail}`);
+
+      // Try SMS to both phone numbers if available
+      if (patient.phone || patient.alternative_phone) {
+        const phoneToTry = patient.phone || patient.alternative_phone;
+        console.log(`[OTP-RESET] 📱 Trying SMS to: ${phoneToTry}`);
+        try {
+          smsSuccess = await sendOTPViaTubelight(phoneToTry, otp, patient.name);
+        } catch (smsError) {
+          console.error(`[OTP-RESET] ❌ SMS error:`, smsError.message);
+        }
+      }
+
+      const channels = ['email'];
+      if (smsSuccess) channels.push('SMS');
 
       res.json({ 
         success: true, 
         message: resend 
-          ? 'New OTP sent successfully! Check your email.' 
-          : 'OTP sent successfully to your email. Please check your inbox and spam folder.',
-        expiresIn: 600, // 10 minutes in seconds
-        canResendAfter: 120 // 2 minutes in seconds
+          ? `New OTP sent to your ${channels.join(' and ')}!` 
+          : `OTP sent to your ${channels.join(' and ')}. Please check.`,
+        expiresIn: 600,
+        canResendAfter: 120,
+        deliveryChannels: channels
       });
     } catch (emailError) {
       console.error('[ERROR] Failed to send OTP email:', emailError.message);
@@ -3564,10 +3975,10 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     try {
       console.log(`[PROVIDER-RESET] 🔍 Attempt 1: Direct query with explicit schema...`);
       
-      // Query with 'full_name' column from healthcare_providers table
+      // Query with 'full_name' and phone fields from healthcare_providers table
       const { data: attempt1Data, error: attempt1Error, count: attempt1Count } = await supabase
         .from('healthcare_providers')
-        .select('id, email, full_name', { count: 'exact' })
+        .select('id, email, full_name, mobile_number, alternative_mobile', { count: 'exact' })
         .ilike('email', normalizedEmail);
 
       console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Count:`, attempt1Count);
@@ -3755,14 +4166,29 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         html: otpEmailHtml
       });
 
-      console.log(`[PROVIDER-RESET] ✅ OTP email sent successfully to ${normalizedEmail}`);
-      console.log(`[PROVIDER-RESET] Email Result:`, emailResult);
+      console.log(`[PROVIDER-RESET] ✅ OTP email sent to ${normalizedEmail}`);
+
+      // Try SMS to both phone numbers if available
+      let smsSuccess = false;
+      if (provider.mobile_number || provider.alternative_mobile) {
+        const phoneToTry = provider.mobile_number || provider.alternative_mobile;
+        console.log(`[PROVIDER-RESET] 📱 Trying SMS to: ${phoneToTry}`);
+        try {
+          smsSuccess = await sendOTPViaTubelight(phoneToTry, otp, provider.full_name);
+        } catch (smsError) {
+          console.error(`[PROVIDER-RESET] ❌ SMS error:`, smsError.message);
+        }
+      }
+
+      const channels = ['email'];
+      if (smsSuccess) channels.push('SMS');
 
       res.json({ 
         success: true, 
-        message: 'OTP sent successfully! Please check your email inbox and spam folder.',
-        expiresIn: 600, // 10 minutes
-        canResendAfter: 120 // 2 minutes
+        message: `OTP sent to your ${channels.join(' and ')}!`,
+        expiresIn: 600,
+        canResendAfter: 120,
+        deliveryChannels: channels
       });
 
     } catch (emailError) {
@@ -4416,6 +4842,398 @@ app.get('/api/test-email', async (req, res) => {
     });
   }
 });
+
+// ============================================================================
+// PATIENT LOGIN OTP ENDPOINTS
+// ============================================================================
+
+// Send login OTP (validates credentials without logging in)
+// NOW SUPPORTS: Email OR Phone Number (primary or alternative)
+app.post('/send-login-otp', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email/Phone and password are required' });
+    }
+
+    const identifier = email.trim();
+    console.log(`[LOGIN-OTP] Request for: ${identifier}`);
+
+    // Detect if identifier is email or phone
+    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+    const phoneRegex = /^[\d]{10}$/; // 10 digit phone number
+    
+    const isEmail = emailRegex.test(identifier);
+    const isPhone = phoneRegex.test(identifier);
+    
+    if (!isEmail && !isPhone) {
+      return res.status(400).json({ error: 'Invalid email or phone number format' });
+    }
+
+    const normalizedIdentifier = isEmail ? identifier.toLowerCase() : identifier;
+    console.log(`[LOGIN-OTP] Type detected: ${isEmail ? 'EMAIL' : 'PHONE'}`);
+
+    // Check cooldown (2 minutes) - use identifier as key
+    const existingOTP = await getLoginOTP(normalizedIdentifier);
+    if (existingOTP && existingOTP.lastSentAt) {
+      const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
+      const cooldownPeriod = 2 * 60 * 1000;
+      
+      if (timeSinceLastSend < cooldownPeriod) {
+        const remainingTime = Math.ceil((cooldownPeriod - timeSinceLastSend) / 1000);
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        
+        return res.status(429).json({ 
+          error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
+          remainingSeconds: remainingTime
+        });
+      }
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    // Step 1: Check if patient exists in patients table (by email OR phone)
+    let patient = null;
+    let patientEmail = null;
+    
+    if (isEmail) {
+      // Search by email
+      const { data, error: patientError } = await supabase
+        .from('patients')
+        .select('email, name, user_id, phone, alternative_phone')
+        .eq('email', normalizedIdentifier)
+        .maybeSingle();
+      
+      if (patientError || !data) {
+        console.log(`[LOGIN-OTP] Patient not found by email: ${normalizedIdentifier}`);
+        return res.status(401).json({ error: 'Invalid email/phone or password' });
+      }
+      patient = data;
+      patientEmail = data.email;
+    } else {
+      // Search by phone (check both phone and alternative_phone)
+      const { data, error: patientError } = await supabase
+        .from('patients')
+        .select('email, name, user_id, phone, alternative_phone')
+        .or(`phone.eq.${normalizedIdentifier},alternative_phone.eq.${normalizedIdentifier}`)
+        .maybeSingle();
+      
+      if (patientError || !data) {
+        console.log(`[LOGIN-OTP] Patient not found by phone: ${normalizedIdentifier}`);
+        return res.status(401).json({ error: 'Invalid email/phone or password' });
+      }
+      patient = data;
+      patientEmail = data.email; // Need email for Supabase auth
+      
+      if (!patientEmail) {
+        console.log(`[LOGIN-OTP] Patient found by phone but no email in record`);
+        return res.status(401).json({ error: 'Account email not found. Please contact support.' });
+      }
+    }
+
+    // Step 2: Verify password with Supabase Auth (always use email for auth)
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: patientEmail, // Always use email for Supabase auth
+        password: password.trim()
+      });
+
+      // Sign out immediately - we only validated credentials
+      if (authData?.session) {
+        await supabase.auth.signOut();
+      }
+
+      if (authError) {
+        console.log(`[LOGIN-OTP] Invalid password for identifier: ${normalizedIdentifier}`);
+        return res.status(401).json({ error: 'Invalid email/phone or password' });
+      }
+    } catch (authErr) {
+      console.error(`[LOGIN-OTP] Auth error:`, authErr.message);
+      return res.status(401).json({ error: 'Invalid email/phone or password' });
+    }
+
+    // Step 3: Credentials valid - Generate and send OTP
+    const otp = generateOTP();
+    const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
+    const lastSentAt = Date.now();
+
+    // Store OTP with identifier as key (could be email or phone)
+    await storeLoginOTP(normalizedIdentifier, {
+      otp,
+      expiresAt,
+      attempts: 0,
+      userId: patient.user_id,
+      lastSentAt,
+      password: password.trim(), // Store temporarily for final login
+      email: patientEmail, // Store email for final Supabase login
+      phone: patient.phone || null,
+      alternative_phone: patient.alternative_phone || null,
+      name: patient.name || 'User',
+      loginType: isEmail ? 'email' : 'phone',
+      identifier: normalizedIdentifier
+    });
+
+    console.log(`[LOGIN-OTP] OTP generated for ${normalizedIdentifier} (${isEmail ? 'email' : 'phone'}): ${otp}`);
+
+    // Create OTP email
+    const otpEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 40px 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Login Verification</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 40px 30px;">
+                    <p style="font-size: 16px; color: #333; margin: 0 0 20px;">Hello ${patient.name || 'there'},</p>
+                    <p style="font-size: 14px; color: #666; line-height: 1.6; margin: 0 0 20px;">
+                      You're attempting to log in to your SR CareHive account. Use the OTP below to complete your login:
+                    </p>
+                    <div style="background: linear-gradient(135deg, #2260FF 0%, #1a4fd6 100%); padding: 30px; text-align: center; border-radius: 8px; margin: 30px 0;">
+                      <p style="margin: 0 0 10px; font-size: 14px; color: #ffffff; opacity: 0.9;">Your Login OTP</p>
+                      <p style="margin: 0; font-size: 42px; font-weight: bold; color: #ffffff; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                        ${otp}
+                      </p>
+                    </div>
+                    <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                      <p style="margin: 0; font-size: 13px; color: #856404;">
+                        <strong>⚠️ Security Notice:</strong><br/>
+                        • This OTP expires in <strong>10 minutes</strong><br/>
+                        • You can request a new OTP after <strong>2 minutes</strong><br/>
+                        • Never share this code with anyone<br/>
+                        • If you didn't attempt to log in, ignore this email
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+                    <p style="margin: 0 0 10px; font-size: 14px; color: #2260FF; font-weight: bold;">SR CareHive</p>
+                    <p style="margin: 0; font-size: 11px; color: #999;">
+                      This is an automated email. Please do not reply.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    // Send OTP to the appropriate channel
+    const channels = [];
+    let emailSuccess = false;
+    let smsSuccess = false;
+    
+    try {
+      if (isEmail) {
+        // User logged in with email - send OTP to email
+        await sendEmail({
+          to: patientEmail,
+          subject: 'Login Verification OTP - SR CareHive',
+          html: otpEmailHtml
+        });
+        console.log(`[LOGIN-OTP] ✅ Email sent to: ${patientEmail}`);
+        emailSuccess = true;
+        channels.push('email');
+      } else {
+        // User logged in with phone - send OTP to that phone via SMS
+        console.log(`[LOGIN-OTP] 📱 Sending SMS to: ${normalizedIdentifier}`);
+        try {
+          smsSuccess = await sendOTPViaTubelight(normalizedIdentifier, otp, patient.name);
+          if (smsSuccess) {
+            console.log(`[LOGIN-OTP] ✅ SMS sent to: ${normalizedIdentifier}`);
+            channels.push('SMS');
+          } else {
+            console.error(`[LOGIN-OTP] ❌ SMS failed for: ${normalizedIdentifier}`);
+          }
+        } catch (smsError) {
+          console.error(`[LOGIN-OTP] ❌ SMS error:`, smsError.message);
+        }
+      }
+
+      if (channels.length === 0) {
+        return res.status(500).json({ error: 'Failed to send OTP. Please try again later.' });
+      }
+
+      res.json({ 
+        success: true, 
+        message: `OTP sent to your ${channels.join(' and ')}. Please check.`,
+        expiresIn: 600,
+        canResendAfter: 120,
+        deliveryChannels: channels,
+        loginType: isEmail ? 'email' : 'phone'
+      });
+    } catch (emailError) {
+      console.error('[LOGIN-OTP] ❌ Email failed:', emailError.message);
+      return res.status(500).json({ 
+        error: 'Failed to send OTP email. Please try again later.'
+      });
+    }
+
+  } catch (e) {
+    console.error('[LOGIN-OTP] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Failed to process login request', 
+      details: e.message 
+    });
+  }
+});
+
+// Verify login OTP (NOW SUPPORTS: Email OR Phone)
+app.post('/verify-login-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body; // 'email' param now accepts email OR phone
+    
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email/Phone and OTP are required' });
+    }
+
+    const identifier = email.trim();
+    const normalizedIdentifier = identifier.includes('@') ? identifier.toLowerCase() : identifier;
+    const otpData = await getLoginOTP(normalizedIdentifier);
+
+    if (!otpData) {
+      return res.status(400).json({ 
+        error: 'No OTP found. Please request a new one.',
+        expired: true
+      });
+    }
+
+    // Check expiry
+    if (Date.now() > otpData.expiresAt) {
+      await deleteLoginOTP(normalizedIdentifier);
+      return res.status(400).json({ 
+        error: 'OTP has expired. Please request a new one.',
+        expired: true
+      });
+    }
+
+    // Check attempts
+    if (otpData.attempts >= 5) {
+      await deleteLoginOTP(normalizedIdentifier);
+      return res.status(429).json({ 
+        error: 'Too many incorrect attempts. Please request a new OTP.',
+        attemptsExceeded: true
+      });
+    }
+
+    // Verify OTP
+    if (otpData.otp !== otp.trim()) {
+      otpData.attempts += 1;
+      await storeLoginOTP(normalizedIdentifier, otpData);
+      
+      const remainingAttempts = 5 - otpData.attempts;
+      return res.status(400).json({ 
+        error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
+        remainingAttempts,
+        invalidOtp: true
+      });
+    }
+
+    // OTP verified - return success with credentials for final login
+    await deleteLoginOTP(normalizedIdentifier);
+    
+    console.log(`[LOGIN-OTP] ✅ OTP verified for: ${normalizedIdentifier}`);
+    
+    // Return stored email (needed for Supabase login even if user used phone)
+    res.json({ 
+      success: true,
+      message: 'OTP verified successfully',
+      userId: otpData.userId,
+      email: otpData.email || normalizedIdentifier // Use stored email
+    });
+
+  } catch (e) {
+    console.error('[LOGIN-OTP] ❌ Verify error:', e);
+    res.status(500).json({ 
+      error: 'Failed to verify OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// Login OTP Storage Functions (Redis with fallback)
+const loginOTPStore = new Map();
+
+async function storeLoginOTP(email, otpData) {
+  const key = `login-otp:${email.toLowerCase()}`;
+  const ttl = 600; // 10 minutes in seconds
+  
+  try {
+    if (redisEnabled) {
+      await redis.setex(key, ttl, JSON.stringify(otpData));
+      console.log(`[REDIS] ✅ Login OTP stored for: ${email}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] storeLoginOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  loginOTPStore.set(email.toLowerCase(), otpData);
+  console.log(`[MEMORY] ✅ Login OTP stored (fallback) for: ${email}`);
+  return true;
+}
+
+async function getLoginOTP(email) {
+  const key = `login-otp:${email.toLowerCase()}`;
+  
+  try {
+    if (redisEnabled) {
+      const data = await redis.get(key);
+      if (data) {
+        console.log(`[REDIS] ✅ Login OTP retrieved for: ${email}`);
+        return typeof data === 'string' ? JSON.parse(data) : data;
+      }
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] getLoginOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  const memData = loginOTPStore.get(email.toLowerCase());
+  if (memData) {
+    console.log(`[MEMORY] ✅ Login OTP retrieved (fallback) for: ${email}`);
+  }
+  return memData || null;
+}
+
+async function deleteLoginOTP(email) {
+  const key = `login-otp:${email.toLowerCase()}`;
+  
+  try {
+    if (redisEnabled) {
+      await redis.del(key);
+      console.log(`[REDIS] ✅ Login OTP deleted for: ${email}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ [REDIS] deleteLoginOTP failed:', error.message);
+  }
+  
+  // Fallback to in-memory
+  loginOTPStore.delete(email.toLowerCase());
+  console.log(`[MEMORY] ✅ Login OTP deleted (fallback) for: ${email}`);
+  return true;
+}
 
 // ============================================================================
 // START SERVER

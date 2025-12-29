@@ -8,7 +8,7 @@ class OTPService {
   static DateTime? _otpGeneratedTime;
   static const int OTP_VALIDITY_MINUTES = 2;
 
-  // Generate 6-digit OTP
+  // Generate 6-digit OTP (for backward compatibility only)
   static String generateOTP() {
     final random = Random();
     _currentOTP = (100000 + random.nextInt(900000)).toString();
@@ -16,7 +16,7 @@ class OTPService {
     return _currentOTP!;
   }
 
-  // Verify OTP
+  // Verify OTP (for backward compatibility only - not recommended for new code)
   static bool verifyOTP(String enteredOTP) {
     if (_currentOTP == null || _otpGeneratedTime == null) {
       return false;
@@ -50,7 +50,146 @@ class OTPService {
     return remainingSeconds > 0 ? remainingSeconds : 0;
   }
 
-  // Send OTP via Twilio SMS
+  // ============================================================================
+  // NEW: Backend-Based OTP with Redis Storage and Multi-Channel Delivery
+  // ============================================================================
+
+  /// Send signup OTP via backend (supports email, phone, and alternative phone)
+  /// At least one contact method must be provided
+  /// Returns a map with delivery status and channels
+  static Future<Map<String, dynamic>> sendSignupOTP({
+    String? email,
+    String? phone,
+    String? alternativePhone,
+    String? name,
+  }) async {
+    try {
+      // Validate: at least one contact method required
+      if ((email == null || email.isEmpty) && 
+          (phone == null || phone.isEmpty) && 
+          (alternativePhone == null || alternativePhone.isEmpty)) {
+        return {
+          'success': false,
+          'error': 'At least one contact method (email, phone, or alternative phone) is required',
+          'deliveryChannels': <String>[],
+        };
+      }
+
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+      
+      // Build request body with only provided fields
+      final Map<String, dynamic> requestBody = {};
+      if (email != null && email.isNotEmpty) requestBody['email'] = email;
+      if (phone != null && phone.isNotEmpty) requestBody['phone'] = phone;
+      if (alternativePhone != null && alternativePhone.isNotEmpty) {
+        requestBody['alternativePhone'] = alternativePhone;
+      }
+      if (name != null && name.isNotEmpty) requestBody['name'] = name;
+
+      print('[OTP-SERVICE] 📤 Sending signup OTP request...');
+      print('[OTP-SERVICE] 📧 Email: ${email ?? "Not provided"}');
+      print('[OTP-SERVICE] 📱 Phone: ${phone ?? "Not provided"}');
+      print('[OTP-SERVICE] 📱 Alt Phone: ${alternativePhone ?? "Not provided"}');
+
+      final response = await http.post(
+        Uri.parse('$apiUrl/api/send-signup-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
+
+      print('[OTP-SERVICE] Response status: ${response.statusCode}');
+      print('[OTP-SERVICE] Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP sent successfully',
+          'deliveryChannels': List<String>.from(data['deliveryChannels'] ?? []),
+          'expiresIn': data['expiresIn'] ?? 120,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorData['error'] ?? 'Failed to send OTP',
+          'deliveryChannels': <String>[],
+        };
+      }
+    } catch (e) {
+      print('[OTP-SERVICE] ❌ Error sending signup OTP: $e');
+      return {
+        'success': false,
+        'error': 'Network error: $e',
+        'deliveryChannels': <String>[],
+      };
+    }
+  }
+
+  /// Verify signup OTP via backend
+  static Future<Map<String, dynamic>> verifySignupOTP({
+    String? email,
+    String? phone,
+    String? alternativePhone,
+    required String otp,
+  }) async {
+    try {
+      if (otp.isEmpty) {
+        return {
+          'success': false,
+          'error': 'OTP is required',
+        };
+      }
+
+      final apiUrl = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+      
+      // Build request body with identifiers and OTP
+      final Map<String, dynamic> requestBody = {'otp': otp};
+      if (email != null && email.isNotEmpty) requestBody['email'] = email;
+      if (phone != null && phone.isNotEmpty) requestBody['phone'] = phone;
+      if (alternativePhone != null && alternativePhone.isNotEmpty) {
+        requestBody['alternativePhone'] = alternativePhone;
+      }
+
+      print('[OTP-SERVICE] 🔍 Verifying signup OTP...');
+
+      final response = await http.post(
+        Uri.parse('$apiUrl/api/verify-signup-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
+
+      print('[OTP-SERVICE] Verify response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP verified successfully',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorData['error'] ?? 'Failed to verify OTP',
+          'attemptsRemaining': errorData['attemptsRemaining'],
+        };
+      }
+    } catch (e) {
+      print('[OTP-SERVICE] ❌ Error verifying signup OTP: $e');
+      return {
+        'success': false,
+        'error': 'Network error: $e',
+      };
+    }
+  }
+
+  // ============================================================================
+  // OLD METHODS (DEPRECATED - Kept for backward compatibility)
+  // These use client-side OTP generation which is insecure
+  // ============================================================================
+
+  // Send OTP via Twilio SMS (DEPRECATED)
   static Future<bool> sendOTPViaSMS(String phoneNumber, String otp) async {
     try {
       final accountSid = dotenv.env['TWILIO_ACCOUNT_SID'];
@@ -86,7 +225,7 @@ class OTPService {
     }
   }
 
-  // Send OTP via Email
+  // Send OTP via Email (DEPRECATED - uses old endpoint)
   static Future<bool> sendOTPViaEmail(String email, String otp) async {
     try {
       final apiUrl = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
@@ -107,7 +246,7 @@ class OTPService {
     }
   }
 
-  // Send OTP to both phone and email
+  // Send OTP to both phone and email (DEPRECATED - insecure client-side OTP)
   static Future<Map<String, bool>> sendOTP(
       String phoneNumber, String email) async {
     final otp = generateOTP();

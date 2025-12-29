@@ -88,11 +88,17 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     super.dispose();
   }
 
+  // Helper method to check if input is a phone number (10 digits)
+  bool _isPhoneNumber(String input) {
+    final cleaned = input.replaceAll(RegExp(r'[^\d]'), '');
+    return cleaned.length == 10 && RegExp(r'^\d{10}$').hasMatch(cleaned);
+  }
+
   Future<void> _handleLogin() async {
     if (emailController.text.isEmpty || passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter email and password'),
+          content: Text('Please enter email/phone number and password'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -209,6 +215,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
 
   Future<void> _handleForgotPassword() async {
     final forgotPasswordEmailController = TextEditingController();
+    final forgotPasswordPhoneController = TextEditingController();
     
     // Dialog returns a map with email and message, or null
     final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
@@ -229,59 +236,85 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
               Text('Forgot Password'),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter your registered email address to receive a password reset OTP.',
-                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-              ),
-              SizedBox(height: 20),
-              TextField(
-                controller: forgotPasswordEmailController,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: InputDecoration(
-                  labelText: 'Email Address',
-                  hintText: 'your.email@example.com',
-                  prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF2260FF)),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
-                  ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enter your registered email and phone number (optional) to receive a password reset OTP.',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                 ),
-              ),
-              SizedBox(height: 12),
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 18, color: Color(0xFF2260FF)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'A 6-digit OTP will be sent to your email',
-                        style: TextStyle(fontSize: 12, color: Colors.blue[900]),
-                      ),
+                SizedBox(height: 20),
+                TextField(
+                  controller: forgotPasswordEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: 'Email Address',
+                    hintText: 'your.email@example.com',
+                    prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF2260FF)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: 16),
+                TextField(
+                  controller: forgotPasswordPhoneController,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number (Optional)',
+                    hintText: '10-digit mobile number',
+                    prefixIcon: Icon(Icons.phone_outlined, color: Color(0xFF2260FF)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
+                    ),
+                    counterText: '',
+                  ),
+                ),
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: Color(0xFF2260FF)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'OTP will be sent to your email\n If phone is registered, SMS will also be sent',
+                          style: TextStyle(fontSize: 11, color: Colors.blue[900]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -298,12 +331,13 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                   ? null
                   : () async {
                       final email = forgotPasswordEmailController.text.trim();
+                      final phone = forgotPasswordPhoneController.text.trim();
                       
                       if (email.isEmpty) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(dialogContext).showSnackBar(
                           const SnackBar(
-                            content: Text('Please enter your email address'),
+                            content: Text('Please enter your email address or phone number'),
                             backgroundColor: Colors.orange,
                           ),
                         );
@@ -323,21 +357,41 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         return;
                       }
 
+                      // Validate phone if provided
+                      if (phone.isNotEmpty && phone.length != 10) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(
+                            content: Text('Phone number must be 10 digits'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
                       setDialogState(() => isDialogLoading = true);
 
                       try {
                         print('📧 Sending password reset OTP to: $email');
+                        if (phone.isNotEmpty) print('📱 Phone provided: $phone');
                         
-                        final result = await NurseApiService.sendPasswordResetOtp(email: email);
+                        final result = await NurseApiService.sendPasswordResetOtp(
+                          email: email,
+                          phone: phone.isNotEmpty ? phone : null,
+                        );
                         final success = result['success'] ?? false;
                         final message = result['message'] ?? 'OTP sent successfully';
                         final notFound = result['notFound'] ?? false;
                         final serviceError = result['serviceError'] ?? false;
+                        final deliveryChannels = result['deliveryChannels'] as List?;
                         
                         print('🔍 Backend response success: $success');
                         print('🔍 Backend response message: "$message"');
                         print('🔍 Backend response notFound: $notFound');
                         print('🔍 Backend response serviceError: $serviceError');
+                        if (deliveryChannels != null) {
+                          print('🔍 Delivery channels: $deliveryChannels');
+                        }
                         
                         setDialogState(() => isDialogLoading = false);
                         
@@ -365,10 +419,16 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           return; // Don't close dialog, don't navigate
                         }
                         
+                        // Build success message
+                        String successMessage = message;
+                        if (deliveryChannels != null && deliveryChannels.contains('SMS')) {
+                          successMessage = 'OTP sent to your email and phone!';
+                        }
+                        
                         // Success! Return email and message to show OUTSIDE dialog
                         Navigator.pop(dialogContext, {
                           'email': email,
-                          'message': message,
+                          'message': successMessage,
                         });
                       } catch (e) {
                         setDialogState(() => isDialogLoading = false);
@@ -433,6 +493,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     // Wait for dialog close animation to complete before disposing controller
     await Future.delayed(const Duration(milliseconds: 300));
     forgotPasswordEmailController.dispose();
+    forgotPasswordPhoneController.dispose();
     
     // If result was returned, show message and navigate (OUTSIDE dialog)
     if (result != null && mounted) {
@@ -464,8 +525,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
-        backgroundColor: Colors.white,
+        leading: const BackButton(color: Colors.white),
+        backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),
       body: Padding(
@@ -497,12 +558,18 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
           ),
         ),
         const SizedBox(height: 30),
-        const Text('Email', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        const Text('Email or Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          'Enter registered email or primary/alternative phone number you have registered with',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: emailController,
+          keyboardType: TextInputType.emailAddress,
           decoration: InputDecoration(
-            hintText: 'example@srcarehive.com',
+            hintText: 'Email or phone number',
             filled: true,
             fillColor: const Color(0xFFEDEFFF),
             border: OutlineInputBorder(
@@ -575,7 +642,9 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Text('An OTP has been sent to your email: ${emailController.text.trim()}',
+        Text(_isPhoneNumber(emailController.text.trim()) 
+            ? 'An OTP has been sent to your phone: ${emailController.text.trim()}'
+            : 'An OTP has been sent to your email: ${emailController.text.trim()}',
             style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 30),
         TextField(

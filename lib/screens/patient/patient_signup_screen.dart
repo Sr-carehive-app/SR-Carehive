@@ -23,7 +23,11 @@ class PatientSignUpScreen extends StatefulWidget {
   State<PatientSignUpScreen> createState() => _PatientSignUpScreenState();
 }
 
-class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
+class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTickerProviderStateMixin {
+  // Animation controller for Google button gradient border
+  late AnimationController _gradientController;
+  late Animation<double> _gradientAnimation;
+  
   // Salutation and Name fields
   String? selectedSalutation;
   final TextEditingController firstNameController = TextEditingController();
@@ -79,6 +83,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     super.initState();
     _isGoogleUser = widget.prefillData != null;
     _prefillData();
+    
+    // Initialize gradient animation for Google button
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(); // Infinite loop
+    
+    _gradientAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_gradientController);
   }
 
   void _prefillData() {
@@ -183,7 +195,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     return '${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8)}';
   }
 
-  // OTP Verification Dialog
+  // OTP Verification Dialog (NEW - Backend-based with Redis)
   Future<bool> _showOTPVerificationDialog() async {
     final otpController = TextEditingController();
     bool isVerifying = false;
@@ -191,21 +203,44 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
     bool canResend = false;
     Timer? countdownTimer;
 
-    // Send OTP
+    // Send OTP via new backend endpoint
     final phoneWithCode = selectedCountryCode + aadharLinkedPhoneController.text.trim();
-    final result = await OTPService.sendOTP(phoneWithCode, emailController.text.trim());
+    final altPhone = alternativePhoneController.text.trim().isNotEmpty 
+        ? selectedCountryCode + alternativePhoneController.text.trim() 
+        : null;
+    final email = emailController.text.trim().isNotEmpty 
+        ? emailController.text.trim() 
+        : null;
+    
+    final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
+    
+    print('📤 Sending signup OTP...');
+    print('📧 Email: ${email ?? "Not provided"}');
+    print('📱 Phone: $phoneWithCode');
+    print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
+    
+    final result = await OTPService.sendSignupOTP(
+      email: email,
+      phone: phoneWithCode,
+      alternativePhone: altPhone,
+      name: fullName,
+    );
 
-    if (!result['sms']! && !result['email']!) {
+    if (!result['success']) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send OTP. Please check your phone number and email.'),
+          SnackBar(
+            content: Text(result['error'] ?? 'Failed to send OTP. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
       }
       return false;
     }
+    
+    // Get delivery channels
+    final List<String> deliveryChannels = result['deliveryChannels'] ?? [];
+    print('✅ OTP sent via: ${deliveryChannels.join(", ")}');
 
     return await showDialog<bool>(
       context: context,
@@ -241,15 +276,30 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                     style: TextStyle(color: Colors.grey[700]),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '📧 ${emailController.text}',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  if (result['sms']!)
-                    Text(
-                      '📱 $phoneWithCode',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
+                  // Show channels dynamically based on backend response
+                  ...deliveryChannels.map((channel) {
+                    String icon = '📧';
+                    String text = '';
+                    
+                    if (channel.toLowerCase().contains('email') && email != null) {
+                      icon = '📧';
+                      text = email;
+                    } else if (channel.toLowerCase().contains('primary') || channel.toLowerCase().contains('sms')) {
+                      icon = '📱';
+                      text = phoneWithCode;
+                    } else if (channel.toLowerCase().contains('alternative') && altPhone != null) {
+                      icon = '📱';
+                      text = '$altPhone (alternative)';
+                    }
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '$icon $text',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    );
+                  }).toList(),
                   const SizedBox(height: 20),
                   TextField(
                     controller: otpController,
@@ -300,20 +350,22 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                           }
                         });
                         
-                        final resendResult = await OTPService.sendOTP(
-                          phoneWithCode,
-                          emailController.text.trim(),
+                        final resendResult = await OTPService.sendSignupOTP(
+                          email: email,
+                          phone: phoneWithCode,
+                          alternativePhone: altPhone,
+                          name: fullName,
                         );
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                resendResult['sms']! || resendResult['email']!
+                                resendResult['success']
                                     ? 'OTP resent successfully'
-                                    : 'Failed to resend OTP',
+                                    : resendResult['error'] ?? 'Failed to resend OTP',
                               ),
                               backgroundColor:
-                                  resendResult['sms']! || resendResult['email']!
+                                  resendResult['success']
                                       ? Colors.green
                                       : Colors.red,
                             ),
@@ -335,7 +387,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                 ElevatedButton(
                   onPressed: isVerifying
                       ? null
-                      : () {
+                      : () async {
                           if (otpController.text.length != 6) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -347,20 +399,36 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
 
                           setState(() => isVerifying = true);
 
-                          final isValid = OTPService.verifyOTP(otpController.text);
+                          // Verify OTP via backend
+                          final verifyResult = await OTPService.verifySignupOTP(
+                            email: email,
+                            phone: phoneWithCode,
+                            alternativePhone: altPhone,
+                            otp: otpController.text,
+                          );
 
                           setState(() => isVerifying = false);
 
-                          if (isValid) {
+                          if (verifyResult['success']) {
                             countdownTimer?.cancel();
                             Navigator.of(dialogContext).pop(true);
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Invalid or expired OTP'),
+                              SnackBar(
+                                content: Text(verifyResult['error'] ?? 'Invalid or expired OTP'),
                                 backgroundColor: Colors.red,
                               ),
                             );
+                            
+                            // Show remaining attempts if available
+                            if (verifyResult['attemptsRemaining'] != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('${verifyResult['attemptsRemaining']} attempts remaining'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
                           }
                         },
                   child: isVerifying
@@ -383,6 +451,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
 
   @override
   void dispose() {
+    _gradientController.dispose(); // Dispose animation controller
     firstNameController.dispose();
     middleNameController.dispose();
     lastNameController.dispose();
@@ -425,12 +494,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
-    if (emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
-      return;
-    }
+    // EMAIL IS NOW OPTIONAL - No validation needed
+    // User can signup with just phone numbers if they don't have email
     
     if (aadharLinkedPhoneController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -465,28 +530,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
-    if (aadharController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your Aadhar number')),
-      );
-      return;
-    }
-    
-    if (houseNumberController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your house/flat number')),
-      );
-      return;
-    }
-    
+    // Aadhar is now optional - skip empty check
+    // House/Flat Number is now optional - skip empty check
     // Street removed from signup form (not required)
-    
-    if (townController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your town/locality')),
-      );
-      return;
-    }
+    // Town/Locality is now optional - skip empty check
     
     if (cityController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -516,8 +563,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
       return;
     }
     
-    // Validate Aadhar number
-    if (!validateAadharFormat(aadharController.text)) {
+    // Validate Aadhar number only if provided
+    if (aadharController.text.trim().isNotEmpty && !validateAadharFormat(aadharController.text)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter a valid Aadhar number'),
@@ -831,12 +878,22 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
           enableSuggestions: false,
           decoration: InputDecoration(
             hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
             filled: true,
-            fillColor: enabled ? const Color(0xFFEDEFFF) : const Color(0xFFF5F5F5),
+            fillColor: enabled ? Colors.white : const Color(0xFFF5F5F5),
             suffixIcon: suffixIcon,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
             ),
           ),
         ),
@@ -849,9 +906,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
             if (_isGoogleUser) {
               // For Google users, navigate to dashboard since they're already authenticated
@@ -868,20 +926,66 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             }
           },
         ),
-        backgroundColor: Colors.white,
+        title: const Text(
+          'Healthcare Seeker Registration',
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF2260FF), Color(0xFF1A4FCC)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20.0),
         child: ListView(
           children: [
-            const SizedBox(height: 20),
-            const Text(
-              'Register Your New Account Below',
-              style: TextStyle(
-                fontSize: 24,
-                color: Color(0xFF2260FF),
-                fontWeight: FontWeight.bold,
+            // Welcome Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2260FF), Color(0xFF1A4FCC)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2260FF).withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Register Your New Account Below',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Complete the form below to create your account and access our healthcare services',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white70,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
             if (_isGoogleUser || widget.showRegistrationMessage) ...[
@@ -922,8 +1026,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEDEFFF),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
                   ),
                   child: DropdownButton<String>(
                     value: selectedSalutation,
@@ -982,7 +1087,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
               const SizedBox(height: 20),
             ],
             buildTextField(
-              label: 'Email',
+              label: 'Email (Optional)',
               hint: 'example@domain.com',
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
@@ -1034,11 +1139,21 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                         ],
                         decoration: InputDecoration(
                           hintText: getPhonePlaceholder(),
+                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                           filled: true,
-                          fillColor: const Color(0xFFEDEFFF),
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
                           ),
                         ),
                       ),
@@ -1065,8 +1180,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEDEFFF),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
                       ),
                       child: DropdownButton<String>(
                         value: selectedCountryCode,
@@ -1098,13 +1214,22 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                         ],
                         decoration: InputDecoration(
                           hintText: getPhonePlaceholder(),
+                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                           filled: true,
-                          fillColor: const Color(0xFFEDEFFF),
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                            borderSide: BorderSide(color: Colors.grey[300]!),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
+                          ),
                         ),
                       ),
                     ),
@@ -1125,13 +1250,22 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
                   decoration: InputDecoration(
                     hintText: 'XX',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                     filled: true,
-                    fillColor: const Color(0xFFEDEFFF),
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(color: Colors.grey[300]!),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
+                    ),
                   ),
                 ),
               ],
@@ -1140,7 +1274,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Aadhar Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const Text('Aadhar Number (Optional)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: aadharController,
@@ -1160,8 +1294,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                   },
                   decoration: InputDecoration(
                     hintText: 'XXXX-XXXX-XXXX',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                     filled: true,
-                    fillColor: const Color(0xFFEDEFFF),
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     suffixIcon: _aadharTouched 
                       ? (_aadharValid 
                           ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
@@ -1169,7 +1305,15 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                       : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
                     ),
                   ),
                 ),
@@ -1191,13 +1335,13 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
             const Text('Permanent Address', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             buildTextField(
-              label: 'House/Flat Number *',
+              label: 'House/Flat Number (Optional)',
               hint: '',
               controller: houseNumberController,
             ),
             const SizedBox(height: 20),
             buildTextField(
-              label: 'Town/Locality *',
+              label: 'Town/Village/Locality (Optional)',
               hint: '',
               controller: townController,
             ),
@@ -1260,31 +1404,60 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> {
                   ),
             const SizedBox(height: 20),
             if (!_isGoogleUser) ...[
-              OutlinedButton(
-                onPressed: _handleGoogleSignIn,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFFDADADA), width: 1),
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const GoogleLogoWidget(size: 24),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Sign up with Google',
-                      style: TextStyle(
-                        color: Color(0xFF3C4043),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
+              // Animated Google Sign-In Button with rotating gradient border
+              AnimatedBuilder(
+                animation: _gradientAnimation,
+                builder: (context, child) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      gradient: SweepGradient(
+                        colors: const [
+                          Color(0xFF4285F4), // Google Blue
+                          Color(0xFF34A853), // Google Green
+                          Color(0xFFFBBC04), // Google Yellow
+                          Color(0xFFEA4335), // Google Red
+                          Color(0xFF4285F4), // Back to Blue for smooth loop
+                        ],
+                        stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+                        transform: GradientRotation(_gradientAnimation.value * 2 * 3.14159), // 360 degree rotation
                       ),
                     ),
-                  ],
-                ),
+                    child: Container(
+                      margin: const EdgeInsets.all(2), // Border width
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _handleGoogleSignIn,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                GoogleLogoWidget(size: 24),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Sign up with Google',
+                                  style: TextStyle(
+                                    color: Color(0xFF3C4043),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
             ],

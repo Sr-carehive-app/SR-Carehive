@@ -93,7 +93,12 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
   Widget build(BuildContext context) {
     const primary = Color(0xFF2260FF);
     return Scaffold(
-      appBar: AppBar(title: const Text('Ask for Refund'), backgroundColor: primary, centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Ask for Refund', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: primary,
+        iconTheme: const IconThemeData(color: Colors.white),
+        centerTitle: true,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

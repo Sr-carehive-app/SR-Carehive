@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Provider;
 import 'patient_signup_screen.dart';
 import 'forgot_password_otp_screen.dart';
+import 'login_otp_verification_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -20,15 +21,33 @@ class PatientLoginScreen extends StatefulWidget {
   State<PatientLoginScreen> createState() => _PatientLoginScreenState();
 }
 
-class _PatientLoginScreenState extends State<PatientLoginScreen> {
+class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTickerProviderStateMixin {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   bool _obscureText = true;
   bool _isLoading = false;
+  
+  // Animation controller for Google button gradient border
+  late AnimationController _gradientController;
+  late Animation<double> _gradientAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize gradient animation for Google button
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(); // Infinite loop
+    
+    _gradientAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_gradientController);
+  }
 
   @override
   void dispose() {
+    _gradientController.dispose(); // Dispose animation controller
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -38,165 +57,102 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
     if (emailController.text.isEmpty || passwordController.text.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+        const SnackBar(content: Text('Please enter email/phone and password')),
       );
       return;
     }
+    
     setState(() => _isLoading = true);
-    final supabase = Supabase.instance.client;
+    
     try {
-      final response = await supabase.auth.signInWithPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+      final email = emailController.text.trim();
+      final password = passwordController.text.trim();
+      
+      print('🔐 Sending login OTP request for: $email');
+      
+      // Step 1: Validate credentials and send OTP
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/send-login-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'password': password,
+        }),
       );
-      final user = response.user;
-      if (user != null) {
-        // Check if patient record exists
-        var patient = await supabase
-            .from('patients')
-            .select()
-            .eq('user_id', user.id)
-            .maybeSingle();
-        if (patient == null) {
-          // If coming from signup, you may want to pass these details via Navigator or store temporarily
-          // For now, show a dialog to collect missing info
-          await showDialog(
-            context: context,
-            builder: (context) {
-              final nameController = TextEditingController();
-              final phoneController = TextEditingController();
-              final dobController = TextEditingController();
-              final ageController = TextEditingController();
-              final aadharController = TextEditingController();
-              final addressController = TextEditingController();
-              String? selectedGender;
-              // Pre-fill from shared_preferences if available
-              Future<void> prefill() async {
-                final prefs = await SharedPreferences.getInstance();
-                nameController.text = prefs.getString('signup_name') ?? '';
-                phoneController.text = prefs.getString('signup_phone') ?? '';
-                // Prefill age if saved from signup flow
-                ageController.text = prefs.getString('signup_age') ?? '';
-                aadharController.text = prefs.getString('signup_aadhar') ?? '';
-                addressController.text = prefs.getString('signup_address') ?? '';
-                selectedGender = prefs.getString('signup_gender');
-              }
-              // Use a FutureBuilder to prefill before showing dialog
-              return FutureBuilder(
-                future: prefill(),
-                builder: (context, snapshot) {
-                  return AlertDialog(
-                    title: const Text('Complete Profile'),
-                    content: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Full Name')),
-                          TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Mobile Number')),
-                          TextField(controller: ageController, decoration: const InputDecoration(labelText: 'Age')),
-                          TextField(controller: aadharController, decoration: const InputDecoration(labelText: 'Aadhar Number')),
-                          TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Permanent Address')),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('Male'),
-                                  value: 'Male',
-                                  groupValue: selectedGender,
-                                  onChanged: (value) => selectedGender = value,
-                                ),
-                              ),
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('Female'),
-                                  value: 'Female',
-                                  groupValue: selectedGender,
-                                  onChanged: (value) => selectedGender = value,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          if (nameController.text.isEmpty || phoneController.text.isEmpty || ageController.text.isEmpty || aadharController.text.isEmpty || addressController.text.isEmpty || selectedGender == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
-                            return;
-                          }
-                          await supabase.from('patients').insert({
-                            'user_id': user.id,
-                            'name': nameController.text.trim(),
-                            'email': user.email ?? '',
-                            'phone': phoneController.text.trim(),
-                            'age': int.tryParse(ageController.text.trim()) ?? null,
-                            'aadhar_number': aadharController.text.trim(),
-                            'permanent_address': addressController.text.trim(),
-                            'gender': selectedGender,
-                          });
-                          // Clear shared_preferences after saving
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.remove('signup_name');
-                          await prefs.remove('signup_email');
-                          await prefs.remove('signup_phone');
-                          await prefs.remove('signup_age');
-                          await prefs.remove('signup_aadhar');
-                          await prefs.remove('signup_address');
-                          await prefs.remove('signup_gender');
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          );
-          // Re-fetch patient after insert
-          patient = await supabase
-              .from('patients')
-              .select()
-              .eq('user_id', user.id)
-              .single();
-        }
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login successful!')),
-        );
-        // Build display name with salutation if available
-        final salutation = patient?['salutation'] ?? '';
-        final name = patient?['name'] ?? '';
-        final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+
+      final data = json.decode(response.body);
+      print('Response: $data');
+
+      if (!mounted) return;
+      
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Login OTP sent successfully!');
         
-        Navigator.pushAndRemoveUntil(
+        final deliveryChannels = data['deliveryChannels'] as List?;
+        final loginType = data['loginType'] ?? 'email';
+        
+        String message = 'OTP sent!';
+        if (deliveryChannels != null && deliveryChannels.isNotEmpty) {
+          if (loginType == 'phone') {
+            message = 'OTP sent to your phone via SMS!';
+          } else if (deliveryChannels.contains('SMS') && deliveryChannels.contains('email')) {
+            message = 'OTP sent to your email and phone!';
+          } else if (deliveryChannels.contains('email')) {
+            message = 'OTP sent to your email!';
+          }
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $message Check and verify.'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        
+        // Step 2: Navigate to OTP verification screen
+        Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => PatientDashboardScreen(userName: displayName),
+            builder: (_) => LoginOTPVerificationScreen(
+              email: email,
+              password: password,
+            ),
           ),
-              (route) => false,
+        );
+      } else if (response.statusCode == 401) {
+        // Invalid credentials
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ ${data['error'] ?? 'Invalid email/phone or password'}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else if (response.statusCode == 429) {
+        // Rate limited
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⏳ ${data['error'] ?? 'Please wait before trying again'}'),
+            backgroundColor: Colors.orange,
+          ),
         );
       } else {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login failed! Please check credentials')),
+          SnackBar(
+            content: Text('❌ ${data['error'] ?? 'Failed to send OTP'}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
     } catch (e) {
+      print('❌ Login error: $e');
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        const SnackBar(
+          content: Text('❌ Network error. Please check your connection.'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -241,6 +197,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
 
   Future<void> _handleForgotPassword() async {
     final emailController = TextEditingController();
+    final phoneController = TextEditingController();
     bool isLoading = false;
     
     await showDialog(
@@ -248,26 +205,51 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Forgot Password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                enableSuggestions: false,
-                enableInteractiveSelection: true,
-                decoration: const InputDecoration(
-                  hintText: 'Enter your email',
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  enableInteractiveSelection: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address or Phone Number',
+                    hintText: 'Enter your email or phone',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'We\'ll send you a 6-digit OTP to reset your password.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number (Optional)',
+                    hintText: '10-digit mobile number',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    ' We\'ll send a 6-digit OTP to your email.\n If phone is provided and registered, SMS will also be sent.',
+                    style: TextStyle(fontSize: 11, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -279,9 +261,11 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                   ? null
                   : () async {
                       final email = emailController.text.trim();
+                      final phone = phoneController.text.trim();
+                      
                       if (email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please enter your email address')),
+                          const SnackBar(content: Text('Please enter your email address or phone number')),
                         );
                         return;
                       }
@@ -290,6 +274,14 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                       if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please enter a valid email address')),
+                        );
+                        return;
+                      }
+
+                      // Validate phone if provided
+                      if (phone.isNotEmpty && phone.length != 10) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Phone number must be 10 digits')),
                         );
                         return;
                       }
@@ -320,13 +312,19 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                       
                       try {
                         print('📧 Sending OTP to: $email');
+                        if (phone.isNotEmpty) print('📱 Phone provided: $phone');
                         print('🌐 Using API: ${ApiConfig.sendPasswordResetOtp}');
                         
-                        // Call backend to send OTP via Nodemailer
+                        // Call backend to send OTP via email (and SMS if phone provided)
+                        final requestBody = {'email': email};
+                        if (phone.isNotEmpty) {
+                          requestBody['phone'] = phone;
+                        }
+                        
                         final response = await http.post(
                           Uri.parse(ApiConfig.sendPasswordResetOtp),
                           headers: {'Content-Type': 'application/json'},
-                          body: json.encode({'email': email}),
+                          body: json.encode(requestBody),
                         );
 
                         final data = json.decode(response.body);
@@ -336,6 +334,14 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                         
                         if (response.statusCode == 200 && data['success'] == true) {
                           print('✅ OTP sent successfully!');
+                          
+                          final deliveryChannels = data['deliveryChannels'] as List?;
+                          String successMsg = '✅ OTP sent to $email!';
+                          if (deliveryChannels != null && deliveryChannels.contains('SMS')) {
+                            successMsg += ' Check your email and phone.';
+                          } else {
+                            successMsg += ' Check your email and spam folder.';
+                          }
                           
                           Navigator.pop(context); // Close dialog
                           
@@ -349,7 +355,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
                           
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('✅ OTP sent to $email! Check your email and spam folder.'),
+                              content: Text(successMsg),
                               backgroundColor: Colors.green,
                               duration: const Duration(seconds: 4),
                             ),
@@ -398,8 +404,8 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
-        backgroundColor: Colors.white,
+        leading: const BackButton(color: Colors.white),
+        backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),
       body: Padding(
@@ -425,16 +431,24 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            const Text('Email', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text(
+              'Email or Phone Number',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Enter registered email or primary/alternative phone number you have registered with',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: emailController,
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.text,
               autocorrect: false,
               enableSuggestions: false,
               enableInteractiveSelection: true,
               decoration: InputDecoration(
-                hintText: 'example@domain.com',
+                hintText: 'Email or phone number',
                 filled: true,
                 fillColor: const Color(0xFFEDEFFF),
                 border: OutlineInputBorder(
@@ -486,32 +500,60 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
               child: const Text('Log In', style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
             const SizedBox(height: 20),
-            // Google Sign-In 
-            OutlinedButton(
-              onPressed: _handleGoogleSignIn,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: Color(0xFFDADADA), width: 1),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const GoogleLogoWidget(size: 24),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Login with Google',
-                    style: TextStyle(
-                      color: Color(0xFF3C4043),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+            // Google Sign-In with animated gradient border
+            AnimatedBuilder(
+              animation: _gradientAnimation,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: SweepGradient(
+                      colors: const [
+                        Color(0xFF4285F4), // Google Blue
+                        Color(0xFF34A853), // Google Green
+                        Color(0xFFFBBC04), // Google Yellow
+                        Color(0xFFEA4335), // Google Red
+                        Color(0xFF4285F4), // Back to Blue for smooth loop
+                      ],
+                      stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+                      transform: GradientRotation(_gradientAnimation.value * 2 * 3.14159), // 360 degree rotation
                     ),
                   ),
-                ],
-              ),
+                  child: Container(
+                    margin: const EdgeInsets.all(2), // Border width
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _handleGoogleSignIn,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              GoogleLogoWidget(size: 24),
+                              SizedBox(width: 12),
+                              Text(
+                                'Login with Google',
+                                style: TextStyle(
+                                  color: Color(0xFF3C4043),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 20),
             Center(

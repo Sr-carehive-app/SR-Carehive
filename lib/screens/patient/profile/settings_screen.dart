@@ -8,9 +8,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+      appBar: AppBar(title: const Text('Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: const Color(0xFF2260FF),
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       body: ListView(

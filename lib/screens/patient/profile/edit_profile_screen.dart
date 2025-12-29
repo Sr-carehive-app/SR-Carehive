@@ -49,6 +49,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool isUploadingImage = false;
   bool _aadharValid = false;
   bool _aadharTouched = false;
+  bool isOAuthUser = false; // Track if user signed in via OAuth
   
   // Profile image
   String? profileImageUrl;
@@ -177,6 +178,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final user = supabase.auth.currentUser;
       
       if (user != null) {
+        // Check if user is OAuth user (Google, etc.)
+        isOAuthUser = user.appMetadata['provider'] != null && user.appMetadata['provider'] != 'email';
+        
         final patient = await supabase
             .from('patients')
             .select()
@@ -552,9 +556,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Profile', style: TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: Colors.black),
+          title: const Text('Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+          backgroundColor: const Color(0xFF2260FF),
+          iconTheme: const IconThemeData(color: Colors.white),
           centerTitle: true,
         ),
         body: const Center(
@@ -565,9 +569,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text('Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: const Color(0xFF2260FF),
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       body: ListView(
@@ -661,8 +665,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const Divider(thickness: 1),
           const SizedBox(height: 16),
           
-          // Email (Read-only)
-          buildTextField('Email', 'Enter your email', emailController, isReadOnly: true),
+          // Email (Read-only for OAuth users, optional for others)
+          buildTextField(
+            isOAuthUser ? 'Email' : 'Email (Optional)',
+            'Enter your email',
+            emailController,
+            isReadOnly: isOAuthUser,
+          ),
           
           // Aadhar Linked Phone Number with Country Code
           const Text('Aadhar Linked Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
@@ -803,7 +812,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             children: [
               Row(
                 children: [
-                  Text('Aadhar Number', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Aadhar Number (Optional)', style: const TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -857,8 +866,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           // Address Section - 6 detailed fields
           const Text('Address Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          buildTextField('House/Flat Number', 'Enter house/flat number', houseNumberController),
-          buildTextField('Town/Village', 'Enter town/village', townController),
+          buildTextField('House/Flat Number (Optional)', 'Enter house/flat number', houseNumberController),
+          buildTextField('Town/Village/Locality (Optional)', 'Enter town/village/locality', townController),
           buildTextField('City', 'Enter city', cityController),
           buildTextField('State', 'Enter state', stateController),
           buildTextField('Pincode', 'Enter pincode', pincodeController, keyboardType: TextInputType.number),

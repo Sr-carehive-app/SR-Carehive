@@ -284,15 +284,23 @@ class NurseApiService {
   // FORGOT PASSWORD METHODS
   // ============================================================================
 
-  /// Send password reset OTP to healthcare provider email
+  /// Send password reset OTP to healthcare provider email (and phone if provided)
   /// Returns a map with 'success' and 'message' keys
   /// Throws exception on rate limiting (429) or other errors
-  static Future<Map<String, dynamic>> sendPasswordResetOtp({required String email}) async {
+  static Future<Map<String, dynamic>> sendPasswordResetOtp({
+    required String email,
+    String? phone,
+  }) async {
     try {
+      final requestBody = {'email': email};
+      if (phone != null && phone.isNotEmpty) {
+        requestBody['phone'] = phone;
+      }
+      
       final resp = await http.post(
         Uri.parse('$_base/api/nurse/send-password-reset-otp'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
+        body: jsonEncode(requestBody),
       );
       
       print('📡 Response status: ${resp.statusCode}');
@@ -303,6 +311,7 @@ class NurseApiService {
         return {
           'success': data['success'] ?? true,
           'message': data['message'] ?? 'OTP sent successfully',
+          'deliveryChannels': data['deliveryChannels'],
         };
       }
       

@@ -525,12 +525,12 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     if (isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Schedule'),
+          title: const Text('Care Schedule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
           backgroundColor: primaryColor,
           centerTitle: true,
           actions: [
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, color: Colors.white),
               onPressed: null, // Disabled during loading
             ),
           ],
@@ -542,15 +542,15 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
-        title: const Text('Schedule'),
+        title: const Text('Care Schedule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: () {
               // Refresh user data and reset form
               _loadUserData();
@@ -722,9 +722,9 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
 
           const SizedBox(height: 24),
 
-          // Healthcare Seeker section
+          // Service User section
           const Text(
-            'Healthcare Seeker Details',
+            'Service User Details',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),

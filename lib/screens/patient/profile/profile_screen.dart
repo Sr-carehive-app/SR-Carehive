@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_profile_screen.dart';
-import 'settings_screen.dart';
-import 'privacy_policy_screen.dart';
-import 'terms_conditions_screen.dart';
-import 'refund_request_screen.dart';
-import 'help_center_screen.dart';
-import 'about_screen.dart';
+import 'view_profile_details_screen.dart';
 import 'package:care12/screens/splash_screen.dart'; // update import if needed
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -91,32 +86,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _showImageOptions() async {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth > 600;
+    
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Color(0xFF2260FF)),
-              title: const Text('Choose from Gallery'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage();
-              },
-            ),
-            if (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: isTablet ? 24 : 16,
+            vertical: isTablet ? 20 : 16,
+          ),
+          child: Wrap(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
               ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text('Remove Avatar', style: TextStyle(color: Colors.red)),
+                leading: const Icon(Icons.photo_library, color: Color(0xFF2260FF)),
+                title: Text(
+                  'Choose from Gallery',
+                  style: TextStyle(fontSize: isTablet ? 16 : 15),
+                ),
                 onTap: () {
                   Navigator.pop(context);
-                  _removeAvatar();
+                  _pickImage();
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.cancel, color: Colors.grey),
-              title: const Text('Cancel'),
-              onTap: () => Navigator.pop(context),
+              if (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: Text(
+                    'Remove Avatar',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: isTablet ? 16 : 15,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removeAvatar();
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.cancel, color: Colors.grey),
+                title: Text(
+                  'Cancel',
+                  style: TextStyle(fontSize: isTablet ? 16 : 15),
+                ),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewProfilePicture() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: selectedImageBytes != null
+                    ? Image.memory(selectedImageBytes!, fit: BoxFit.contain)
+                    : selectedImageFile != null
+                        ? Image.file(selectedImageFile!, fit: BoxFit.contain)
+                        : (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                            ? Image.network(profileImageUrl!, fit: BoxFit.contain)
+                            : Image.asset('assets/images/user.png', fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
           ],
         ),
@@ -126,7 +193,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 80);
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
       if (image != null) {
         if (kIsWeb) {
           final bytes = await image.readAsBytes();
@@ -565,14 +632,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
         ),
-        title: const Text('My Profile', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
+        title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: primaryColor,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -582,15 +648,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Center(
                   child: Stack(
                     children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: selectedImageBytes != null
-                            ? MemoryImage(selectedImageBytes!)
-                            : selectedImageFile != null
-                                ? FileImage(selectedImageFile!)
-                                : (profileImageUrl != null && profileImageUrl!.isNotEmpty)
-                                    ? NetworkImage(profileImageUrl!) as ImageProvider
-                                    : const AssetImage('assets/images/user.png') as ImageProvider,
+                      GestureDetector(
+                        onTap: () => _viewProfilePicture(),
+                        child: Hero(
+                          tag: 'profile_picture',
+                          child: ClipOval(
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                              ),
+                              child: selectedImageBytes != null
+                                  ? Image.memory(
+                                      selectedImageBytes!,
+                                      fit: BoxFit.cover,
+                                      width: 100,
+                                      height: 100,
+                                    )
+                                  : selectedImageFile != null
+                                      ? Image.file(
+                                          selectedImageFile!,
+                                          fit: BoxFit.cover,
+                                          width: 100,
+                                          height: 100,
+                                        )
+                                      : (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                                          ? Image.network(
+                                              profileImageUrl!,
+                                              fit: BoxFit.cover,
+                                              width: 100,
+                                              height: 100,
+                                              loadingBuilder: (context, child, loadingProgress) {
+                                                if (loadingProgress == null) return child;
+                                                return Center(
+                                                  child: CircularProgressIndicator(
+                                                    value: loadingProgress.expectedTotalBytes != null
+                                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                        : null,
+                                                  ),
+                                                );
+                                              },
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Image.asset('assets/images/user.png', fit: BoxFit.cover);
+                                              },
+                                            )
+                                          : Image.asset(
+                                              'assets/images/user.png',
+                                              fit: BoxFit.cover,
+                                              width: 100,
+                                              height: 100,
+                                            ),
+                            ),
+                          ),
+                        ),
                       ),
                       Positioned(
                         bottom: 0,
@@ -617,13 +728,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                buildProfileOption(context, Icons.person, 'Profile', const EditProfileScreen()),
-                buildProfileOption(context, Icons.info_outline, 'About Serechi', const AboutScreen()),
-                buildProfileOption(context, Icons.assignment_return, 'Ask for Refund', const RefundRequestScreen()),
-                buildProfileOption(context, Icons.article, 'Terms & Conditions', const TermsConditionsScreen()),
-                buildProfileOption(context, Icons.privacy_tip, 'Privacy Policy', const PrivacyPolicyScreen()),
-                buildProfileOption(context, Icons.settings, 'Settings', const SettingsScreen()),
-                buildProfileOption(context, Icons.help, 'Help', const HelpCenterScreen()),
+                buildProfileOption(context, Icons.visibility, 'View Profile', const ViewProfileDetailsScreen()),
+                buildProfileOption(context, Icons.edit, 'Edit Profile', const EditProfileScreen()),
+                const Divider(height: 32),
                 ListTile(
                   leading: const Icon(Icons.logout, color: Color(0xFF2260FF)),
                   title: const Text('Logout'),

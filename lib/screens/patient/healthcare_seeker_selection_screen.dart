@@ -10,8 +10,8 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
-        backgroundColor: Colors.white,
+        leading: const BackButton(color: Colors.white),
+        backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),
       body: SafeArea(
@@ -21,10 +21,9 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
                 // Heading
                 const Text(
-                  'Hello Healthcare Seeker!',
+                  'Welcome to Serechi Care Services',
                   style: TextStyle(
                     fontSize: 28,
                     color: Color(0xFF2260FF),
@@ -34,7 +33,7 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 // Subtitle
                 const Text(
-                  'Welcome to Serechi',
+                  'Supporting you every day',
                   style: TextStyle(
                     fontSize: 20,
                     color: Color(0xFF2260FF),
@@ -63,10 +62,10 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
                 
                 const SizedBox(height: 24),
                 
-                // Existing User Card
+                // Existing Healthcare Seeker
                 _buildSelectionCard(
                   context: context,
-                  title: 'Already a User?',
+                  title: 'Already a Healthcare Seeker?',
                   description: 'Please log in here to continue\naccessing your healthcare services',
                   buttonText: 'Log In',
                   buttonColor: const Color(0xFFCAD6FF),
@@ -79,6 +78,18 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
                       ),
                     );
                   },
+                ),
+                const SizedBox(height: 20),
+                // Bottom centered emergency text
+                Text(
+                  'For emergencies, please contact your local emergency medical services / hospital.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.3,
+                  ),
                 ),
               ],
             ),

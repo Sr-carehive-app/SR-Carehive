@@ -8,9 +8,9 @@ class AboutScreen extends StatelessWidget {
     const primary = Color(0xFF2260FF);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('About Serechi', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+        title: const Text('About Serechi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: primary,
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       backgroundColor: const Color(0xFFF7F7FB),
@@ -31,7 +31,10 @@ class AboutScreen extends StatelessWidget {
                     Center(
                       child: Column(
                         children: [
-                          Image.asset('assets/images/logo.png', width: 80, height: 80),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Image.asset('assets/images/logo.png', width: 80, height: 80),
+                          ),
                           const SizedBox(height: 12),
                           const Text(
                             'Serechi',

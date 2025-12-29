@@ -140,15 +140,15 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Help Center', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white, 
-        iconTheme: const IconThemeData(color: Colors.black), 
+        title: const Text('Help Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+        backgroundColor: const Color(0xFF2260FF), 
+        iconTheme: const IconThemeData(color: Colors.white), 
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF2260FF),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'FAQ'),
             Tab(text: 'Contact Us'),

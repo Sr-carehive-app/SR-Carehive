@@ -16,7 +16,7 @@ class RegisterScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset('assets/images/logo.png', width: 100, height: 100),
+                Image.asset('assets/images/logo.png', width: 150, height: 150),
                 const SizedBox(height: 20),
                 const Text(
                   'Serechi',
@@ -28,14 +28,28 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Welcome To Serechi',
+                  'By SR CareHive Pvt. Ltd.',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 60), 
+                const SizedBox(height: 30),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(
+                    'Serechi connects users with registered healthcare professionals for non-emergency health care services.\nThis app does not provide emergency medical care.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30), 
                 const Text(
                   'How may i help you ?',
                   textAlign: TextAlign.center,
@@ -63,7 +77,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'I need\nHealthcare',
+                      'Patient / Family',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -92,7 +106,7 @@ class RegisterScreen extends StatelessWidget {
                       ),
                     ),
                     child: const Text(
-                      'I am a Healthcare worker',
+                      'Health Care Worker',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF2260FF),

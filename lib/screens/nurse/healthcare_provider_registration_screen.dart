@@ -606,12 +606,11 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
               
               _buildTextField(
                 controller: emailController,
-                label: 'Email ID *',
+                label: 'Email ID (Optional)',
                 hint: 'your.email@example.com',
                 keyboardType: TextInputType.emailAddress,
                 validator: (val) {
-                  if (val == null || val.isEmpty) return 'Email is required';
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val)) {
+                  if (val != null && val.isNotEmpty && !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val)) {
                     return 'Enter valid email address';
                   }
                   return null;
@@ -719,9 +718,8 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
               
               _buildTextField(
                 controller: registrationNumberController,
-                label: 'Registration Number *',
+                label: 'Registration Number (Optional)',
                 hint: 'Medical/Nursing/RCI/etc. Registration No.',
-                validator: (val) => val == null || val.isEmpty ? 'Registration number is required' : null,
               ),
               
               const SizedBox(height: 24),
