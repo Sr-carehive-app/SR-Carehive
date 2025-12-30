@@ -418,7 +418,8 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
       return false;
     }
 
-    const requestBody = {
+    // Build query parameters for GET request (Tubelight API uses GET, not POST)
+    const params = new URLSearchParams({
       username: TUBELIGHT_USERNAME,
       password: TUBELIGHT_PASSWORD,
       sender: TUBELIGHT_SENDER_ID,
@@ -427,15 +428,16 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
       templateid: templateId,
       pe_id: TUBELIGHT_ENTITY_ID,
       dltContentId: templateId,
-    };
+    });
+
+    const apiUrl = `https://portal.tubelightcommunications.com/api/mt/SendSMS?${params.toString()}`;
 
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
     console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
 
-    const response = await fetch('https://portal.tubelightcommunications.com/api/mt/SendSMS', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
     });
 
     console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
