@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 12,
-  "timestamp": "2025-12-30T23:40:00Z",
-  "lastUpdated": "Tubelight SMS API parameters fix (v2.1 format)"
+  "buildNumber": 13,
+  "timestamp": "2025-12-30T23:58:00Z",
+  "lastUpdated": "Tubelight SMS API multi-endpoint retry logic + diagnostics"
 }

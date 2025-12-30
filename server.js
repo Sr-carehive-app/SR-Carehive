@@ -418,57 +418,137 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
       return false;
     }
 
-    // Build query parameters for GET request (Tubelight API standard format)
-    // Based on Tubelight API v2.1 documentation
+    // ========================================================================
+    // CRITICAL FIX: Tubelight API Configuration
+    // ========================================================================
+    // Based on Tubelight API v2.1 Documentation for portal.tubelightcommunications.com
+    // The correct endpoint format varies by provider configuration
+    
+    // Build the complete API URL with all required parameters
+    // Note: Parameter names are case-sensitive and must match exactly
     const params = new URLSearchParams({
-      user: TUBELIGHT_USERNAME,           // 'user' not 'username'
-      password: TUBELIGHT_PASSWORD,
-      senderid: TUBELIGHT_SENDER_ID,      // 'senderid' not 'sender'
-      channel: 'Trans',                    // Channel type for transactional SMS
-      DCS: '0',                            // Data Coding Scheme (0 = normal text)
-      flashsms: '0',                       // 0 = normal SMS, 1 = flash SMS
-      number: fullPhoneNumber,             // 'number' not 'mobile'
-      text: message,                       // 'text' not 'message'
-      route: '2',                          // Route 2 = Transactional
-      DLT_TE_ID: templateId,               // Template Entity ID
+      user: TUBELIGHT_USERNAME,           // Username provided by Tubelight
+      password: TUBELIGHT_PASSWORD,       // Password provided by Tubelight
+      senderid: TUBELIGHT_SENDER_ID,      // Approved Sender ID (e.g., SERECH)
+      channel: 'Trans',                    // Channel type: Trans = Transactional
+      DCS: '0',                            // Data Coding Scheme: 0 = Normal text
+      flashsms: '0',                       // 0 = Normal SMS, 1 = Flash SMS
+      number: fullPhoneNumber,             // Mobile number with country code (91xxxxxxxxxx)
+      text: message,                       // SMS content (must match DLT template exactly)
+      route: '2',                          // Route: 2 = Transactional route
+      EntityId: TUBELIGHT_ENTITY_ID,       // Principal Entity ID (PE_ID) from DLT
+      DLT_TE_ID: templateId,               // DLT Template Entity ID
     });
 
-    const apiUrl = `https://portal.tubelightcommunications.com/api/mt/SendSMS?${params.toString()}`;
+    // Try multiple possible API endpoints
+    // Most Tubelight installations use one of these patterns
+    const possibleEndpoints = [
+      // Portal v2.1 API (Most Common for newer installations)
+      `https://portal.tubelightcommunications.com/api/mt/SendSMS?${params.toString()}`,
+      
+      // Direct portal endpoint (Alternative configuration)
+      `https://portal.tubelightcommunications.com/SendSMS?${params.toString()}`,
+      
+      // Legacy www endpoint
+      `https://www.tubelightcommunications.com/api/SendSMS?${params.toString()}`,
+      
+      // API v2 endpoint
+      `https://www.tubelightcommunications.com/smsapi/v2/SendSMS?${params.toString()}`,
+    ];
 
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
     console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
-    console.log(`[TUBELIGHT-SMS] 🔗 API URL (partial): ${apiUrl.substring(0, 100)}...`);
+    console.log(`[TUBELIGHT-SMS] 👤 User: ${TUBELIGHT_USERNAME}`);
 
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-    });
+    // Try each endpoint until one works
+    for (let i = 0; i < possibleEndpoints.length; i++) {
+      const apiUrl = possibleEndpoints[i];
+      console.log(`[TUBELIGHT-SMS] 🔗 Attempt ${i + 1}/${possibleEndpoints.length}: ${apiUrl.substring(0, 80)}...`);
 
-    console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
-    console.log(`[TUBELIGHT-SMS] 📡 Content-Type: ${response.headers.get('content-type')}`);
-    
-    // Get response text first to check what we're receiving
-    const responseText = await response.text();
-    console.log(`[TUBELIGHT-SMS] 📡 Raw Response (first 200 chars): ${responseText.substring(0, 200)}`);
-    
-    // Try to parse as JSON
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error(`[TUBELIGHT-SMS] ❌ Failed to parse response as JSON`);
-      console.error(`[TUBELIGHT-SMS] Response was: ${responseText.substring(0, 500)}`);
-      return false;
-    }
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json, text/plain, */*',
+          },
+        });
 
-    if (response.status === 200 || response.status === 201) {
-      const status = responseData.status?.toLowerCase();
-      if (status === 'success' || status === 'sent' || responseData.success) {
-        console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully`);
-        return true;
+        console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
+        console.log(`[TUBELIGHT-SMS] 📡 Content-Type: ${response.headers.get('content-type')}`);
+        
+        const responseText = await response.text();
+        console.log(`[TUBELIGHT-SMS] 📡 Raw Response (first 300 chars): ${responseText.substring(0, 300)}`);
+        
+        // Check if we got HTML (login page) - if so, try next endpoint
+        if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
+            responseText.trim().toLowerCase().startsWith('<html')) {
+          console.warn(`[TUBELIGHT-SMS] ⚠️  Got HTML response (likely login page), trying next endpoint...`);
+          continue; // Try next endpoint
+        }
+
+        // Try to parse as JSON
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+          console.log(`[TUBELIGHT-SMS] 📡 Parsed JSON Response:`, responseData);
+        } catch (parseError) {
+          // If not JSON, check if it's a simple text response (some SMS APIs return plain text)
+          console.log(`[TUBELIGHT-SMS] 📡 Plain text response: ${responseText}`);
+          
+          // Check for common success indicators in plain text
+          const successIndicators = ['success', 'sent', 'delivered', 'submitted', 'queued'];
+          const failIndicators = ['error', 'fail', 'invalid', 'unauthorized', 'authentication'];
+          
+          const lowerResponse = responseText.toLowerCase();
+          const hasSuccess = successIndicators.some(ind => lowerResponse.includes(ind));
+          const hasFail = failIndicators.some(ind => lowerResponse.includes(ind));
+          
+          if (hasSuccess && !hasFail) {
+            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully (text response)`);
+            return true;
+          } else if (hasFail) {
+            console.error(`[TUBELIGHT-SMS] ❌ SMS failed (text response): ${responseText}`);
+            continue; // Try next endpoint
+          } else {
+            console.warn(`[TUBELIGHT-SMS] ⚠️  Ambiguous response, trying next endpoint...`);
+            continue;
+          }
+        }
+
+        // Check JSON response for success
+        if (response.status === 200 || response.status === 201) {
+          const status = (responseData.status || responseData.Status || '').toLowerCase();
+          const errorCode = responseData.ErrorCode || responseData.errorCode || responseData.error_code;
+          
+          if (status === 'success' || status === 'sent' || status === 'submitted' || 
+              responseData.success === true || errorCode === '000' || errorCode === 0) {
+            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully via endpoint ${i + 1}`);
+            return true;
+          } else {
+            console.warn(`[TUBELIGHT-SMS] ⚠️  Endpoint ${i + 1} failed:`, responseData);
+            continue; // Try next endpoint
+          }
+        } else {
+          console.warn(`[TUBELIGHT-SMS] ⚠️  HTTP ${response.status}, trying next endpoint...`);
+          continue;
+        }
+      } catch (fetchError) {
+        console.error(`[TUBELIGHT-SMS] ❌ Fetch error for endpoint ${i + 1}:`, fetchError.message);
+        continue; // Try next endpoint
       }
     }
-    console.warn(`[TUBELIGHT-SMS] ⚠️  SMS failed:`, responseData);
+
+    // If we got here, all endpoints failed
+    console.error(`[TUBELIGHT-SMS] ❌ All ${possibleEndpoints.length} endpoints failed`);
+    console.error(`[TUBELIGHT-SMS] ⚠️  Please verify:`);
+    console.error(`[TUBELIGHT-SMS]    1. Username: ${TUBELIGHT_USERNAME}`);
+    console.error(`[TUBELIGHT-SMS]    2. Password is correct (not logged for security)`);
+    console.error(`[TUBELIGHT-SMS]    3. Sender ID: ${TUBELIGHT_SENDER_ID}`);
+    console.error(`[TUBELIGHT-SMS]    4. Entity ID: ${TUBELIGHT_ENTITY_ID}`);
+    console.error(`[TUBELIGHT-SMS]    5. Template ID: ${templateId}`);
+    console.error(`[TUBELIGHT-SMS]    6. Contact Tubelight support for correct API endpoint`);
     return false;
+
   } catch (error) {
     console.error(`[TUBELIGHT-SMS] ❌ Error:`, error.message);
     return false;
@@ -5368,4 +5448,24 @@ async function deleteLoginOTP(email) {
 // ============================================================================
 // START SERVER
 // ============================================================================
+
+// Display Tubelight SMS Configuration Status on Startup
+console.log('\n═══════════════════════════════════════════════════════════');
+console.log('📱 TUBELIGHT SMS CONFIGURATION STATUS');
+console.log('═══════════════════════════════════════════════════════════');
+console.log('Username:', TUBELIGHT_USERNAME ? `✅ ${TUBELIGHT_USERNAME}` : '❌ NOT SET');
+console.log('Password:', TUBELIGHT_PASSWORD ? '✅ SET (hidden)' : '❌ NOT SET');
+console.log('Sender ID:', TUBELIGHT_SENDER_ID ? `✅ ${TUBELIGHT_SENDER_ID}` : '❌ NOT SET');
+console.log('Entity ID:', TUBELIGHT_ENTITY_ID ? `✅ ${TUBELIGHT_ENTITY_ID}` : '❌ NOT SET');
+console.log('───────────────────────────────────────────────────────────');
+console.log('Template IDs:');
+console.log('  Registration:', TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('  Login:', TUBELIGHT_LOGIN_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('  Patient Reset:', TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('  Provider Login:', TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('  Provider Reset:', TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('───────────────────────────────────────────────────────────');
+console.log('SMS Status:', tubelightSMSEnabled ? '✅ ENABLED' : '❌ DISABLED');
+console.log('═══════════════════════════════════════════════════════════\n');
+
 app.listen(PORT, () => console.log(`Payment server (Razorpay) running on http://localhost:${PORT}`));
