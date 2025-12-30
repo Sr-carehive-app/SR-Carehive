@@ -419,134 +419,179 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
     }
 
     // ========================================================================
-    // CRITICAL FIX: Tubelight API Configuration
+    // TUBELIGHT SMS API - COMPREHENSIVE FIX
     // ========================================================================
-    // Based on Tubelight API v2.1 Documentation for portal.tubelightcommunications.com
-    // The correct endpoint format varies by provider configuration
+    // Based on common SMS gateway patterns and Tubelight API v2.1
+    // Since all endpoints return HTML (login page), trying multiple approaches
     
-    // Build the complete API URL with all required parameters
-    // Note: Parameter names are case-sensitive and must match exactly
-    const params = new URLSearchParams({
-      user: TUBELIGHT_USERNAME,           // Username provided by Tubelight
-      password: TUBELIGHT_PASSWORD,       // Password provided by Tubelight
-      senderid: TUBELIGHT_SENDER_ID,      // Approved Sender ID (e.g., SERECH)
-      channel: 'Trans',                    // Channel type: Trans = Transactional
-      DCS: '0',                            // Data Coding Scheme: 0 = Normal text
-      flashsms: '0',                       // 0 = Normal SMS, 1 = Flash SMS
-      number: fullPhoneNumber,             // Mobile number with country code (91xxxxxxxxxx)
-      text: message,                       // SMS content (must match DLT template exactly)
-      route: '2',                          // Route: 2 = Transactional route
-      EntityId: TUBELIGHT_ENTITY_ID,       // Principal Entity ID (PE_ID) from DLT
-      DLT_TE_ID: templateId,               // DLT Template Entity ID
-    });
-
-    // Try multiple possible API endpoints
-    // Most Tubelight installations use one of these patterns
-    const possibleEndpoints = [
-      // Portal v2.1 API (Most Common for newer installations)
-      `https://portal.tubelightcommunications.com/api/mt/SendSMS?${params.toString()}`,
-      
-      // Direct portal endpoint (Alternative configuration)
-      `https://portal.tubelightcommunications.com/SendSMS?${params.toString()}`,
-      
-      // Legacy www endpoint
-      `https://www.tubelightcommunications.com/api/SendSMS?${params.toString()}`,
-      
-      // API v2 endpoint
-      `https://www.tubelightcommunications.com/smsapi/v2/SendSMS?${params.toString()}`,
-    ];
-
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
     console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
     console.log(`[TUBELIGHT-SMS] 👤 User: ${TUBELIGHT_USERNAME}`);
 
-    // Try each endpoint until one works
-    for (let i = 0; i < possibleEndpoints.length; i++) {
-      const apiUrl = possibleEndpoints[i];
-      console.log(`[TUBELIGHT-SMS] 🔗 Attempt ${i + 1}/${possibleEndpoints.length}: ${apiUrl.substring(0, 80)}...`);
+    // Base API URL - trying the most common Tubelight portal endpoint
+    const baseUrl = 'https://portal.tubelightcommunications.com';
+    
+    // Strategy 1: Try different endpoint paths with GET method
+    const endpointPaths = [
+      '/api/mt/SendSMS',           // Current failing endpoint
+      '/api/SendSMS',               // Alternative API path
+      '/SendSMS',                   // Direct endpoint
+      '/smsapi/SendSMS',            // SMS API path
+      '/api/v2/SendSMS',            // Version 2 API
+      '/mt/SendSMS',                // Message type path
+    ];
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json, text/plain, */*',
-          },
-        });
+    // Strategy 2: Try different parameter formats
+    const paramSets = [
+      // Format 1: Standard parameters
+      {
+        user: TUBELIGHT_USERNAME,
+        password: TUBELIGHT_PASSWORD,
+        senderid: TUBELIGHT_SENDER_ID,
+        channel: 'Trans',
+        DCS: '0',
+        flashsms: '0',
+        number: fullPhoneNumber,
+        text: message,
+        route: '2',
+        EntityId: TUBELIGHT_ENTITY_ID,
+        DLT_TE_ID: templateId,
+      },
+      // Format 2: Lowercase parameter names
+      {
+        user: TUBELIGHT_USERNAME,
+        password: TUBELIGHT_PASSWORD,
+        senderid: TUBELIGHT_SENDER_ID,
+        channel: 'trans',
+        dcs: '0',
+        flashsms: '0',
+        number: fullPhoneNumber,
+        text: message,
+        route: '2',
+        entityid: TUBELIGHT_ENTITY_ID,
+        dlt_te_id: templateId,
+      },
+      // Format 3: Simplified parameters (minimal)
+      {
+        user: TUBELIGHT_USERNAME,
+        password: TUBELIGHT_PASSWORD,
+        senderid: TUBELIGHT_SENDER_ID,
+        number: fullPhoneNumber,
+        text: message,
+        DLT_TE_ID: templateId,
+      },
+    ];
 
-        console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
-        console.log(`[TUBELIGHT-SMS] 📡 Content-Type: ${response.headers.get('content-type')}`);
+    let attemptNumber = 0;
+    
+    // Try GET requests with different combinations
+    for (const path of endpointPaths) {
+      for (const params of paramSets) {
+        attemptNumber++;
+        const queryString = new URLSearchParams(params).toString();
+        const apiUrl = `${baseUrl}${path}?${queryString}`;
         
-        const responseText = await response.text();
-        console.log(`[TUBELIGHT-SMS] 📡 Raw Response (first 300 chars): ${responseText.substring(0, 300)}`);
-        
-        // Check if we got HTML (login page) - if so, try next endpoint
-        if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
-            responseText.trim().toLowerCase().startsWith('<html')) {
-          console.warn(`[TUBELIGHT-SMS] ⚠️  Got HTML response (likely login page), trying next endpoint...`);
-          continue; // Try next endpoint
-        }
+        console.log(`[TUBELIGHT-SMS] 🔗 GET Attempt ${attemptNumber}: ${path} (${Object.keys(params).length} params)`);
 
-        // Try to parse as JSON
-        let responseData;
         try {
-          responseData = JSON.parse(responseText);
-          console.log(`[TUBELIGHT-SMS] 📡 Parsed JSON Response:`, responseData);
-        } catch (parseError) {
-          // If not JSON, check if it's a simple text response (some SMS APIs return plain text)
-          console.log(`[TUBELIGHT-SMS] 📡 Plain text response: ${responseText}`);
+          const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+              'User-Agent': 'SR-CareHive/1.0',
+            },
+          });
+
+          const responseText = await response.text();
           
-          // Check for common success indicators in plain text
-          const successIndicators = ['success', 'sent', 'delivered', 'submitted', 'queued'];
-          const failIndicators = ['error', 'fail', 'invalid', 'unauthorized', 'authentication'];
-          
-          const lowerResponse = responseText.toLowerCase();
-          const hasSuccess = successIndicators.some(ind => lowerResponse.includes(ind));
-          const hasFail = failIndicators.some(ind => lowerResponse.includes(ind));
-          
-          if (hasSuccess && !hasFail) {
-            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully (text response)`);
-            return true;
-          } else if (hasFail) {
-            console.error(`[TUBELIGHT-SMS] ❌ SMS failed (text response): ${responseText}`);
-            continue; // Try next endpoint
-          } else {
-            console.warn(`[TUBELIGHT-SMS] ⚠️  Ambiguous response, trying next endpoint...`);
+          // Skip HTML responses (login pages)
+          if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
+              responseText.trim().toLowerCase().startsWith('<html')) {
             continue;
           }
-        }
 
-        // Check JSON response for success
-        if (response.status === 200 || response.status === 201) {
-          const status = (responseData.status || responseData.Status || '').toLowerCase();
-          const errorCode = responseData.ErrorCode || responseData.errorCode || responseData.error_code;
+          console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}, Response: ${responseText.substring(0, 100)}`);
           
-          if (status === 'success' || status === 'sent' || status === 'submitted' || 
-              responseData.success === true || errorCode === '000' || errorCode === 0) {
-            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully via endpoint ${i + 1}`);
+          // Check for success in response
+          const lowerResponse = responseText.toLowerCase();
+          if (lowerResponse.includes('success') || lowerResponse.includes('sent') || 
+              lowerResponse.includes('submitted') || lowerResponse.includes('queued')) {
+            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully!`);
             return true;
-          } else {
-            console.warn(`[TUBELIGHT-SMS] ⚠️  Endpoint ${i + 1} failed:`, responseData);
-            continue; // Try next endpoint
           }
-        } else {
-          console.warn(`[TUBELIGHT-SMS] ⚠️  HTTP ${response.status}, trying next endpoint...`);
-          continue;
+        } catch (error) {
+          // Silent fail, continue to next attempt
         }
-      } catch (fetchError) {
-        console.error(`[TUBELIGHT-SMS] ❌ Fetch error for endpoint ${i + 1}:`, fetchError.message);
-        continue; // Try next endpoint
       }
     }
 
-    // If we got here, all endpoints failed
-    console.error(`[TUBELIGHT-SMS] ❌ All ${possibleEndpoints.length} endpoints failed`);
-    console.error(`[TUBELIGHT-SMS] ⚠️  Please verify:`);
-    console.error(`[TUBELIGHT-SMS]    1. Username: ${TUBELIGHT_USERNAME}`);
-    console.error(`[TUBELIGHT-SMS]    2. Password is correct (not logged for security)`);
-    console.error(`[TUBELIGHT-SMS]    3. Sender ID: ${TUBELIGHT_SENDER_ID}`);
-    console.error(`[TUBELIGHT-SMS]    4. Entity ID: ${TUBELIGHT_ENTITY_ID}`);
-    console.error(`[TUBELIGHT-SMS]    5. Template ID: ${templateId}`);
-    console.error(`[TUBELIGHT-SMS]    6. Contact Tubelight support for correct API endpoint`);
+    // Strategy 3: Try POST request with form data (common for SMS APIs)
+    console.log(`[TUBELIGHT-SMS] 🔄 Trying POST method with form data...`);
+    
+    const postEndpoints = ['/api/mt/SendSMS', '/api/SendSMS', '/SendSMS'];
+    
+    for (const path of postEndpoints) {
+      attemptNumber++;
+      const formData = new URLSearchParams({
+        user: TUBELIGHT_USERNAME,
+        password: TUBELIGHT_PASSWORD,
+        senderid: TUBELIGHT_SENDER_ID,
+        channel: 'Trans',
+        DCS: '0',
+        flashsms: '0',
+        number: fullPhoneNumber,
+        text: message,
+        route: '2',
+        EntityId: TUBELIGHT_ENTITY_ID,
+        DLT_TE_ID: templateId,
+      });
+
+      console.log(`[TUBELIGHT-SMS] 🔗 POST Attempt ${attemptNumber}: ${path}`);
+
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json, text/plain, */*',
+          },
+          body: formData.toString(),
+        });
+
+        const responseText = await response.text();
+        
+        // Skip HTML responses
+        if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
+            responseText.trim().toLowerCase().startsWith('<html')) {
+          continue;
+        }
+
+        console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}, Response: ${responseText.substring(0, 100)}`);
+        
+        const lowerResponse = responseText.toLowerCase();
+        if (lowerResponse.includes('success') || lowerResponse.includes('sent')) {
+          console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully via POST!`);
+          return true;
+        }
+      } catch (error) {
+        // Silent fail
+      }
+    }
+
+    // All attempts failed - provide diagnostic info
+    console.error(`[TUBELIGHT-SMS] ❌ All ${attemptNumber} attempts failed - HTML login page returned`);
+    console.error(`[TUBELIGHT-SMS] 🔍 DIAGNOSTIC INFORMATION:`);
+    console.error(`[TUBELIGHT-SMS]    Username: ${TUBELIGHT_USERNAME}`);
+    console.error(`[TUBELIGHT-SMS]    Sender ID: ${TUBELIGHT_SENDER_ID}`);
+    console.error(`[TUBELIGHT-SMS]    Entity ID: ${TUBELIGHT_ENTITY_ID}`);
+    console.error(`[TUBELIGHT-SMS]    Template ID: ${templateId}`);
+    console.error(`[TUBELIGHT-SMS]    Phone: ${fullPhoneNumber}`);
+    console.error(`[TUBELIGHT-SMS] 💡 POSSIBLE ISSUES:`);
+    console.error(`[TUBELIGHT-SMS]    1. Wrong username/password`);
+    console.error(`[TUBELIGHT-SMS]    2. Account not activated or suspended`);
+    console.error(`[TUBELIGHT-SMS]    3. IP whitelist required - Add Vercel IPs to Tubelight portal`);
+    console.error(`[TUBELIGHT-SMS]    4. API endpoint changed - Contact Tubelight support`);
+    console.error(`[TUBELIGHT-SMS]    5. Requires API token/key instead of username/password`);
     return false;
 
   } catch (error) {
