@@ -58,7 +58,7 @@ function registerNurseOtpRoutes(app) {
         
         if (smsSent) {
           console.log(`[OTP] SMS sent successfully to: ${normalizedIdentifier}`);
-          return res.json({ success: true, message: resend ? 'OTP resent to your phone.' : 'OTP sent to your phone.', expiresIn: 300, canResendAfter: 120 });
+          return res.json({ success: true, message: resend ? 'OTP resent to your phone.' : 'OTP sent to your phone.', expiresIn: 300, canResendAfter: 120, deliveryChannels: ['SMS'] });
         } else {
           console.error(`[OTP] Failed to send SMS to: ${normalizedIdentifier}`);
           // Clear stored OTP if SMS failed
@@ -76,7 +76,7 @@ function registerNurseOtpRoutes(app) {
             html: otpEmailHtml
           });
           console.log('[OTP] OTP email sent successfully to:', normalizedIdentifier);
-          return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120 });
+          return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120, deliveryChannels: ['email'] });
         } catch (e) {
           console.error('[OTP] Failed to send OTP email to healthcare provider:', normalizedIdentifier, 'Error:', e.message);
           // Clear stored OTP if email failed
@@ -418,26 +418,29 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
       return false;
     }
 
-    // Build query parameters for GET request (Tubelight API uses GET, not POST)
+    // Build query parameters for GET request (Tubelight API standard format)
+    // Based on Tubelight API v2.1 documentation
     const params = new URLSearchParams({
-      username: TUBELIGHT_USERNAME,
+      user: TUBELIGHT_USERNAME,           // 'user' not 'username'
       password: TUBELIGHT_PASSWORD,
-      sender: TUBELIGHT_SENDER_ID,
-      mobile: fullPhoneNumber,
-      message: message,
-      templateid: templateId,
-      pe_id: TUBELIGHT_ENTITY_ID,
-      dltContentId: templateId,
+      senderid: TUBELIGHT_SENDER_ID,      // 'senderid' not 'sender'
+      channel: 'Trans',                    // Channel type for transactional SMS
+      DCS: '0',                            // Data Coding Scheme (0 = normal text)
+      flashsms: '0',                       // 0 = normal SMS, 1 = flash SMS
+      number: fullPhoneNumber,             // 'number' not 'mobile'
+      text: message,                       // 'text' not 'message'
+      route: '2',                          // Route 2 = Transactional
+      DLT_TE_ID: templateId,               // Template Entity ID
     });
 
     const apiUrl = `https://portal.tubelightcommunications.com/api/mt/SendSMS?${params.toString()}`;
 
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
     console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
+    console.log(`[TUBELIGHT-SMS] 🔗 API URL (partial): ${apiUrl.substring(0, 100)}...`);
 
     const response = await fetch(apiUrl, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
     });
 
     console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
