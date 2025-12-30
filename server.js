@@ -501,14 +501,11 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
       return false;
     }
 
-    // Step 2: Send SMS using correct API endpoint and format
-    // Try multiple endpoint variations since documentation endpoint returned 404
+    // Step 2: Send SMS using correct API endpoint
+    // CORRECT endpoint from Tubelight portal: /sms/api/v1/websms/single
     const endpointVariations = [
-      '/sms/api/v1/webhms/single/personalize',  // Personalized/Variable SMS (for OTP with variables)
-      '/sms/api/v1/webhms/single',              // Regular single SMS (from PDF page 3)
-      '/api/v1/webhms/single/personalize',      // Without /sms prefix (personalized)
-      '/api/v1/webhms/single',                  // Without /sms prefix
-      '/sms/api/v1/single',                     // Without /webhms
+      '/sms/api/v1/websms/single',              // ✅ CORRECT from portal (was webhms - TYPO!)
+      '/sms/api/v1/websms/single/personalize',  // Personalized variation
     ];
     
     // Prepare request body as per Tubelight API v2.1 specification
