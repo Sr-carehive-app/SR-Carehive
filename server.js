@@ -48,7 +48,13 @@ function registerNurseOtpRoutes(app) {
       if (isPhoneNumber) {
         // Send OTP via SMS
         console.log(`[OTP] Sending OTP via SMS to: ${normalizedIdentifier}`);
-        const smsSent = await sendOTPViaTubelight(normalizedIdentifier, otp, 'Healthcare Provider');
+        const smsSent = await sendOTPViaTubelight(
+          normalizedIdentifier, 
+          otp, 
+          'Healthcare Provider',
+          TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID,
+          'provider login'
+        );
         
         if (smsSent) {
           console.log(`[OTP] SMS sent successfully to: ${normalizedIdentifier}`);
@@ -320,25 +326,56 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER) {
 }
 
 // ============================================================================
-// TUBELIGHT SMS API (JIO TRUECONNECT) - For Password Reset OTP
+// TUBELIGHT SMS API (JIO TRUECONNECT) - For OTP Sending
 // ============================================================================
 const TUBELIGHT_USERNAME = (process.env.TUBELIGHT_USERNAME || '').trim();
 const TUBELIGHT_PASSWORD = (process.env.TUBELIGHT_PASSWORD || '').trim();
 const TUBELIGHT_SENDER_ID = (process.env.TUBELIGHT_SENDER_ID || '').trim();
 const TUBELIGHT_ENTITY_ID = (process.env.TUBELIGHT_ENTITY_ID || '').trim();
-const TUBELIGHT_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_OTP_TEMPLATE_ID || '').trim();
+
+// Template IDs for different OTP scenarios
+const TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID || '').trim();
+const TUBELIGHT_LOGIN_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_LOGIN_OTP_TEMPLATE_ID || '').trim();
+const TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID || '').trim();
+const TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID || '').trim();
+const TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID = (process.env.TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID || '').trim();
 
 let tubelightSMSEnabled = false;
-if (TUBELIGHT_USERNAME && TUBELIGHT_PASSWORD && TUBELIGHT_SENDER_ID && TUBELIGHT_ENTITY_ID && TUBELIGHT_OTP_TEMPLATE_ID) {
+if (TUBELIGHT_USERNAME && TUBELIGHT_PASSWORD && TUBELIGHT_SENDER_ID && TUBELIGHT_ENTITY_ID && 
+    TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID && TUBELIGHT_LOGIN_OTP_TEMPLATE_ID && 
+    TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID && TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID && 
+    TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID) {
   tubelightSMSEnabled = true;
-  console.log(`[INIT] ✅ Tubelight SMS enabled`);
+  console.log(`[INIT] ✅ Tubelight SMS enabled with all 5 templates`);
 } else {
-  console.warn('[WARN] ⚠️  Tubelight SMS not configured');
+  console.warn('[WARN] ⚠️  Tubelight SMS not fully configured');
+  if (!TUBELIGHT_USERNAME || !TUBELIGHT_PASSWORD || !TUBELIGHT_SENDER_ID || !TUBELIGHT_ENTITY_ID) {
+    console.warn('[WARN]    Missing credentials or basic config');
+  }
+  if (!TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID');
+  if (!TUBELIGHT_LOGIN_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_LOGIN_OTP_TEMPLATE_ID');
+  if (!TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID');
+  if (!TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID');
+  if (!TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID');
 }
 
-async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User') {
+/**
+ * Send OTP via Tubelight SMS API with specific template
+ * @param {string} phoneNumber - 10 digit phone number
+ * @param {string} otp - OTP code
+ * @param {string} recipientName - Name of recipient
+ * @param {string} templateId - Template ID for the specific OTP type
+ * @param {string} messageContext - Context for message (e.g., 'registration', 'login', 'password reset')
+ * @returns {boolean} - Success status
+ */
+async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', templateId = '', messageContext = 'verification') {
   if (!tubelightSMSEnabled) {
     console.log('[TUBELIGHT-SMS] ⚠️  SMS not configured');
+    return false;
+  }
+
+  if (!templateId) {
+    console.error('[TUBELIGHT-SMS] ❌ Template ID is required');
     return false;
   }
 
@@ -350,7 +387,36 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User') {
     }
 
     const fullPhoneNumber = `91${cleanPhone}`;
-    const message = `Dear ${recipientName}, Your OTP for SR CareHive password reset is ${otp}. Valid for 10 minutes. Do not share this code.`;
+    
+    // Construct message based on template type
+    // The actual message content MUST EXACTLY match the approved DLT template
+    let message = '';
+    let validity = '2 minutes'; // Default
+    
+    if (templateId === TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID) {
+      // Template: "Dear {#var#}, your OTP for Serechi registration is {#var#}. Valid for 2 minutes. Do not share. - SERECH"
+      validity = '2 minutes';
+      message = `Dear ${recipientName}, your OTP for Serechi registration is ${otp}. Valid for 2 minutes. Do not share. - SERECH`;
+    } else if (templateId === TUBELIGHT_LOGIN_OTP_TEMPLATE_ID) {
+      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive) login is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      validity = '10 minutes';
+      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive) login is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+    } else if (templateId === TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID) {
+      // Template: "Dear {#var#}, your OTP for Serechi password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      validity = '10 minutes';
+      message = `Dear ${recipientName}, your OTP for Serechi password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+    } else if (templateId === TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID) {
+      // Template: "Dear Healthcare Provider, your OTP for Serechi (SR CareHive) login is {#var#}. Valid for 5 minutes. Do not share. - SERECH"
+      validity = '5 minutes';
+      message = `Dear Healthcare Provider, your OTP for Serechi (SR CareHive) login is ${otp}. Valid for 5 minutes. Do not share. - SERECH`;
+    } else if (templateId === TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID) {
+      // Template: "Dear Healthcare Provider, your OTP for Serechi password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      validity = '10 minutes';
+      message = `Dear Healthcare Provider, your OTP for Serechi password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+    } else {
+      console.error(`[TUBELIGHT-SMS] ❌ Unknown template ID: ${templateId}`);
+      return false;
+    }
 
     const requestBody = {
       username: TUBELIGHT_USERNAME,
@@ -358,12 +424,13 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User') {
       sender: TUBELIGHT_SENDER_ID,
       mobile: fullPhoneNumber,
       message: message,
-      templateid: TUBELIGHT_OTP_TEMPLATE_ID,
+      templateid: templateId,
       pe_id: TUBELIGHT_ENTITY_ID,
-      dltContentId: TUBELIGHT_OTP_TEMPLATE_ID,
+      dltContentId: templateId,
     };
 
-    console.log(`[TUBELIGHT-SMS] 📤 Sending to: ${fullPhoneNumber}`);
+    console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
+    console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
 
     const response = await fetch('https://portal.tubelightcommunications.com/api/mt/SendSMS', {
       method: 'POST',
@@ -371,17 +438,31 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User') {
       body: JSON.stringify(requestBody),
     });
 
-    const responseData = await response.json();
     console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}`);
+    console.log(`[TUBELIGHT-SMS] 📡 Content-Type: ${response.headers.get('content-type')}`);
+    
+    // Get response text first to check what we're receiving
+    const responseText = await response.text();
+    console.log(`[TUBELIGHT-SMS] 📡 Raw Response (first 200 chars): ${responseText.substring(0, 200)}`);
+    
+    // Try to parse as JSON
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[TUBELIGHT-SMS] ❌ Failed to parse response as JSON`);
+      console.error(`[TUBELIGHT-SMS] Response was: ${responseText.substring(0, 500)}`);
+      return false;
+    }
 
     if (response.status === 200 || response.status === 201) {
       const status = responseData.status?.toLowerCase();
       if (status === 'success' || status === 'sent' || responseData.success) {
-        console.log(`[TUBELIGHT-SMS] ✅ SMS sent`);
+        console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully`);
         return true;
       }
     }
-    console.warn(`[TUBELIGHT-SMS] ⚠️  SMS failed`);
+    console.warn(`[TUBELIGHT-SMS] ⚠️  SMS failed:`, responseData);
     return false;
   } catch (error) {
     console.error(`[TUBELIGHT-SMS] ❌ Error:`, error.message);
@@ -2264,7 +2345,21 @@ async function deleteSignupOTP(identifier) {
 // Send Signup OTP (NEW - Multi-Channel with Redis)
 app.post('/api/send-signup-otp', async (req, res) => {
   try {
-    const { email, phone, alternativePhone, name } = req.body;
+    let { email, phone, alternativePhone, name } = req.body;
+    
+    // Clean phone numbers - remove country code if present
+    if (phone) {
+      phone = phone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+      if (phone.length !== 10) {
+        return res.status(400).json({ error: 'Invalid phone number. Must be 10 digits.' });
+      }
+    }
+    if (alternativePhone) {
+      alternativePhone = alternativePhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+      if (alternativePhone.length !== 10) {
+        return res.status(400).json({ error: 'Invalid alternative phone number. Must be 10 digits.' });
+      }
+    }
     
     // At least one contact method required
     if (!email && !phone && !alternativePhone) {
@@ -2280,8 +2375,8 @@ app.post('/api/send-signup-otp', async (req, res) => {
     
     console.log(`[SIGNUP-OTP] 🔑 Generated OTP: ${otp}`);
     console.log(`[SIGNUP-OTP] 📧 Email: ${email || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP] 📱 Phone: ${phone || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP] 📱 Alt Phone: ${alternativePhone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP] 📱 Phone (cleaned): ${phone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP] 📱 Alt Phone (cleaned): ${alternativePhone || 'Not provided'}`);
     
     // Use phone as primary identifier, fallback to email
     const identifier = phone || alternativePhone || email;
@@ -2344,7 +2439,13 @@ app.post('/api/send-signup-otp', async (req, res) => {
     // Send SMS to primary phone if provided
     if (phone && phone.trim()) {
       try {
-        smsSuccess = await sendOTPViaTubelight(phone, otp, name || 'User');
+        smsSuccess = await sendOTPViaTubelight(
+          phone, 
+          otp, 
+          name || 'User',
+          TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID,
+          'registration'
+        );
         if (smsSuccess) {
           console.log(`[SIGNUP-OTP] ✅ SMS sent to primary phone: ${phone.slice(0,6)}***`);
           deliveryChannels.push('SMS (primary)');
@@ -2357,7 +2458,13 @@ app.post('/api/send-signup-otp', async (req, res) => {
     // Send SMS to alternative phone if provided and different from primary
     if (alternativePhone && alternativePhone.trim() && alternativePhone !== phone) {
       try {
-        altSmsSuccess = await sendOTPViaTubelight(alternativePhone, otp, name || 'User');
+        altSmsSuccess = await sendOTPViaTubelight(
+          alternativePhone, 
+          otp, 
+          name || 'User',
+          TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID,
+          'registration'
+        );
         if (altSmsSuccess) {
           console.log(`[SIGNUP-OTP] ✅ SMS sent to alt phone: ${alternativePhone.slice(0,6)}***`);
           deliveryChannels.push('SMS (alternative)');
@@ -3700,7 +3807,13 @@ app.post('/send-password-reset-otp', async (req, res) => {
         const phoneToTry = patient.phone || patient.alternative_phone;
         console.log(`[OTP-RESET] 📱 Trying SMS to: ${phoneToTry}`);
         try {
-          smsSuccess = await sendOTPViaTubelight(phoneToTry, otp, patient.name);
+          smsSuccess = await sendOTPViaTubelight(
+            phoneToTry, 
+            otp, 
+            patient.name,
+            TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID,
+            'patient password reset'
+          );
         } catch (smsError) {
           console.error(`[OTP-RESET] ❌ SMS error:`, smsError.message);
         }
@@ -4174,7 +4287,13 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         const phoneToTry = provider.mobile_number || provider.alternative_mobile;
         console.log(`[PROVIDER-RESET] 📱 Trying SMS to: ${phoneToTry}`);
         try {
-          smsSuccess = await sendOTPViaTubelight(phoneToTry, otp, provider.full_name);
+          smsSuccess = await sendOTPViaTubelight(
+            phoneToTry, 
+            otp, 
+            provider.full_name,
+            TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID,
+            'provider password reset'
+          );
         } catch (smsError) {
           console.error(`[PROVIDER-RESET] ❌ SMS error:`, smsError.message);
         }
@@ -5056,7 +5175,13 @@ app.post('/send-login-otp', async (req, res) => {
         // User logged in with phone - send OTP to that phone via SMS
         console.log(`[LOGIN-OTP] 📱 Sending SMS to: ${normalizedIdentifier}`);
         try {
-          smsSuccess = await sendOTPViaTubelight(normalizedIdentifier, otp, patient.name);
+          smsSuccess = await sendOTPViaTubelight(
+            normalizedIdentifier, 
+            otp, 
+            patient.name,
+            TUBELIGHT_LOGIN_OTP_TEMPLATE_ID,
+            'patient login'
+          );
           if (smsSuccess) {
             console.log(`[LOGIN-OTP] ✅ SMS sent to: ${normalizedIdentifier}`);
             channels.push('SMS');

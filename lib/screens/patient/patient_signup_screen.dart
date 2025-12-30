@@ -35,6 +35,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
   final TextEditingController lastNameController = TextEditingController();
   
   final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   
   // Phone fields
@@ -284,19 +285,30 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                     if (channel.toLowerCase().contains('email') && email != null) {
                       icon = '📧';
                       text = email;
-                    } else if (channel.toLowerCase().contains('primary') || channel.toLowerCase().contains('sms')) {
+                    } else if (channel.toLowerCase().contains('primary') || (channel.toLowerCase().contains('sms') && !channel.toLowerCase().contains('alternative'))) {
                       icon = '📱';
                       text = phoneWithCode;
                     } else if (channel.toLowerCase().contains('alternative') && altPhone != null) {
                       icon = '📱';
-                      text = '$altPhone (alternative)';
+                      text = '$altPhone (Alt)';
+                    } else {
+                      return SizedBox.shrink(); // Skip unknown channels
                     }
                     
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        '$icon $text',
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      child: Row(
+                        children: [
+                          Text(icon, style: TextStyle(fontSize: 16)),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              text,
+                              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   }).toList(),
@@ -456,6 +468,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     middleNameController.dispose();
     lastNameController.dispose();
     passwordController.dispose();
+    confirmPasswordController.dispose();
     emailController.dispose();
     aadharLinkedPhoneController.dispose();
     alternativePhoneController.dispose();
@@ -588,6 +601,18 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         const SnackBar(
           content: Text('Password must be at least 6 characters long'),
           backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Validate password confirmation
+    if (!_isGoogleUser && passwordController.text != confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match. Please check and try again.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
       return;
@@ -1078,6 +1103,17 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                 label: 'Password (Should be atleast 6 characters)',
                 hint: '******',
                 controller: passwordController,
+                obscure: _obscureText,
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureText ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                  onPressed: () => setState(() => _obscureText = !_obscureText),
+                ),
+              ),
+              const SizedBox(height: 20),
+              buildTextField(
+                label: 'Confirm Password *',
+                hint: '******',
+                controller: confirmPasswordController,
                 obscure: _obscureText,
                 suffixIcon: IconButton(
                   icon: Icon(_obscureText ? Icons.visibility_off : Icons.visibility, color: Colors.grey),

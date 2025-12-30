@@ -100,21 +100,22 @@ class _MyAppState extends State<MyApp> {
       
       // If update available, Google Play shows native update dialog automatically
       if (info.updateAvailability == UpdateAvailability.updateAvailable) {
-        if (info.immediateUpdateAllowed) {
-          print('⚠️ CRITICAL UPDATE - Showing force update dialog...');
-          // Force update - Google shows full-screen update dialog
-          // This is a BLOCKING call - waits for user to complete update
-          // NOTE: After user clicks UPDATE, app is KILLED and RESTARTED by Android
-          // The line below this will NEVER execute - app restarts with new version
-          await InAppUpdate.performImmediateUpdate();
-          // App was killed and restarted - code below never runs
-        } else if (info.flexibleUpdateAllowed) {
+        // Always use flexible update - allows user to download later
+        // They can continue using app while update downloads in background
+        if (info.flexibleUpdateAllowed) {
           print('📲 Optional update available - Showing notification...');
           // Optional update - Google shows notification banner
+          // User can click "Download" or "Later"
           await InAppUpdate.startFlexibleUpdate();
-          print('⬇️ Flexible update download started');
+          print('⬇️ Flexible update download started (user can use app meanwhile)');
           // Note: completeFlexibleUpdate should be called AFTER download completes
           // Google Play will handle the completion notification automatically
+          // Update will be prompted again next time app opens if not installed
+        } else if (info.immediateUpdateAllowed) {
+          // Fallback to immediate update only if flexible is not allowed
+          print('⚠️ UPDATE REQUIRED - Showing update dialog...');
+          // This shows update dialog, but user can still dismiss it
+          await InAppUpdate.performImmediateUpdate();
         }
       } else {
         print('✅ App is up to date');
