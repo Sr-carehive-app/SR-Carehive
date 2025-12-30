@@ -2513,6 +2513,66 @@ app.post('/api/send-signup-otp', async (req, res) => {
       });
     }
 
+    // ✅ Check for duplicate phone number or email in database
+    if (!supabase) {
+      console.error('[SIGNUP-OTP] ❌ Supabase not configured');
+      return res.status(500).json({ error: 'Database not available. Please try again later.' });
+    }
+
+    try {
+      // Check if primary phone number already exists (only check primary phone, not alternative)
+      if (phone) {
+        console.log(`[SIGNUP-OTP] 🔍 Checking if phone ${phone} already exists...`);
+        const { data: existingPhoneUser, error: phoneCheckError } = await supabase
+          .from('patients')
+          .select('phone, email')
+          .eq('phone', phone)
+          .maybeSingle();
+
+        if (phoneCheckError && phoneCheckError.code !== 'PGRST116') {
+          console.error('[SIGNUP-OTP] ❌ Error checking phone:', phoneCheckError);
+          return res.status(500).json({ error: 'Failed to verify phone number. Please try again.' });
+        }
+
+        if (existingPhoneUser) {
+          console.log(`[SIGNUP-OTP] ❌ Phone ${phone} already registered`);
+          return res.status(409).json({ 
+            error: 'This phone number is already registered. Please use a different phone number or login to your existing account.',
+            field: 'phone'
+          });
+        }
+      }
+
+      // Check if email already exists
+      if (email) {
+        const normalizedEmail = email.toLowerCase().trim();
+        console.log(`[SIGNUP-OTP] 🔍 Checking if email ${normalizedEmail} already exists...`);
+        const { data: existingEmailUser, error: emailCheckError } = await supabase
+          .from('patients')
+          .select('email, phone')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
+
+        if (emailCheckError && emailCheckError.code !== 'PGRST116') {
+          console.error('[SIGNUP-OTP] ❌ Error checking email:', emailCheckError);
+          return res.status(500).json({ error: 'Failed to verify email address. Please try again.' });
+        }
+
+        if (existingEmailUser) {
+          console.log(`[SIGNUP-OTP] ❌ Email ${normalizedEmail} already registered`);
+          return res.status(409).json({ 
+            error: 'This email address is already registered. Please use a different email or login to your existing account.',
+            field: 'email'
+          });
+        }
+      }
+
+      console.log(`[SIGNUP-OTP] ✅ Phone and Email are available for registration`);
+    } catch (dbCheckError) {
+      console.error('[SIGNUP-OTP] ❌ Database check failed:', dbCheckError);
+      return res.status(500).json({ error: 'Failed to verify registration details. Please try again.' });
+    }
+
     // Generate OTP
     const otp = generateOTP();
     const now = Date.now();
@@ -2627,12 +2687,28 @@ app.post('/api/send-signup-otp', async (req, res) => {
       });
     }
 
+    // Prepare contact details for UI display
+    const contactDetails = [];
+    if (emailSuccess && email) {
+      const maskedEmail = email.replace(/(.{2})(.*)(@.*)/, '$1' + '*'.repeat(5) + '$3');
+      contactDetails.push(`📧 Email: ${maskedEmail}`);
+    }
+    if (smsSuccess && phone) {
+      const maskedPhone = phone.slice(0, 2) + 'X'.repeat(6) + phone.slice(-2);
+      contactDetails.push(`📱 Phone (Primary): +91${maskedPhone}`);
+    }
+    if (altSmsSuccess && alternativePhone) {
+      const maskedAltPhone = alternativePhone.slice(0, 2) + 'X'.repeat(6) + alternativePhone.slice(-2);
+      contactDetails.push(`📱 Phone (Alternative): +91${maskedAltPhone}`);
+    }
+
     res.json({
       success: true,
       message: `OTP sent to ${deliveryChannels.join(', ')}. Please check.`,
       otp: process.env.NODE_ENV === 'development' ? otp : undefined, // Only in dev
       expiresIn: 120, // 2 minutes
-      deliveryChannels: deliveryChannels
+      deliveryChannels: deliveryChannels,
+      sentTo: contactDetails  // ✅ Added contact details for UI
     });
 
   } catch (e) {

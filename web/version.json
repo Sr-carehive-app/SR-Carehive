@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 18,
-  "timestamp": "2025-12-31T01:30:00Z",
-  "lastUpdated": "Enhanced all 5 OTP endpoint responses to show phone numbers + email addresses in UI (sentTo field)"
+  "buildNumber": 19,
+  "timestamp": "2025-12-31T02:00:00Z",
+  "lastUpdated": "FINAL FIX: All 5 OTP endpoints now have sentTo field (Registration was missing) - Complete UI consistency"
 }
