@@ -359,8 +359,70 @@ if (TUBELIGHT_USERNAME && TUBELIGHT_PASSWORD && TUBELIGHT_SENDER_ID && TUBELIGHT
   if (!TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID) console.warn('[WARN]    Missing TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID');
 }
 
+// ============================================================================
+// TUBELIGHT API TOKEN MANAGEMENT (Bearer Authentication)
+// ============================================================================
+let tubelightAuthToken = null;
+let tubelightTokenExpiry = null;
+
+/**
+ * Get valid Tubelight Bearer token (login if needed)
+ * Based on Tubelight API v2.1 documentation - Login API
+ */
+async function getTubelightAuthToken() {
+  // Check if we have a valid token
+  if (tubelightAuthToken && tubelightTokenExpiry && Date.now() < tubelightTokenExpiry) {
+    console.log('[TUBELIGHT-AUTH] ✅ Using cached token');
+    return tubelightAuthToken;
+  }
+
+  // Login to get new token
+  console.log('[TUBELIGHT-AUTH] 🔑 Logging in to get Bearer token...');
+  
+  const loginUrl = 'https://portal.tubelightcommunications.com/api/authentication/login';
+  const loginBody = {
+    username: TUBELIGHT_USERNAME,
+    password: TUBELIGHT_PASSWORD,
+    validityTime: '1460', // Token validity in minutes (24 hours)
+  };
+
+  try {
+    const response = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(loginBody),
+    });
+
+    if (!response.ok) {
+      console.error(`[TUBELIGHT-AUTH] ❌ Login failed with status: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    if (data.accessToken) {
+      tubelightAuthToken = data.accessToken;
+      // Set expiry to 23 hours (1380 minutes) to be safe
+      tubelightTokenExpiry = Date.now() + (1380 * 60 * 1000);
+      console.log('[TUBELIGHT-AUTH] ✅ Login successful, token acquired');
+      console.log(`[TUBELIGHT-AUTH] 📅 Token valid until: ${new Date(tubelightTokenExpiry).toLocaleString()}`);
+      return tubelightAuthToken;
+    } else {
+      console.error('[TUBELIGHT-AUTH] ❌ No accessToken in response:', JSON.stringify(data));
+      return null;
+    }
+  } catch (error) {
+    console.error('[TUBELIGHT-AUTH] ❌ Login error:', error.message);
+    return null;
+  }
+}
+
 /**
  * Send OTP via Tubelight SMS API with specific template
+ * Based on Tubelight API v2.1 documentation - Send SMS API
  * @param {string} phoneNumber - 10 digit phone number
  * @param {string} otp - OTP code
  * @param {string} recipientName - Name of recipient
@@ -419,180 +481,101 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
     }
 
     // ========================================================================
-    // TUBELIGHT SMS API - COMPREHENSIVE FIX
+    // TUBELIGHT SMS API v2.1 - CORRECT IMPLEMENTATION
     // ========================================================================
-    // Based on common SMS gateway patterns and Tubelight API v2.1
-    // Since all endpoints return HTML (login page), trying multiple approaches
+    // Based on official Tubelight API v2.1 documentation
+    // Uses Bearer token authentication + POST request with JSON body
     
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
-    console.log(`[TUBELIGHT-SMS] 📝 Template: ${templateId}`);
-    console.log(`[TUBELIGHT-SMS] 👤 User: ${TUBELIGHT_USERNAME}`);
+    console.log(`[TUBELIGHT-SMS] 📝 Template ID: ${templateId}`);
+    console.log(`[TUBELIGHT-SMS] 🏢 Entity ID: ${TUBELIGHT_ENTITY_ID}`);
 
-    // Base API URL - trying the most common Tubelight portal endpoint
-    const baseUrl = 'https://portal.tubelightcommunications.com';
-    
-    // Strategy 1: Try different endpoint paths with GET method
-    const endpointPaths = [
-      '/api/mt/SendSMS',           // Current failing endpoint
-      '/api/SendSMS',               // Alternative API path
-      '/SendSMS',                   // Direct endpoint
-      '/smsapi/SendSMS',            // SMS API path
-      '/api/v2/SendSMS',            // Version 2 API
-      '/mt/SendSMS',                // Message type path
-    ];
-
-    // Strategy 2: Try different parameter formats
-    const paramSets = [
-      // Format 1: Standard parameters
-      {
-        user: TUBELIGHT_USERNAME,
-        password: TUBELIGHT_PASSWORD,
-        senderid: TUBELIGHT_SENDER_ID,
-        channel: 'Trans',
-        DCS: '0',
-        flashsms: '0',
-        number: fullPhoneNumber,
-        text: message,
-        route: '2',
-        EntityId: TUBELIGHT_ENTITY_ID,
-        DLT_TE_ID: templateId,
-      },
-      // Format 2: Lowercase parameter names
-      {
-        user: TUBELIGHT_USERNAME,
-        password: TUBELIGHT_PASSWORD,
-        senderid: TUBELIGHT_SENDER_ID,
-        channel: 'trans',
-        dcs: '0',
-        flashsms: '0',
-        number: fullPhoneNumber,
-        text: message,
-        route: '2',
-        entityid: TUBELIGHT_ENTITY_ID,
-        dlt_te_id: templateId,
-      },
-      // Format 3: Simplified parameters (minimal)
-      {
-        user: TUBELIGHT_USERNAME,
-        password: TUBELIGHT_PASSWORD,
-        senderid: TUBELIGHT_SENDER_ID,
-        number: fullPhoneNumber,
-        text: message,
-        DLT_TE_ID: templateId,
-      },
-    ];
-
-    let attemptNumber = 0;
-    
-    // Try GET requests with different combinations
-    for (const path of endpointPaths) {
-      for (const params of paramSets) {
-        attemptNumber++;
-        const queryString = new URLSearchParams(params).toString();
-        const apiUrl = `${baseUrl}${path}?${queryString}`;
-        
-        console.log(`[TUBELIGHT-SMS] 🔗 GET Attempt ${attemptNumber}: ${path} (${Object.keys(params).length} params)`);
-
-        try {
-          const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json, text/plain, */*',
-              'User-Agent': 'SR-CareHive/1.0',
-            },
-          });
-
-          const responseText = await response.text();
-          
-          // Skip HTML responses (login pages)
-          if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
-              responseText.trim().toLowerCase().startsWith('<html')) {
-            continue;
-          }
-
-          console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}, Response: ${responseText.substring(0, 100)}`);
-          
-          // Check for success in response
-          const lowerResponse = responseText.toLowerCase();
-          if (lowerResponse.includes('success') || lowerResponse.includes('sent') || 
-              lowerResponse.includes('submitted') || lowerResponse.includes('queued')) {
-            console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully!`);
-            return true;
-          }
-        } catch (error) {
-          // Silent fail, continue to next attempt
-        }
-      }
+    // Step 1: Get Bearer token (login if needed)
+    const authToken = await getTubelightAuthToken();
+    if (!authToken) {
+      console.error('[TUBELIGHT-SMS] ❌ Failed to get authentication token');
+      console.error('[TUBELIGHT-SMS] 🔧 Please check:');
+      console.error('[TUBELIGHT-SMS]    - Username and password are correct');
+      console.error('[TUBELIGHT-SMS]    - Account is active in Tubelight portal');
+      console.error('[TUBELIGHT-SMS]    - Network connectivity to portal.tubelightcommunications.com');
+      return false;
     }
 
-    // Strategy 3: Try POST request with form data (common for SMS APIs)
-    console.log(`[TUBELIGHT-SMS] 🔄 Trying POST method with form data...`);
+    // Step 2: Send SMS using correct API endpoint and format
+    const smsUrl = 'https://portal.tubelightcommunications.com/sms/api/v1/webhms/single';
     
-    const postEndpoints = ['/api/mt/SendSMS', '/api/SendSMS', '/SendSMS'];
-    
-    for (const path of postEndpoints) {
-      attemptNumber++;
-      const formData = new URLSearchParams({
-        user: TUBELIGHT_USERNAME,
-        password: TUBELIGHT_PASSWORD,
-        senderid: TUBELIGHT_SENDER_ID,
-        channel: 'Trans',
-        DCS: '0',
-        flashsms: '0',
-        number: fullPhoneNumber,
-        text: message,
-        route: '2',
-        EntityId: TUBELIGHT_ENTITY_ID,
-        DLT_TE_ID: templateId,
+    // Prepare request body as per Tubelight API v2.1 specification
+    const requestBody = {
+      sender: TUBELIGHT_SENDER_ID,        // "SERECH"
+      mobileNo: fullPhoneNumber,          // "919876543210"
+      messageType: 'TEXT',                // Always TEXT for OTP
+      messages: message,                   // Full OTP message matching DLT template
+      tempId: templateId,                 // DLT Template ID
+      peId: TUBELIGHT_ENTITY_ID,          // DLT Entity ID
+      cust_uuid: `${Date.now()}_${cleanPhone}`, // Unique ID for tracking
+    };
+
+    console.log('[TUBELIGHT-SMS] 🚀 Sending SMS request...');
+    console.log(`[TUBELIGHT-SMS] 📍 Endpoint: ${smsUrl}`);
+    console.log(`[TUBELIGHT-SMS] 📦 Payload: ${JSON.stringify({...requestBody, messages: requestBody.messages.substring(0, 50) + '...'})}`);
+
+    try {
+      const response = await fetch(smsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(requestBody),
       });
 
-      console.log(`[TUBELIGHT-SMS] 🔗 POST Attempt ${attemptNumber}: ${path}`);
-
-      try {
-        const response = await fetch(`${baseUrl}${path}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json, text/plain, */*',
-          },
-          body: formData.toString(),
-        });
-
-        const responseText = await response.text();
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Check if we got HTML (error/login page)
+      if (contentType.includes('text/html')) {
+        const htmlText = await response.text();
+        console.error('[TUBELIGHT-SMS] ❌ Received HTML response instead of JSON');
+        console.error('[TUBELIGHT-SMS] ⚠️  This indicates:');
+        console.error('[TUBELIGHT-SMS]    - Token expired or invalid');
+        console.error('[TUBELIGHT-SMS]    - IP not whitelisted');
+        console.error('[TUBELIGHT-SMS]    - Account issue');
+        console.error(`[TUBELIGHT-SMS] Response preview: ${htmlText.substring(0, 200)}`);
         
-        // Skip HTML responses
-        if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
-            responseText.trim().toLowerCase().startsWith('<html')) {
-          continue;
-        }
-
-        console.log(`[TUBELIGHT-SMS] 📡 Status: ${response.status}, Response: ${responseText.substring(0, 100)}`);
-        
-        const lowerResponse = responseText.toLowerCase();
-        if (lowerResponse.includes('success') || lowerResponse.includes('sent')) {
-          console.log(`[TUBELIGHT-SMS] ✅ SMS sent successfully via POST!`);
-          return true;
-        }
-      } catch (error) {
-        // Silent fail
+        // Clear token to force re-login next time
+        tubelightAuthToken = null;
+        tubelightTokenExpiry = null;
+        return false;
       }
-    }
 
-    // All attempts failed - provide diagnostic info
-    console.error(`[TUBELIGHT-SMS] ❌ All ${attemptNumber} attempts failed - HTML login page returned`);
-    console.error(`[TUBELIGHT-SMS] 🔍 DIAGNOSTIC INFORMATION:`);
-    console.error(`[TUBELIGHT-SMS]    Username: ${TUBELIGHT_USERNAME}`);
-    console.error(`[TUBELIGHT-SMS]    Sender ID: ${TUBELIGHT_SENDER_ID}`);
-    console.error(`[TUBELIGHT-SMS]    Entity ID: ${TUBELIGHT_ENTITY_ID}`);
-    console.error(`[TUBELIGHT-SMS]    Template ID: ${templateId}`);
-    console.error(`[TUBELIGHT-SMS]    Phone: ${fullPhoneNumber}`);
-    console.error(`[TUBELIGHT-SMS] 💡 POSSIBLE ISSUES:`);
-    console.error(`[TUBELIGHT-SMS]    1. Wrong username/password`);
-    console.error(`[TUBELIGHT-SMS]    2. Account not activated or suspended`);
-    console.error(`[TUBELIGHT-SMS]    3. IP whitelist required - Add Vercel IPs to Tubelight portal`);
-    console.error(`[TUBELIGHT-SMS]    4. API endpoint changed - Contact Tubelight support`);
-    console.error(`[TUBELIGHT-SMS]    5. Requires API token/key instead of username/password`);
-    return false;
+      // Parse JSON response
+      const responseData = await response.json();
+      console.log('[TUBELIGHT-SMS] 📡 Response received:', JSON.stringify(responseData));
+
+      // Check for success
+      if (response.ok && (responseData.message === 'Message Sent Successfully' || 
+          responseData.message === 'Message Queued Successfully' ||
+          responseData.messageId)) {
+        console.log('[TUBELIGHT-SMS] ✅ SMS sent successfully!');
+        if (responseData.messageId) {
+          console.log(`[TUBELIGHT-SMS] 📬 Message ID: ${responseData.messageId}`);
+        }
+        return true;
+      } else {
+        console.error('[TUBELIGHT-SMS] ❌ SMS sending failed');
+        console.error(`[TUBELIGHT-SMS] Status: ${response.status}`);
+        console.error(`[TUBELIGHT-SMS] Response: ${JSON.stringify(responseData)}`);
+        return false;
+      }
+
+    } catch (error) {
+      console.error('[TUBELIGHT-SMS] ❌ Network/Fetch Error:', error.message);
+      console.error('[TUBELIGHT-SMS] 🔧 Check:');
+      console.error('[TUBELIGHT-SMS]    - Internet connectivity');
+      console.error('[TUBELIGHT-SMS]    - Tubelight API server status');
+      console.error('[TUBELIGHT-SMS]    - Firewall/proxy settings');
+      return false;
+    }
 
   } catch (error) {
     console.error(`[TUBELIGHT-SMS] ❌ Error:`, error.message);
