@@ -58,7 +58,15 @@ function registerNurseOtpRoutes(app) {
         
         if (smsSent) {
           console.log(`[OTP] SMS sent successfully to: ${normalizedIdentifier}`);
-          return res.json({ success: true, message: resend ? 'OTP resent to your phone.' : 'OTP sent to your phone.', expiresIn: 300, canResendAfter: 120, deliveryChannels: ['SMS'] });
+          const maskedPhone = normalizedIdentifier.slice(0, 2) + 'X'.repeat(6) + normalizedIdentifier.slice(-2);
+          return res.json({ 
+            success: true, 
+            message: resend ? 'OTP resent to your phone.' : 'OTP sent to your phone.', 
+            expiresIn: 300, 
+            canResendAfter: 120, 
+            deliveryChannels: ['SMS'],
+            sentTo: [`📱 Phone: +91${maskedPhone}`]
+          });
         } else {
           console.error(`[OTP] Failed to send SMS to: ${normalizedIdentifier}`);
           // Clear stored OTP if SMS failed
@@ -76,7 +84,15 @@ function registerNurseOtpRoutes(app) {
             html: otpEmailHtml
           });
           console.log('[OTP] OTP email sent successfully to:', normalizedIdentifier);
-          return res.json({ success: true, message: resend ? 'OTP resent.' : 'OTP sent.', expiresIn: 300, canResendAfter: 120, deliveryChannels: ['email'] });
+          const maskedEmail = normalizedIdentifier.replace(/(.{2})(.*)(@.*)/, '$1' + '*'.repeat(5) + '$3');
+          return res.json({ 
+            success: true, 
+            message: resend ? 'OTP resent.' : 'OTP sent.', 
+            expiresIn: 300, 
+            canResendAfter: 120, 
+            deliveryChannels: ['email'],
+            sentTo: [`📧 Email: ${maskedEmail}`]
+          });
         } catch (e) {
           console.error('[OTP] Failed to send OTP email to healthcare provider:', normalizedIdentifier, 'Error:', e.message);
           // Clear stored OTP if email failed
@@ -3951,6 +3967,14 @@ app.post('/send-password-reset-otp', async (req, res) => {
       const channels = ['email'];
       if (smsSuccess) channels.push('SMS');
 
+      // Build detailed message with actual contact info
+      const contactDetails = [];
+      contactDetails.push(`📧 Email: ${normalizedEmail}`);
+      if (smsSuccess && (patient.phone || patient.alternative_phone)) {
+        const phoneUsed = patient.phone || patient.alternative_phone;
+        contactDetails.push(`📱 Phone: +91${phoneUsed}`);
+      }
+
       res.json({ 
         success: true, 
         message: resend 
@@ -3958,7 +3982,8 @@ app.post('/send-password-reset-otp', async (req, res) => {
           : `OTP sent to your ${channels.join(' and ')}. Please check.`,
         expiresIn: 600,
         canResendAfter: 120,
-        deliveryChannels: channels
+        deliveryChannels: channels,
+        sentTo: contactDetails  // ✅ Added contact details
       });
     } catch (emailError) {
       console.error('[ERROR] Failed to send OTP email:', emailError.message);
@@ -4431,12 +4456,21 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       const channels = ['email'];
       if (smsSuccess) channels.push('SMS');
 
+      // Build detailed message with actual contact info
+      const contactDetails = [];
+      contactDetails.push(`📧 Email: ${normalizedEmail}`);
+      if (smsSuccess && (provider.mobile_number || provider.alternative_mobile)) {
+        const phoneUsed = provider.mobile_number || provider.alternative_mobile;
+        contactDetails.push(`📱 Phone: +91${phoneUsed}`);
+      }
+
       res.json({ 
         success: true, 
         message: `OTP sent to your ${channels.join(' and ')}!`,
         expiresIn: 600,
         canResendAfter: 120,
-        deliveryChannels: channels
+        deliveryChannels: channels,
+        sentTo: contactDetails  // ✅ Added contact details
       });
 
     } catch (emailError) {
@@ -5326,12 +5360,24 @@ app.post('/send-login-otp', async (req, res) => {
         return res.status(500).json({ error: 'Failed to send OTP. Please try again later.' });
       }
 
+      // Prepare contact details for UI display
+      const contactDetails = [];
+      if (emailSuccess) {
+        const maskedEmail = patientEmail.replace(/(.{2})(.*)(@.*)/, '$1' + '*'.repeat(5) + '$3');
+        contactDetails.push(`📧 Email: ${maskedEmail}`);
+      }
+      if (smsSuccess) {
+        const maskedPhone = normalizedIdentifier.slice(0, 2) + 'X'.repeat(6) + normalizedIdentifier.slice(-2);
+        contactDetails.push(`📱 Phone: +91${maskedPhone}`);
+      }
+
       res.json({ 
         success: true, 
         message: `OTP sent to your ${channels.join(' and ')}. Please check.`,
         expiresIn: 600,
         canResendAfter: 120,
         deliveryChannels: channels,
+        sentTo: contactDetails,
         loginType: isEmail ? 'email' : 'phone'
       });
     } catch (emailError) {

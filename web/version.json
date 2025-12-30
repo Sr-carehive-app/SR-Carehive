@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 17,
-  "timestamp": "2025-12-31T01:15:00Z",
-  "lastUpdated": "Tubelight SMS - Fixed endpoint typo (webhms → websms) + DLT template corrections"
+  "buildNumber": 18,
+  "timestamp": "2025-12-31T01:30:00Z",
+  "lastUpdated": "Enhanced all 5 OTP endpoint responses to show phone numbers + email addresses in UI (sentTo field)"
 }
