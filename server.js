@@ -2723,10 +2723,18 @@ app.post('/api/send-signup-otp', async (req, res) => {
 // Verify Signup OTP (NEW)
 app.post('/api/verify-signup-otp', async (req, res) => {
   try {
-    const { email, phone, alternativePhone, otp } = req.body;
+    let { email, phone, alternativePhone, otp } = req.body;
     
     if (!otp) {
       return res.status(400).json({ error: 'OTP is required' });
+    }
+
+    // ✅ Clean phone numbers - SAME as send-signup-otp (CRITICAL!)
+    if (phone) {
+      phone = phone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+    }
+    if (alternativePhone) {
+      alternativePhone = alternativePhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
     }
 
     // Use phone as primary identifier, fallback to email
