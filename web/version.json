@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 21,
-  "timestamp": "2026-01-01T06:00:00Z",
-  "lastUpdated": "Build 21: Deep scan and verification of aadhar_linked_phone migration - All patient table operations verified and fixed"
+  "buildNumber": 22,
+  "timestamp": "2026-01-01T07:00:00Z",
+  "lastUpdated": "Build 22: Repository public - Redeployment after private repo issue resolution"
 }
