@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 20,
-  "timestamp": "2025-12-31T02:30:00Z",
-  "lastUpdated": "Build 20: Added duplicate email/phone validation + Fixed OTP verify phone cleaning + Corrected Tubelight Entity ID (1201176406887451880)"
+  "buildNumber": 21,
+  "timestamp": "2026-01-01T06:00:00Z",
+  "lastUpdated": "Build 21: Deep scan and verification of aadhar_linked_phone migration - All patient table operations verified and fixed"
 }

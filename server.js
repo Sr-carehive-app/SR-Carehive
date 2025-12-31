@@ -2490,12 +2490,12 @@ async function deleteSignupOTP(identifier) {
 // Send Signup OTP (NEW - Multi-Channel with Redis)
 app.post('/api/send-signup-otp', async (req, res) => {
   try {
-    let { email, phone, alternativePhone, name } = req.body;
+    let { email, aadharLinkedPhone, alternativePhone, name } = req.body;
     
     // Clean phone numbers - remove country code if present
-    if (phone) {
-      phone = phone.replace(/^\+91/, '').replace(/[^\d]/g, '');
-      if (phone.length !== 10) {
+    if (aadharLinkedPhone) {
+      aadharLinkedPhone = aadharLinkedPhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+      if (aadharLinkedPhone.length !== 10) {
         return res.status(400).json({ error: 'Invalid phone number. Must be 10 digits.' });
       }
     }
@@ -2507,7 +2507,7 @@ app.post('/api/send-signup-otp', async (req, res) => {
     }
     
     // At least one contact method required
-    if (!email && !phone && !alternativePhone) {
+    if (!email && !aadharLinkedPhone && !alternativePhone) {
       return res.status(400).json({ 
         error: 'At least one contact method (email, phone, or alternative phone) is required' 
       });
@@ -2521,12 +2521,12 @@ app.post('/api/send-signup-otp', async (req, res) => {
 
     try {
       // Check if primary phone number already exists (only check primary phone, not alternative)
-      if (phone) {
-        console.log(`[SIGNUP-OTP] 🔍 Checking if phone ${phone} already exists...`);
+      if (aadharLinkedPhone) {
+        console.log(`[SIGNUP-OTP] 🔍 Checking if phone ${aadharLinkedPhone} already exists...`);
         const { data: existingPhoneUser, error: phoneCheckError } = await supabase
           .from('patients')
-          .select('phone, email')
-          .eq('phone', phone)
+          .select('aadhar_linked_phone, email')
+          .eq('aadhar_linked_phone', aadharLinkedPhone)
           .maybeSingle();
 
         if (phoneCheckError && phoneCheckError.code !== 'PGRST116') {
@@ -2535,10 +2535,10 @@ app.post('/api/send-signup-otp', async (req, res) => {
         }
 
         if (existingPhoneUser) {
-          console.log(`[SIGNUP-OTP] ❌ Phone ${phone} already registered`);
+          console.log(`[SIGNUP-OTP] ❌ Phone ${aadharLinkedPhone} already registered`);
           return res.status(409).json({ 
             error: 'This phone number is already registered. Please use a different phone number or login to your existing account.',
-            field: 'phone'
+            field: 'aadharLinkedPhone'
           });
         }
       }
@@ -2549,7 +2549,7 @@ app.post('/api/send-signup-otp', async (req, res) => {
         console.log(`[SIGNUP-OTP] 🔍 Checking if email ${normalizedEmail} already exists...`);
         const { data: existingEmailUser, error: emailCheckError } = await supabase
           .from('patients')
-          .select('email, phone')
+          .select('email, aadhar_linked_phone')
           .eq('email', normalizedEmail)
           .maybeSingle();
 
@@ -2580,11 +2580,11 @@ app.post('/api/send-signup-otp', async (req, res) => {
     
     console.log(`[SIGNUP-OTP] 🔑 Generated OTP: ${otp}`);
     console.log(`[SIGNUP-OTP] 📧 Email: ${email || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP] 📱 Phone (cleaned): ${phone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP] 📱 Aadhar Linked Phone (cleaned): ${aadharLinkedPhone || 'Not provided'}`);
     console.log(`[SIGNUP-OTP] 📱 Alt Phone (cleaned): ${alternativePhone || 'Not provided'}`);
     
-    // Use phone as primary identifier, fallback to email
-    const identifier = phone || alternativePhone || email;
+    // Use aadhar_linked_phone as primary identifier, fallback to email
+    const identifier = aadharLinkedPhone || alternativePhone || email;
     
     // Store OTP in Redis
     await storeSignupOTP(identifier, {
@@ -2593,7 +2593,7 @@ app.post('/api/send-signup-otp', async (req, res) => {
       attempts: 0,
       lastSentAt: now,
       email: email || null,
-      phone: phone || null,
+      aadharLinkedPhone: aadharLinkedPhone || null,
       alternativePhone: alternativePhone || null,
       name: name || 'User'
     });
@@ -2642,17 +2642,17 @@ app.post('/api/send-signup-otp', async (req, res) => {
     }
 
     // Send SMS to primary phone if provided
-    if (phone && phone.trim()) {
+    if (aadharLinkedPhone && aadharLinkedPhone.trim()) {
       try {
         smsSuccess = await sendOTPViaTubelight(
-          phone, 
+          aadharLinkedPhone, 
           otp, 
           name || 'User',
           TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID,
           'registration'
         );
         if (smsSuccess) {
-          console.log(`[SIGNUP-OTP] ✅ SMS sent to primary phone: ${phone.slice(0,6)}***`);
+          console.log(`[SIGNUP-OTP] ✅ SMS sent to primary phone: ${aadharLinkedPhone.slice(0,6)}***`);
           deliveryChannels.push('SMS (primary)');
         }
       } catch (smsError) {
@@ -2661,7 +2661,7 @@ app.post('/api/send-signup-otp', async (req, res) => {
     }
 
     // Send SMS to alternative phone if provided and different from primary
-    if (alternativePhone && alternativePhone.trim() && alternativePhone !== phone) {
+    if (alternativePhone && alternativePhone.trim() && alternativePhone !== aadharLinkedPhone) {
       try {
         altSmsSuccess = await sendOTPViaTubelight(
           alternativePhone, 
@@ -2693,8 +2693,8 @@ app.post('/api/send-signup-otp', async (req, res) => {
       const maskedEmail = email.replace(/(.{2})(.*)(@.*)/, '$1' + '*'.repeat(5) + '$3');
       contactDetails.push(`📧 Email: ${maskedEmail}`);
     }
-    if (smsSuccess && phone) {
-      const maskedPhone = phone.slice(0, 2) + 'X'.repeat(6) + phone.slice(-2);
+    if (smsSuccess && aadharLinkedPhone) {
+      const maskedPhone = aadharLinkedPhone.slice(0, 2) + 'X'.repeat(6) + aadharLinkedPhone.slice(-2);
       contactDetails.push(`📱 Phone (Primary): +91${maskedPhone}`);
     }
     if (altSmsSuccess && alternativePhone) {
@@ -2723,22 +2723,22 @@ app.post('/api/send-signup-otp', async (req, res) => {
 // Verify Signup OTP (NEW)
 app.post('/api/verify-signup-otp', async (req, res) => {
   try {
-    let { email, phone, alternativePhone, otp } = req.body;
+    let { email, aadharLinkedPhone, alternativePhone, otp } = req.body;
     
     if (!otp) {
       return res.status(400).json({ error: 'OTP is required' });
     }
 
     // ✅ Clean phone numbers - SAME as send-signup-otp (CRITICAL!)
-    if (phone) {
-      phone = phone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+    if (aadharLinkedPhone) {
+      aadharLinkedPhone = aadharLinkedPhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
     }
     if (alternativePhone) {
       alternativePhone = alternativePhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
     }
 
-    // Use phone as primary identifier, fallback to email
-    const identifier = phone || alternativePhone || email;
+    // Use aadhar_linked_phone as primary identifier, fallback to email
+    const identifier = aadharLinkedPhone || alternativePhone || email;
     
     if (!identifier) {
       return res.status(400).json({ 
@@ -3879,7 +3879,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     
     const { data: patient, error: patientError } = await supabase
   .from('patients')
-  .select('email, name, user_id, phone, alternative_phone')
+  .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
   .eq('email', normalizedEmail)
   .single();
 
@@ -4032,8 +4032,8 @@ app.post('/send-password-reset-otp', async (req, res) => {
       console.log(`[SUCCESS] ✅ OTP email sent to: ${normalizedEmail}`);
 
       // Try SMS to both phone numbers if available
-      if (patient.phone || patient.alternative_phone) {
-        const phoneToTry = patient.phone || patient.alternative_phone;
+      if (patient.aadhar_linked_phone || patient.alternative_phone) {
+        const phoneToTry = patient.aadhar_linked_phone || patient.alternative_phone;
         console.log(`[OTP-RESET] 📱 Trying SMS to: ${phoneToTry}`);
         try {
           smsSuccess = await sendOTPViaTubelight(
@@ -4054,8 +4054,8 @@ app.post('/send-password-reset-otp', async (req, res) => {
       // Build detailed message with actual contact info
       const contactDetails = [];
       contactDetails.push(`📧 Email: ${normalizedEmail}`);
-      if (smsSuccess && (patient.phone || patient.alternative_phone)) {
-        const phoneUsed = patient.phone || patient.alternative_phone;
+      if (smsSuccess && (patient.aadhar_linked_phone || patient.alternative_phone)) {
+        const phoneUsed = patient.aadhar_linked_phone || patient.alternative_phone;
         contactDetails.push(`📱 Phone: +91${phoneUsed}`);
       }
 
@@ -5270,7 +5270,7 @@ app.post('/send-login-otp', async (req, res) => {
       // Search by email
       const { data, error: patientError } = await supabase
         .from('patients')
-        .select('email, name, user_id, phone, alternative_phone')
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
         .eq('email', normalizedIdentifier)
         .maybeSingle();
       
@@ -5281,11 +5281,11 @@ app.post('/send-login-otp', async (req, res) => {
       patient = data;
       patientEmail = data.email;
     } else {
-      // Search by phone (check both phone and alternative_phone)
+      // Search by phone (check both aadhar_linked_phone and alternative_phone)
       const { data, error: patientError } = await supabase
         .from('patients')
-        .select('email, name, user_id, phone, alternative_phone')
-        .or(`phone.eq.${normalizedIdentifier},alternative_phone.eq.${normalizedIdentifier}`)
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
+        .or(`aadhar_linked_phone.eq.${normalizedIdentifier},alternative_phone.eq.${normalizedIdentifier}`)
         .maybeSingle();
       
       if (patientError || !data) {
@@ -5336,7 +5336,7 @@ app.post('/send-login-otp', async (req, res) => {
       lastSentAt,
       password: password.trim(), // Store temporarily for final login
       email: patientEmail, // Store email for final Supabase login
-      phone: patient.phone || null,
+      aadhar_linked_phone: patient.aadhar_linked_phone || null,
       alternative_phone: patient.alternative_phone || null,
       name: patient.name || 'User',
       loginType: isEmail ? 'email' : 'phone',

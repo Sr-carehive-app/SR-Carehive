@@ -277,13 +277,12 @@ class _ViewProfileDetailsScreenState extends State<ViewProfileDetailsScreen> {
                                 iconColor: const Color(0xFF10B981),
                                 items: [
                                   if (profileData?['aadhar_linked_phone'] !=
-                                          null ||
-                                      profileData?['phone'] != null)
+                                          null)
                                     _buildModernInfoRow(
                                       icon: Icons.phone_android,
-                                      label: 'Primary Phone',
+                                      label: 'Primary Phone (Aadhar Linked)',
                                       value:
-                                          '${profileData?['country_code'] ?? '+91'} ${profileData?['aadhar_linked_phone'] ?? profileData?['phone'] ?? 'N/A'}',
+                                          '${profileData?['country_code'] ?? '+91'} ${profileData!['aadhar_linked_phone']}',
                                       iconBg: const Color(0xFF10B981),
                                     ),
                                   if (profileData?['alternative_phone'] !=

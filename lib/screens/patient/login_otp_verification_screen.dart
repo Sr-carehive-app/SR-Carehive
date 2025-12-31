@@ -290,7 +290,7 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
                   'user_id': user.id,
                   'name': nameController.text.trim(),
                   'email': user.email ?? '',
-                  'phone': phoneController.text.trim(),
+                  'aadhar_linked_phone': phoneController.text.trim(),
                   'age': int.tryParse(ageController.text.trim()),
                   'aadhar_number': aadharController.text.trim(),
                   'permanent_address': addressController.text.trim(),

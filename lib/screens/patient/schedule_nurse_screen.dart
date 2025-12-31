@@ -108,7 +108,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       if (user != null) {
         final patient = await supabase
             .from('patients')
-            .select('salutation, name, phone, permanent_address, aadhar_number, email, age')
+            .select('salutation, name, aadhar_linked_phone, permanent_address, aadhar_number, email, age, country_code')
             .eq('user_id', user.id)
             .maybeSingle();
         
@@ -118,7 +118,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             final salutation = patient['salutation'] ?? '';
             final name = patient['name'] ?? '';
             fullNameController.text = salutation.isNotEmpty ? '$salutation $name' : name;
-            phoneController.text = patient['phone'] ?? '';
+            phoneController.text = patient['aadhar_linked_phone'] ?? '';
             addressController.text = patient['permanent_address'] ?? '';
             aadharController.text = patient['aadhar_number'] ?? '';
             patientEmailController.text = (patient['email'] ?? user.email ?? '').toString();

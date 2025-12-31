@@ -34,14 +34,14 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
       // Try to prefill name/phone from patients
       Supabase.instance.client
           .from('patients')
-          .select('name, phone')
+          .select('name, aadhar_linked_phone')
           .eq('user_id', user.id)
           .maybeSingle()
           .then((p) {
         if (!mounted || p == null) return;
         setState(() {
           if ((p['name'] ?? '').toString().isNotEmpty) _name.text = p['name'];
-          if ((p['phone'] ?? '').toString().isNotEmpty) _mobile.text = p['phone'];
+          if ((p['aadhar_linked_phone'] ?? '').toString().isNotEmpty) _mobile.text = p['aadhar_linked_phone'];
         });
       }).catchError((_) {});
     }
