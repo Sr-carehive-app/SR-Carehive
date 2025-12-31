@@ -90,6 +90,7 @@ class OTPService {
       print('[OTP-SERVICE] 📧 Email: ${email ?? "Not provided"}');
       print('[OTP-SERVICE] 📱 Phone: ${phone ?? "Not provided"}');
       print('[OTP-SERVICE] 📱 Alt Phone: ${alternativePhone ?? "Not provided"}');
+      print('[OTP-SERVICE] 📦 Request Body: ${jsonEncode(requestBody)}');
 
       final response = await http.post(
         Uri.parse('$apiUrl/api/send-signup-otp'),

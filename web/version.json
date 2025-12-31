@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 23,
-  "timestamp": "2026-01-01T08:00:00Z",
-  "lastUpdated": "Build 23: Critical fixes - OTP parameter mismatch (phone→aadharLinkedPhone), Age constraint violations (NULL→0 default in 3 locations), Prevents orphaned auth users"
+  "buildNumber": 24,
+  "timestamp": "2026-01-01T09:00:00Z",
+  "lastUpdated": "Build 24: Fixed TextField key rebuild clearing phone numbers, Added phone validation, Fixed signup flow with auto sign-out, Age field max 2 digits (1-100), Empty strings→NULL for optional fields"
 }

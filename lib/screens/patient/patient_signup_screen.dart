@@ -205,7 +205,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     Timer? countdownTimer;
 
     // Send OTP via new backend endpoint
-    final phoneWithCode = selectedCountryCode + aadharLinkedPhoneController.text.trim();
+    final aadharPhone = aadharLinkedPhoneController.text.trim();
+    final phoneWithCode = aadharPhone.isNotEmpty ? selectedCountryCode + aadharPhone : null;
     final altPhone = alternativePhoneController.text.trim().isNotEmpty 
         ? selectedCountryCode + alternativePhoneController.text.trim() 
         : null;
@@ -217,7 +218,8 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     
     print('📤 Sending signup OTP...');
     print('📧 Email: ${email ?? "Not provided"}');
-    print('📱 Phone: $phoneWithCode');
+    print('📱 Aadhar Phone: ${aadharPhone.isNotEmpty ? aadharPhone : "Not provided"}');
+    print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
     print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
     
     final result = await OTPService.sendSignupOTP(
@@ -769,6 +771,9 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             });
             
             if (mounted) {
+              // Sign out the user so they have to login
+              await supabase.auth.signOut();
+              
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('✅ Registration successful! Please login with your credentials.')),
               );
@@ -1171,7 +1176,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                     // Phone Number Field
                     Expanded(
                       child: TextField(
-                        key: ValueKey(selectedCountryCode), // Rebuild when country changes
                         controller: aadharLinkedPhoneController,
                         keyboardType: TextInputType.phone,
                         autocorrect: false,
@@ -1246,7 +1250,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                     // Alternative Phone Number Field
                     Expanded(
                       child: TextField(
-                        key: ValueKey('alt_$selectedCountryCode'), // Rebuild when country changes
                         controller: alternativePhoneController,
                         keyboardType: TextInputType.phone,
                         autocorrect: false,
