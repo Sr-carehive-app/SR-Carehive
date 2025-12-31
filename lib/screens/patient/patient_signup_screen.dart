@@ -289,7 +289,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                       text = email;
                     } else if (channel.toLowerCase().contains('primary') || (channel.toLowerCase().contains('sms') && !channel.toLowerCase().contains('alternative'))) {
                       icon = '📱';
-                      text = phoneWithCode;
+                      text = phoneWithCode ?? '';
                     } else if (channel.toLowerCase().contains('alternative') && altPhone != null) {
                       icon = '📱';
                       text = '$altPhone (Alt)';
