@@ -80,7 +80,7 @@ class OTPService {
       // Build request body with only provided fields
       final Map<String, dynamic> requestBody = {};
       if (email != null && email.isNotEmpty) requestBody['email'] = email;
-      if (phone != null && phone.isNotEmpty) requestBody['phone'] = phone;
+      if (phone != null && phone.isNotEmpty) requestBody['aadharLinkedPhone'] = phone;  // Backend expects 'aadharLinkedPhone'
       if (alternativePhone != null && alternativePhone.isNotEmpty) {
         requestBody['alternativePhone'] = alternativePhone;
       }
@@ -146,7 +146,7 @@ class OTPService {
       // Build request body with identifiers and OTP
       final Map<String, dynamic> requestBody = {'otp': otp};
       if (email != null && email.isNotEmpty) requestBody['email'] = email;
-      if (phone != null && phone.isNotEmpty) requestBody['phone'] = phone;
+      if (phone != null && phone.isNotEmpty) requestBody['aadharLinkedPhone'] = phone;  // Backend expects 'aadharLinkedPhone'
       if (alternativePhone != null && alternativePhone.isNotEmpty) {
         requestBody['alternativePhone'] = alternativePhone;
       }

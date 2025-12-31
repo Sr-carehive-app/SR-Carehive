@@ -251,7 +251,12 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
               children: [
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Full Name')),
                 TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Mobile Number')),
-                TextField(controller: ageController, decoration: const InputDecoration(labelText: 'Age')),
+                TextField(
+                  controller: ageController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
+                  decoration: const InputDecoration(labelText: 'Age', hintText: '1-100'),
+                ),
                 TextField(controller: aadharController, decoration: const InputDecoration(labelText: 'Aadhar Number')),
                 TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Permanent Address')),
                 Row(
@@ -285,13 +290,19 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
                   return;
                 }
                 
+                final age = int.tryParse(ageController.text.trim()) ?? 0;
+                if (age < 1 || age > 100) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Age must be between 1 and 100')));
+                  return;
+                }
+                
                 final supabase = Supabase.instance.client;
                 await supabase.from('patients').insert({
                   'user_id': user.id,
                   'name': nameController.text.trim(),
                   'email': user.email ?? '',
                   'aadhar_linked_phone': phoneController.text.trim(),
-                  'age': int.tryParse(ageController.text.trim()),
+                  'age': int.tryParse(ageController.text.trim()) ?? 0,
                   'aadhar_number': aadharController.text.trim(),
                   'permanent_address': addressController.text.trim(),
                   'gender': selectedGender,

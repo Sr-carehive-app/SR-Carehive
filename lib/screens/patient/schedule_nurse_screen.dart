@@ -182,6 +182,11 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       _showErrorSnackBar('Please enter a valid age');
       return false;
     }
+    final age = int.tryParse(ageController.text.trim()) ?? 0;
+    if (age < 1 || age > 100) {
+      _showErrorSnackBar('Age must be between 1 and 100');
+      return false;
+    }
     // Email required and valid
     if (patientEmailController.text.trim().isEmpty) {
       final emailContext = selectedPatient == 'Another Person' 
@@ -740,7 +745,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           // Patient information fields
           buildTextField('Full Name', controller: fullNameController),
           const SizedBox(height: 16),
-          buildTextField('Age', controller: ageController, keyboardType: TextInputType.number),
+          buildTextField('Age', controller: ageController, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)]),
           const SizedBox(height: 16),
           // Patient Email - read-only for "Yourself", editable for "Another Person"
           TextField(

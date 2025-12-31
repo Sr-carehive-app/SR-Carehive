@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 22,
-  "timestamp": "2026-01-01T07:00:00Z",
-  "lastUpdated": "Build 22: Repository public - Redeployment after private repo issue resolution"
+  "buildNumber": 23,
+  "timestamp": "2026-01-01T08:00:00Z",
+  "lastUpdated": "Build 23: Critical fixes - OTP parameter mismatch (phone→aadharLinkedPhone), Age constraint violations (NULL→0 default in 3 locations), Prevents orphaned auth users"
 }

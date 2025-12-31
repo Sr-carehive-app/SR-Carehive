@@ -543,6 +543,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
       return;
     }
     
+    final age = int.tryParse(ageController.text.trim()) ?? 0;
+    if (age < 1 || age > 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Age must be between 1 and 100')),
+      );
+      return;
+    }
+    
     // Aadhar is now optional - skip empty check
     // House/Flat Number is now optional - skip empty check
     // Street removed from signup form (not required)
@@ -685,7 +693,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             'salutation': selectedSalutation,
             'name': fullName,
             'first_name': firstNameController.text.trim(),
-            'middle_name': middleNameController.text.trim(),
+            'middle_name': middleNameController.text.trim().isNotEmpty ? middleNameController.text.trim() : null,
             'last_name': lastNameController.text.trim(),
             'email': emailController.text.trim(),
             'country_code': selectedCountryCode,
@@ -693,10 +701,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
                 ? alternativePhoneController.text.trim() 
                 : null,
-            'age': int.tryParse(ageController.text.trim()) ?? null,
-            'aadhar_number': aadharController.text.trim(),
-            'house_number': houseNumberController.text.trim(),
-            'town': townController.text.trim(),
+            'age': int.tryParse(ageController.text.trim()) ?? 0,
+            'aadhar_number': aadharController.text.trim().isNotEmpty ? aadharController.text.trim() : null,
+            'house_number': houseNumberController.text.trim().isNotEmpty ? houseNumberController.text.trim() : null,
+            'town': townController.text.trim().isNotEmpty ? townController.text.trim() : null,
             'city': cityController.text.trim(),
             'state': stateController.text.trim(),
             'pincode': pincodeController.text.trim(),
@@ -739,7 +747,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               'salutation': selectedSalutation,
               'name': fullName,
               'first_name': firstNameController.text.trim(),
-              'middle_name': middleNameController.text.trim(),
+              'middle_name': middleNameController.text.trim().isNotEmpty ? middleNameController.text.trim() : null,
               'last_name': lastNameController.text.trim(),
               'email': emailController.text.trim(),
               'country_code': selectedCountryCode,
@@ -747,11 +755,11 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
                   ? alternativePhoneController.text.trim() 
                   : null,
-              'age': int.tryParse(ageController.text.trim()) ?? null,
-              'aadhar_number': aadharController.text.trim(),
-              'house_number': houseNumberController.text.trim(),
+              'age': int.tryParse(ageController.text.trim()) ?? 0,
+              'aadhar_number': aadharController.text.trim().isNotEmpty ? aadharController.text.trim() : null,
+              'house_number': houseNumberController.text.trim().isNotEmpty ? houseNumberController.text.trim() : null,
               // street removed from signup form
-              'town': townController.text.trim(),
+              'town': townController.text.trim().isNotEmpty ? townController.text.trim() : null,
               'city': cityController.text.trim(),
               'state': stateController.text.trim(),
               'pincode': pincodeController.text.trim(),
@@ -1283,7 +1291,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                 TextField(
                   controller: ageController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
                   decoration: InputDecoration(
                     hintText: 'XX',
                     hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
