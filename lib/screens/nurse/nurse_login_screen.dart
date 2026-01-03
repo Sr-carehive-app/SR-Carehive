@@ -555,8 +555,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     
     // Wait for dialog close animation to complete before disposing controller
     await Future.delayed(const Duration(milliseconds: 300));
-    forgotPasswordEmailController.dispose();
-    forgotPasswordPhoneController.dispose();
+    forgotPasswordController.dispose();
     
     // If result was returned, show message and navigate (OUTSIDE dialog)
     if (result != null && mounted) {
