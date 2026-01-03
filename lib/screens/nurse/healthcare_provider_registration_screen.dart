@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'package:care12/services/provider_email_service.dart';
 import 'package:care12/screens/nurse/provider_application_status_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class HealthcareProviderRegistrationScreen extends StatefulWidget {
   const HealthcareProviderRegistrationScreen({Key? key}) : super(key: key);
@@ -529,7 +530,7 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_registration_back'),
         ),
         title: const Text(
           'Healthcare Provider Registration',

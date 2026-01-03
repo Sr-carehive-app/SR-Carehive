@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'provider_profile_edit_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class ProviderProfileViewScreen extends StatefulWidget {
   const ProviderProfileViewScreen({Key? key}) : super(key: key);
@@ -54,7 +55,7 @@ class _ProviderProfileViewScreenState extends State<ProviderProfileViewScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_profile_view_back'),
         ),
         actions: [
           if (providerData != null)

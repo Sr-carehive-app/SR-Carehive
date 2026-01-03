@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:care12/utils/safe_navigation.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
 import 'refund_request_screen.dart';
@@ -19,7 +20,7 @@ class MenuScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: onBackToHome ?? () => Navigator.pop(context),
+          onPressed: onBackToHome ?? () => SafeNavigation.pop(context, debugLabel: 'menu_back'),
         ),
         title: const Text('Menu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,

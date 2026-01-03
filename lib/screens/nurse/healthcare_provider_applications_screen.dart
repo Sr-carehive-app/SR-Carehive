@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/screens/nurse/healthcare_provider_detail_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class HealthcareProviderApplicationsScreen extends StatefulWidget {
   const HealthcareProviderApplicationsScreen({Key? key}) : super(key: key);
@@ -112,7 +113,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_applications_back'),
         ),
         title: const Text(
           'Provider Applications',

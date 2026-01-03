@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class ProviderProfileEditScreen extends StatefulWidget {
   final Map<String, dynamic> providerData;
@@ -168,7 +169,7 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_profile_edit_back'),
         ),
       ),
       body: Form(

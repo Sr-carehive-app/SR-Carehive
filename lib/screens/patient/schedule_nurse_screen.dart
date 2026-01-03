@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/payment_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class ScheduleNurseScreen extends StatefulWidget {
   final VoidCallback? onBackToHome;
@@ -548,7 +549,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => SafeNavigation.pop(context, debugLabel: 'schedule_back'),
         ),
         title: const Text('Care Schedule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,

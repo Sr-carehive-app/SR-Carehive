@@ -6,6 +6,7 @@ import 'package:care12/models/payment_models.dart';
 import 'package:care12/services/payment_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:care12/utils/safe_navigation.dart';
 import 'dart:convert';
 
 class AppointmentsScreen extends StatefulWidget {
@@ -174,7 +175,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => SafeNavigation.pop(context, debugLabel: 'appointments_back'),
         ),
         title: const Text('My Care Requests', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,

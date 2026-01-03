@@ -8,6 +8,7 @@ import 'package:care12/services/nurse_api_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'healthcare_provider_selection_screen.dart';
 import 'provider_profile_view_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class NurseAppointmentsManageScreen extends StatefulWidget {
   final bool isSuperAdmin;
@@ -1254,7 +1255,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           : widget.isSuperAdmin
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => SafeNavigation.pop(context, debugLabel: 'appointments_manage_super_admin_back'),
               )
             : _buildLogoutButton(),
         actions: [

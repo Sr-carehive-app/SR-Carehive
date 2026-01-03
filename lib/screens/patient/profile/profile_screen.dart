@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:care12/utils/safe_navigation.dart';
 import 'edit_profile_screen.dart';
 import 'view_profile_details_screen.dart';
 import 'package:care12/screens/splash_screen.dart'; // update import if needed
@@ -646,7 +647,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: widget.onBackToHome ?? () => Navigator.pop(context),
+          onPressed: widget.onBackToHome ?? () => SafeNavigation.pop(context, debugLabel: 'profile_back'),
         ),
         title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,

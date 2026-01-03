@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/provider_email_service.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class HealthcareProviderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicationData;
@@ -281,7 +282,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_detail_back'),
         ),
         title: const Text(
           'Application Details',
