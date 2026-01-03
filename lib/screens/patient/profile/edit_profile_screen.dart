@@ -527,7 +527,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
                   ? alternativePhoneController.text.trim() 
                   : null,
-              'phone': aadharLinkedPhoneController.text.trim(), // Legacy field
               
               // Address fields
               'house_number': houseNumberController.text.trim(),

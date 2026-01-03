@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 26,
-  "timestamp": "2026-01-01T21:29:00Z",
-  "lastUpdated": "Build 26: Fixed phone login OTP verification, SMS delivery messages, privacy masking"
+  "buildNumber": 27,
+  "timestamp": "2026-01-03T13:10:00Z",
+  "lastUpdated": "Build 27: Fixed profile update - removed legacy phone field causing database error"
 }
