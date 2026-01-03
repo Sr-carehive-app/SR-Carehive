@@ -536,6 +536,17 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         );
         return;
       }
+      
+      // Validate alternative phone is different from primary phone
+      if (alternativePhoneController.text.trim() == aadharLinkedPhoneController.text.trim()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Alternative phone number must be different from Aadhar-linked phone number'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
     }
     
     if (ageController.text.trim().isEmpty) {

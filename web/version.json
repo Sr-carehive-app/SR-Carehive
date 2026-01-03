@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 25,
-  "timestamp": "2026-01-01T09:30:00Z",
-  "lastUpdated": "Build 25: Fixed nullable phoneWithCode compilation error, All previous fixes intact"
+  "buildNumber": 26,
+  "timestamp": "2026-01-01T21:29:00Z",
+  "lastUpdated": "Build 26: Fixed phone login OTP verification, SMS delivery messages, privacy masking"
 }

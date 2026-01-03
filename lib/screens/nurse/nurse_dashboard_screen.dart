@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // 🔽 Import all target screens
 import 'package:care12/screens/nurse/notification.dart';
 import 'package:care12/screens/patient/profile/settings_screen.dart';
-import 'package:care12/screens/patient/profile/profile_screen.dart';
+import 'package:care12/screens/nurse/provider_profile_view_screen.dart';
 import 'package:care12/screens/nurse/request_screen.dart';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
 import 'package:care12/screens/nurse/Schedule.dart';
@@ -209,7 +209,7 @@ class _NurseDashboardScreenState extends State<NurseDashboardScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ProfileScreen(userName: widget.userName),
+                  builder: (_) => const ProviderProfileViewScreen(),
                 ),
               );
               break;

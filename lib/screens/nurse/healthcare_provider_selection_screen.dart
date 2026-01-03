@@ -24,7 +24,7 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 // Heading
                 const Text(
-                  'Hello Healthcare Provider!',
+                  'Healthcare Provider Onboarding',
                   style: TextStyle(
                     fontSize: 28,
                     color: Color(0xFF2260FF),
@@ -34,7 +34,7 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 // Subtitle
                 const Text(
-                  'Welcome to Serechi',
+                  'Welcome to SR CareHive !',
                   style: TextStyle(
                     fontSize: 20,
                     color: Color(0xFF2260FF),
@@ -47,7 +47,7 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
                 _buildSelectionCard(
                   context: context,
                   title: 'Join Our Healthcare Network',
-                  description: 'Register as a healthcare provider to\nconnect with patients seeking care',
+                  description: 'Register as a care professional to\nprovide services to patients and families',
                   buttonText: 'Register',
                   buttonColor: const Color(0xFF2260FF),
                   buttonTextColor: Colors.white,
@@ -66,7 +66,7 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
                 // Existing Healthcare Worker Card
                 _buildSelectionCard(
                   context: context,
-                  title: 'Already a Healthcare Worker?',
+                  title: 'Already registered?',
                   description: 'Please sign in here to continue\nmanaging your healthcare services',
                   buttonText: 'Sign In',
                   buttonColor: const Color(0xFFCAD6FF),

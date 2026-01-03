@@ -427,4 +427,75 @@ class NurseApiService {
       rethrow;
     }
   }
+
+  // ============================================================================
+  // PROVIDER PROFILE METHODS
+  // ============================================================================
+
+  /// Get provider's own profile data
+  /// Requires authentication token
+  /// Returns provider data as Map
+  static Future<Map<String, dynamic>> getProviderProfile() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$_base/api/provider/profile'),
+        headers: _authHeaders(),
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['provider'] ?? {};
+      }
+      
+      if (resp.statusCode == 401) {
+        throw Exception('Unauthorized. Please login again.');
+      }
+      
+      final error = resp.body.isNotEmpty 
+          ? jsonDecode(resp.body)['error'] ?? 'Failed to load profile' 
+          : 'Failed to load profile';
+      throw Exception(error);
+    } catch (e) {
+      print('❌ Error fetching provider profile: $e');
+      rethrow;
+    }
+  }
+
+  /// Update provider's own profile data
+  /// Requires authentication token
+  /// Only allows updating certain fields (contact info, fees, etc.)
+  /// Professional credentials cannot be changed
+  static Future<Map<String, dynamic>> updateProviderProfile(Map<String, dynamic> updatedData) async {
+    try {
+      final resp = await http.put(
+        Uri.parse('$_base/api/provider/profile'),
+        headers: _authHeaders(),
+        body: jsonEncode(updatedData),
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data;
+      }
+      
+      if (resp.statusCode == 401) {
+        throw Exception('Unauthorized. Please login again.');
+      }
+      
+      if (resp.statusCode == 400) {
+        final error = resp.body.isNotEmpty 
+            ? jsonDecode(resp.body)['error'] ?? 'Invalid data' 
+            : 'Invalid data';
+        throw Exception(error);
+      }
+      
+      final error = resp.body.isNotEmpty 
+          ? jsonDecode(resp.body)['error'] ?? 'Failed to update profile' 
+          : 'Failed to update profile';
+      throw Exception(error);
+    } catch (e) {
+      print('❌ Error updating provider profile: $e');
+      rethrow;
+    }
+  }
 }

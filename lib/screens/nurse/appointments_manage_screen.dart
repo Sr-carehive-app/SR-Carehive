@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'healthcare_provider_selection_screen.dart';
+import 'provider_profile_view_screen.dart';
 
 class NurseAppointmentsManageScreen extends StatefulWidget {
   final bool isSuperAdmin;
@@ -1197,6 +1198,20 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               )
             : _buildLogoutButton(),
         actions: [
+          // Profile button (only for non-super-admin providers)
+          if (!widget.isSuperAdmin && !_isSelectionMode)
+            IconButton(
+              icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
+              tooltip: 'Your Profile',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ProviderProfileViewScreen(),
+                  ),
+                );
+              },
+            ),
           if (_isSelectionMode && listFiltered.isNotEmpty) ...[
             // Select All / Deselect All
             TextButton.icon(

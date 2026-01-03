@@ -275,6 +275,18 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
       );
       return;
     }
+    
+    // Validate alternative mobile is different from primary mobile
+    if (alternativeMobileController.text.trim().isNotEmpty && 
+        alternativeMobileController.text.trim() == mobileController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Alternative mobile number must be different from primary mobile number'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     // Validate password match
     if (passwordController.text != confirmPasswordController.text) {

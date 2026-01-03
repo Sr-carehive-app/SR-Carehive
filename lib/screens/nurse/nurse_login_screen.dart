@@ -561,7 +561,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
         const Text('Email or Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(
-          'Enter registered email or primary/alternative phone number you have registered with',
+          'Enter registered email or primary phone number you have registered with',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
         const SizedBox(height: 8),

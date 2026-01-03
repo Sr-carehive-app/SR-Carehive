@@ -92,6 +92,31 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
     return _otpControllers.map((c) => c.text).join();
   }
 
+  String _getOTPSentMessage() {
+    final identifier = widget.email.trim();
+    final isEmail = identifier.contains('@');
+    
+    if (isEmail) {
+      // Mask email: sh***@example.com
+      final parts = identifier.split('@');
+      if (parts.length == 2) {
+        final username = parts[0];
+        final maskedUsername = username.length > 2 
+            ? '${username.substring(0, 2)}${'*' * 5}'
+            : username;
+        return 'We\'ve sent a 6-digit OTP to\n$maskedUsername@${parts[1]}';
+      }
+      return 'We\'ve sent a 6-digit OTP to\n$identifier';
+    } else {
+      // Mask phone: 96******06
+      if (identifier.length == 10) {
+        final masked = '${identifier.substring(0, 2)}${'X' * 6}${identifier.substring(8)}';
+        return 'We\'ve sent a 6-digit OTP to\n+91 $masked';
+      }
+      return 'We\'ve sent a 6-digit OTP to\n$identifier';
+    }
+  }
+
   Future<void> _verifyOTPAndLogin() async {
     final otp = _getOTP();
     
@@ -127,12 +152,17 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       if (response.statusCode == 200 && data['success'] == true) {
         print('✅ OTP verified! Proceeding with Supabase login...');
         
+        // Get the actual email from backend response (important for phone login)
+        final actualEmail = data['email'] ?? widget.email;
+        print('📧 Email for Supabase login: $actualEmail');
+        print('🔑 Password length: ${widget.password.length}');
+        
         // OTP verified - now do actual Supabase login
         final supabase = Supabase.instance.client;
         
         try {
           final authResponse = await supabase.auth.signInWithPassword(
-            email: widget.email,
+            email: actualEmail,  // Use email returned from backend (not phone)
             password: widget.password,
           );
           
@@ -345,9 +375,21 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       if (!mounted) return;
       
       if (response.statusCode == 200 && data['success'] == true) {
+        final deliveryChannels = data['deliveryChannels'] as List?;
+        String message = '✅ New OTP sent!';
+        if (deliveryChannels != null && deliveryChannels.isNotEmpty) {
+          if (deliveryChannels.contains('SMS')) {
+            message += ' Check your phone.';
+          } else {
+            message += ' Check your email.';
+          }
+        } else {
+          message += ' Check your email/phone.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ New OTP sent! Check your email.'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: Colors.green,
           ),
         );
@@ -415,7 +457,7 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
               ),
               const SizedBox(height: 10),
               Text(
-                'We\'ve sent a 6-digit OTP to\n${widget.email}',
+                _getOTPSentMessage(),
                 style: const TextStyle(
                   fontSize: 14,
                   color: Colors.grey,

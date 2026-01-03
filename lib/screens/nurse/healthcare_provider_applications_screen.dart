@@ -318,6 +318,8 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                   ),
                   child: Column(
                     children: [
+                      _buildInfoRow(Icons.fingerprint, 'ID: ${application['id'] ?? 'N/A'}'),
+                      const SizedBox(height: 8),
                       _buildInfoRow(Icons.email_outlined, application['email'] ?? 'N/A'),
                       const SizedBox(height: 8),
                       _buildInfoRow(Icons.phone_outlined, application['mobile_number'] ?? 'N/A'),

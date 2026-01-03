@@ -437,7 +437,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
             ),
             const SizedBox(height: 4),
             Text(
-              'Enter registered email or primary/alternative phone number you have registered with',
+              'Enter registered email or primary phone (Aadhar-linked) you have registered with',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),

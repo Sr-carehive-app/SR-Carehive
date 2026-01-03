@@ -469,6 +469,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
         return;
       }
+      
+      // Validate alternative phone is different from primary phone
+      if (alternativePhoneController.text.trim() == aadharLinkedPhoneController.text.trim()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Alternative phone number must be different from primary phone number'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
     }
     
     // Validate Aadhar number if provided

@@ -472,25 +472,25 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
     let validity = '2 minutes'; // Default
     
     if (templateId === TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID) {
-      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive) registration is {#var#}. Valid for 2 minutes. Do not share. - SERECH"
+      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive Pvt. Ltd.) registration is {#var#}. Valid for 2 minutes. Do not share. - SERECH"
       validity = '2 minutes';
-      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive) registration is ${otp}. Valid for 2 minutes. Do not share. - SERECH`;
+      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive Pvt. Ltd.) registration is ${otp}. Valid for 2 minutes. Do not share. - SERECH`;
     } else if (templateId === TUBELIGHT_LOGIN_OTP_TEMPLATE_ID) {
-      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive) login is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive Pvt. Ltd.) login is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
       validity = '10 minutes';
-      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive) login is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive Pvt. Ltd.) login is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
     } else if (templateId === TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID) {
-      // Template: "Dear {#var#}, your OTP for Serechi password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive Pvt. Ltd.) password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
       validity = '10 minutes';
-      message = `Dear ${recipientName}, your OTP for Serechi password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive Pvt. Ltd.) password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
     } else if (templateId === TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID) {
-      // Template: "Dear Healthcare Provider, your OTP for Serechi (SR CareHive) login is {#var#}. Valid for 5 minutes. Do not share. - SERECH"
+      // Template: "Dear Healthcare Provider, your OTP for Serechi (SR CareHive Pvt. Ltd.) login is {#var#}. Valid for 5 minutes. Do not share. - SERECH"
       validity = '5 minutes';
-      message = `Dear Healthcare Provider, your OTP for Serechi (SR CareHive) login is ${otp}. Valid for 5 minutes. Do not share. - SERECH`;
+      message = `Dear Healthcare Provider, your OTP for Serechi (SR CareHive Pvt. Ltd.) login is ${otp}. Valid for 5 minutes. Do not share. - SERECH`;
     } else if (templateId === TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID) {
-      // Template: "Dear {#var#}, your OTP for Serechi Healthcare provider password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
+      // Template: "Dear {#var#}, your OTP for Serechi (SR CareHive Pvt. Ltd.) Healthcare provider password reset is {#var#}. Valid for 10 minutes. Do not share. - SERECH"
       validity = '10 minutes';
-      message = `Dear ${recipientName}, your OTP for Serechi Healthcare provider password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
+      message = `Dear ${recipientName}, your OTP for Serechi (SR CareHive Pvt. Ltd.) Healthcare provider password reset is ${otp}. Valid for 10 minutes. Do not share. - SERECH`;
     } else {
       console.error(`[TUBELIGHT-SMS] ❌ Unknown template ID: ${templateId}`);
       return false;
@@ -503,8 +503,8 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
     // Uses Bearer token authentication + POST request with JSON body
     
     console.log(`[TUBELIGHT-SMS] 📤 Sending ${messageContext} OTP to: ${fullPhoneNumber.slice(0,6)}***`);
-    console.log(`[TUBELIGHT-SMS] 📝 Template ID: ${templateId}`);
-    console.log(`[TUBELIGHT-SMS] 🏢 Entity ID: ${TUBELIGHT_ENTITY_ID}`);
+    console.log(`[TUBELIGHT-SMS] 📝 Template ID: ✓ SET`);
+    console.log(`[TUBELIGHT-SMS] 🏢 Entity ID: ✓ SET`);
 
     // Step 1: Get Bearer token (login if needed)
     const authToken = await getTubelightAuthToken();
@@ -527,11 +527,11 @@ async function sendOTPViaTubelight(phoneNumber, otp, recipientName = 'User', tem
     // Prepare request body as per Tubelight API v2.1 specification
     // Using format from PDF page 5-6 (Personalized/Variable-based SMS)
     const requestBody = {
-      sender: TUBELIGHT_SENDER_ID,              // "SERECH" - DLT approved sender
+      sender: TUBELIGHT_SENDER_ID,              // DLT approved sender
       mobileNo: fullPhoneNumber,                // "919876543210" format
       messageType: 'TEXT',                      // TEXT for English content
-      peId: TUBELIGHT_ENTITY_ID,                // "1001819461640092" - DLT Entity/Principal Entity ID
-      tempId: templateId,                       // "1207176682237119156" - DLT Template ID
+      peId: TUBELIGHT_ENTITY_ID,                // DLT Entity/Principal Entity ID
+      tempId: templateId,                       // DLT Template ID
       messages: message,                        // Full message matching approved template
       cust_uuid: `${Date.now()}_${cleanPhone}`, // Unique customer UUID for tracking
     };
@@ -633,12 +633,12 @@ async function initializeMailer() {
 
   try {
     console.log('[INIT] 🔧 Configuring email transport...');
-    console.log('[INIT] SMTP_HOST:', SMTP_HOST);
-    console.log('[INIT] SMTP_PORT:', SMTP_PORT);
-    console.log('[INIT] SMTP_USER:', SMTP_USER);
+    console.log('[INIT] SMTP_HOST:', SMTP_HOST ? '✓ SET (hidden)' : '✗ MISSING');
+    console.log('[INIT] SMTP_PORT:', SMTP_PORT ? '✓ SET' : '✗ MISSING');
+    console.log('[INIT] SMTP_USER:', SMTP_USER ? '✓ SET (hidden)' : '✗ MISSING');
     console.log('[INIT] SMTP_SECURE:', SMTP_SECURE);
-    console.log('[INIT] SENDER_EMAIL:', SENDER_EMAIL);
-    console.log('[INIT] SENDER_NAME:', SENDER_NAME);
+    console.log('[INIT] SENDER_EMAIL:', SENDER_EMAIL ? '✓ SET (hidden)' : '✗ MISSING');
+    console.log('[INIT] SENDER_NAME:', SENDER_NAME ? '✓ SET' : '✗ MISSING');
     
     mailer = nodemailer.createTransport({
       host: SMTP_HOST,
@@ -660,7 +660,7 @@ async function initializeMailer() {
     await mailer.verify();
     
     console.log('[INIT] ✅ Email transport verified and ready!');
-    console.log('[INIT] ✅ Emails will be sent from:', SENDER_EMAIL);
+    console.log('[INIT] ✅ Emails will be sent from: ✓ CONFIGURED');
     mailerReady = true;
     return true;
     
@@ -763,12 +763,12 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
   try {
     const from = `${SENDER_NAME} <${SENDER_EMAIL}>`;
     console.log(`[EMAIL] 📧 Attempting to send email...`);
-    console.log(`[EMAIL] To: ${to}`);
+    console.log(`[EMAIL] To: ${to ? to.replace(/(.{3}).*(@.*)/, '$1***$2') : 'unknown'}`);
     console.log(`[EMAIL] Subject: ${subject}`);
-    console.log(`[EMAIL] From: ${from}`);
-    console.log(`[EMAIL] SMTP Host: ${SMTP_HOST}`);
+    console.log(`[EMAIL] From: ✓ CONFIGURED`);
+    console.log(`[EMAIL] SMTP Host: ✓ SET`);
     console.log(`[EMAIL] SMTP Port: ${SMTP_PORT}`);
-    console.log(`[EMAIL] SMTP User: ${SMTP_USER}`);
+    console.log(`[EMAIL] SMTP User: ✓ SET (hidden)`);
     console.log(`[EMAIL] SMTP Secure: ${SMTP_SECURE}`);
     
     const info = await mailer.sendMail({ from, to, subject, html, attachments });
@@ -1102,9 +1102,13 @@ async function deleteOTP(email) {
 }
 
 // Session Storage Functions
-async function createSession() {
+async function createSession(email = null, isSuperAdmin = false) {
   const token = crypto.randomBytes(32).toString('hex');
-  const sessionData = { createdAt: Date.now() };
+  const sessionData = { 
+    createdAt: Date.now(),
+    email: email,
+    isSuperAdmin: isSuperAdmin
+  };
   const key = `session:${token}`;
   const ttl = Math.floor(SESSION_TTL_MS / 1000); // Convert to seconds
   
@@ -1286,7 +1290,7 @@ app.post('/api/nurse/login', async (req, res) => {
     
     // Check if super admin credentials (only for email)
     if (!isPhoneNumber && NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
-      const token = await createSession();
+      const token = await createSession(normalizedEmail, true);
       console.log('✅ Super Admin Login Successful');
       return res.json({ success: true, token, isSuperAdmin: true });
     }
@@ -1297,14 +1301,14 @@ app.post('/api/nurse/login', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Database not configured' });
     }
     
-    // Query by email OR phone number (mobile_number or alternative_mobile)
+    // Query by email OR phone number (mobile_number only, NOT alternative_mobile)
     let query = supabase
       .from('healthcare_providers')
       .select('*');
     
     if (isPhoneNumber) {
       const cleanPhone = identifier.replace(/[^\d]/g, '');
-      query = query.or(`mobile_number.eq.${cleanPhone},alternative_mobile.eq.${cleanPhone}`);
+      query = query.eq('mobile_number', cleanPhone);
     } else {
       query = query.eq('email', normalizedEmail);
     }
@@ -1376,7 +1380,7 @@ app.post('/api/nurse/login', async (req, res) => {
     // Status: APPROVED
     if (status === 'approved') {
       console.log('✅ Application is APPROVED - Creating session');
-      const token = await createSession();
+      const token = await createSession(provider.email, false);
       return res.json({ 
         success: true, 
         token, 
@@ -1803,6 +1807,193 @@ app.post('/api/nurse/appointments/:id/reject', async (req, res) => {
     res.json({ success: true, item: data });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================================
+// PROVIDER PROFILE ENDPOINTS
+// ============================================================================
+
+// Get provider's own profile
+// Protected: requires authentication token
+app.get('/api/provider/profile', async (req, res) => {
+  try {
+    // Check authentication
+    const h = req.headers['authorization'] || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    const session = await getSession(token);
+    if (!session || !session.email) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    // Check if super admin (they don't have profile in healthcare_providers table)
+    if (session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Super admin does not have a provider profile' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+    
+    // Fetch provider data by email from session
+    const { data: provider, error } = await supabase
+      .from('healthcare_providers')
+      .select('*')
+      .eq('email', session.email)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('❌ Error fetching provider profile:', error.message);
+      return res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+    
+    if (!provider) {
+      return res.status(404).json({ error: 'Provider profile not found' });
+    }
+    
+    // Return complete provider data
+    res.json({ provider });
+  } catch (e) {
+    console.error('❌ Error in GET /api/provider/profile:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update provider's own profile
+// Protected: requires authentication token
+// Only allows updating certain fields (contact info, fees, etc.)
+// Professional credentials cannot be changed
+app.put('/api/provider/profile', async (req, res) => {
+  try {
+    // Check authentication
+    const h = req.headers['authorization'] || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    const session = await getSession(token);
+    if (!session || !session.email) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    // Check if super admin
+    if (session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Super admin cannot update provider profile' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+    
+    // Extract updatable fields from request body
+    // Only these fields can be updated by the provider
+    const {
+      full_name,
+      mobile_number,
+      alternative_mobile,
+      email,
+      city,
+      workplace,
+      service_areas,
+      home_visit_fee,
+      teleconsultation_fee
+    } = req.body || {};
+    
+    // Validate required fields
+    if (!full_name || !mobile_number || !city || !workplace) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: full_name, mobile_number, city, workplace' 
+      });
+    }
+    
+    // Validate mobile number format
+    if (!/^\d{10}$/.test(mobile_number.replace(/[^\d]/g, ''))) {
+      return res.status(400).json({ error: 'Primary mobile number must be 10 digits' });
+    }
+    
+    // Validate alternative mobile if provided
+    if (alternative_mobile) {
+      const cleanAltMobile = alternative_mobile.replace(/[^\d]/g, '');
+      if (cleanAltMobile.length !== 10) {
+        return res.status(400).json({ error: 'Alternative mobile number must be 10 digits' });
+      }
+      // Check if same as primary
+      if (cleanAltMobile === mobile_number.replace(/[^\d]/g, '')) {
+        return res.status(400).json({ 
+          error: 'Alternative mobile number must be different from primary mobile number' 
+        });
+      }
+    }
+    
+    // Validate email format if provided
+    if (email && !/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Check if email is being changed and if new email already exists
+    if (email && email.toLowerCase().trim() !== session.email) {
+      const { data: existingProvider } = await supabase
+        .from('healthcare_providers')
+        .select('id')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+      
+      if (existingProvider) {
+        return res.status(400).json({ 
+          error: 'Email already registered with another provider' 
+        });
+      }
+    }
+    
+    // Build update payload with only allowed fields
+    const updatePayload = {
+      full_name: full_name.trim(),
+      mobile_number: mobile_number.replace(/[^\d]/g, ''),
+      alternative_mobile: alternative_mobile ? alternative_mobile.replace(/[^\d]/g, '') : null,
+      email: email ? email.toLowerCase().trim() : session.email, // Keep old email if not provided
+      city: city.trim(),
+      workplace: workplace.trim(),
+      service_areas: service_areas ? service_areas.trim() : null,
+      home_visit_fee: home_visit_fee !== undefined && home_visit_fee !== null 
+        ? parseFloat(home_visit_fee) 
+        : null,
+      teleconsultation_fee: teleconsultation_fee !== undefined && teleconsultation_fee !== null 
+        ? parseFloat(teleconsultation_fee) 
+        : null,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Update provider profile
+    const { data: updatedProvider, error } = await supabase
+      .from('healthcare_providers')
+      .update(updatePayload)
+      .eq('email', session.email)
+      .select()
+      .maybeSingle();
+    
+    if (error) {
+      console.error('❌ Error updating provider profile:', error.message);
+      return res.status(500).json({ error: 'Failed to update profile' });
+    }
+    
+    if (!updatedProvider) {
+      return res.status(404).json({ error: 'Provider profile not found' });
+    }
+    
+    console.log('✅ Provider profile updated successfully:', session.email);
+    res.json({ 
+      success: true, 
+      message: 'Profile updated successfully',
+      provider: updatedProvider
+    });
+  } catch (e) {
+    console.error('❌ Error in PUT /api/provider/profile:', e.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -5040,9 +5231,9 @@ app.get('/api/debug/status', (req, res) => {
         mailerExists: !!mailer,
         mailerReady: mailerReady,
         smtp: {
-          host: SMTP_HOST || 'not set',
+          host: SMTP_HOST ? '✓ SET' : 'not set',
           port: SMTP_PORT || 'not set',
-          user: SMTP_USER || 'not set',
+          user: SMTP_USER ? '✓ SET (hidden)' : 'not set',
           hasPassword: !!SMTP_PASS,
           secure: SMTP_SECURE
         }
@@ -5159,9 +5350,9 @@ app.get('/api/test-email', async (req, res) => {
         mailer: mailer ? 'exists' : 'null',
         mailerReady: mailerReady,
         smtp: {
-          host: SMTP_HOST || 'not set',
+          host: SMTP_HOST ? '✓ SET' : 'not set',
           port: SMTP_PORT || 'not set',
-          user: SMTP_USER || 'not set',
+          user: SMTP_USER ? '✓ SET (hidden)' : 'not set',
           hasPassword: !!SMTP_PASS
         }
       });
@@ -5179,8 +5370,7 @@ app.get('/api/test-email', async (req, res) => {
           <h2 style="color: #2260FF;">✅ Email Service Working!</h2>
           <p>This is a test email from SR CareHive backend.</p>
           <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-          <p><strong>SMTP Host:</strong> ${SMTP_HOST}</p>
-          <p><strong>SMTP User:</strong> ${SMTP_USER}</p>
+          <p><strong>SMTP Configured:</strong> ✅ YES</p>
           <p>If you received this email, your SMTP configuration is correct! 🎉</p>
         </div>
       `
@@ -5193,9 +5383,10 @@ app.get('/api/test-email', async (req, res) => {
       message: 'Test email sent successfully! Check inbox and spam folder.',
       sentTo: testEmail,
       smtp: {
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        user: SMTP_USER
+        configured: true,
+        host: SMTP_HOST ? '✓ SET' : '✗ NOT SET',
+        port: SMTP_PORT || 'not set',
+        user: SMTP_USER ? '✓ SET (hidden)' : '✗ NOT SET'
       }
     });
 
@@ -5214,7 +5405,7 @@ app.get('/api/test-email', async (req, res) => {
 // ============================================================================
 
 // Send login OTP (validates credentials without logging in)
-// NOW SUPPORTS: Email OR Phone Number (primary or alternative)
+// NOW SUPPORTS: Email OR Primary Phone Number (Aadhar-linked) ONLY
 app.post('/send-login-otp', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -5281,11 +5472,11 @@ app.post('/send-login-otp', async (req, res) => {
       patient = data;
       patientEmail = data.email;
     } else {
-      // Search by phone (check both aadhar_linked_phone and alternative_phone)
+      // Search by phone (check only aadhar_linked_phone, NOT alternative_phone)
       const { data, error: patientError } = await supabase
         .from('patients')
         .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
-        .or(`aadhar_linked_phone.eq.${normalizedIdentifier},alternative_phone.eq.${normalizedIdentifier}`)
+        .eq('aadhar_linked_phone', normalizedIdentifier)
         .maybeSingle();
       
       if (patientError || !data) {
@@ -5627,17 +5818,17 @@ async function deleteLoginOTP(email) {
 console.log('\n═══════════════════════════════════════════════════════════');
 console.log('📱 TUBELIGHT SMS CONFIGURATION STATUS');
 console.log('═══════════════════════════════════════════════════════════');
-console.log('Username:', TUBELIGHT_USERNAME ? `✅ ${TUBELIGHT_USERNAME}` : '❌ NOT SET');
+console.log('Username:', TUBELIGHT_USERNAME ? '✅ SET (hidden)' : '❌ NOT SET');
 console.log('Password:', TUBELIGHT_PASSWORD ? '✅ SET (hidden)' : '❌ NOT SET');
-console.log('Sender ID:', TUBELIGHT_SENDER_ID ? `✅ ${TUBELIGHT_SENDER_ID}` : '❌ NOT SET');
-console.log('Entity ID:', TUBELIGHT_ENTITY_ID ? `✅ ${TUBELIGHT_ENTITY_ID}` : '❌ NOT SET');
+console.log('Sender ID:', TUBELIGHT_SENDER_ID ? '✅ SET (hidden)' : '❌ NOT SET');
+console.log('Entity ID:', TUBELIGHT_ENTITY_ID ? '✅ SET (hidden)' : '❌ NOT SET');
 console.log('───────────────────────────────────────────────────────────');
 console.log('Template IDs:');
-console.log('  Registration:', TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID || '❌ NOT SET');
-console.log('  Login:', TUBELIGHT_LOGIN_OTP_TEMPLATE_ID || '❌ NOT SET');
-console.log('  Patient Reset:', TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID || '❌ NOT SET');
-console.log('  Provider Login:', TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID || '❌ NOT SET');
-console.log('  Provider Reset:', TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID || '❌ NOT SET');
+console.log('  Registration:', TUBELIGHT_REGISTRATION_OTP_TEMPLATE_ID ? '✅ SET' : '❌ NOT SET');
+console.log('  Login:', TUBELIGHT_LOGIN_OTP_TEMPLATE_ID ? '✅ SET' : '❌ NOT SET');
+console.log('  Patient Reset:', TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID ? '✅ SET' : '❌ NOT SET');
+console.log('  Provider Login:', TUBELIGHT_PROVIDER_LOGIN_OTP_TEMPLATE_ID ? '✅ SET' : '❌ NOT SET');
+console.log('  Provider Reset:', TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID ? '✅ SET' : '❌ NOT SET');
 console.log('───────────────────────────────────────────────────────────');
 console.log('SMS Status:', tubelightSMSEnabled ? '✅ ENABLED' : '❌ DISABLED');
 console.log('═══════════════════════════════════════════════════════════\n');

@@ -23,7 +23,7 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
               children: [
                 // Heading
                 const Text(
-                  'Welcome to Serechi Care Services',
+                  'Welcome to SR CareHive Services',
                   style: TextStyle(
                     fontSize: 28,
                     color: Color(0xFF2260FF),

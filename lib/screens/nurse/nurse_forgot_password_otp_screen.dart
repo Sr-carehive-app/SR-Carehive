@@ -297,9 +297,22 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
         _startResendCooldown();
         
         if (!mounted) return;
+        
+        final deliveryChannels = data['deliveryChannels'] as List?;
+        String message = '✅ New OTP sent!';
+        if (deliveryChannels != null && deliveryChannels.isNotEmpty) {
+          if (deliveryChannels.contains('SMS')) {
+            message += ' Check your email and phone.';
+          } else {
+            message += ' Check your email.';
+          }
+        } else {
+          message += ' Check your email.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ New OTP sent! Check your email.'),
+          SnackBar(
+            content: Text(message),
             backgroundColor: Colors.green,
           ),
         );
