@@ -4027,20 +4027,124 @@ app.post('/send-password-reset-otp', async (req, res) => {
     const { email, resend = false } = req.body;
     
     if (!email || !email.trim()) {
-      return res.status(400).json({ error: 'Email is required' });
+      return res.status(400).json({ error: 'Email or phone number is required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[OTP-RESET] ${resend ? 'Resend' : 'New'} request for email: ${normalizedEmail}`);
+    const identifier = email.trim();
+    
+    // Detect if input is phone number (10 digits) or email
+    const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+    const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
+    
+    console.log(`[OTP-RESET] ${resend ? 'Resend' : 'New'} request for ${isPhoneNumber ? 'phone' : 'email'}: ${normalizedIdentifier}`);
 
-    // Validate email format
-    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+    // Validate format
+    if (!isPhoneNumber) {
+      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+      if (!emailRegex.test(normalizedIdentifier)) {
+        return res.status(400).json({ error: 'Please enter a valid email address or phone number' });
+      }
     }
 
-    // Check for resend cooldown (2 minutes)
-    const existingOTP = await getPasswordResetOTP(normalizedEmail);
+    if (!supabase) {
+      console.error('[ERROR] Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+
+    console.log(`[OTP-RESET] Querying database for ${isPhoneNumber ? 'phone' : 'email'}: ${normalizedIdentifier}`);
+    
+    // Query by email or phone
+    let patient = null;
+    let patientError = null;
+    
+    if (isPhoneNumber) {
+      // Search by phone number (only aadhar_linked_phone - primary)
+      const { data: phonePatient, error: phoneError } = await supabase
+        .from('patients')
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
+        .eq('aadhar_linked_phone', normalizedIdentifier)
+        .maybeSingle();
+      
+      patient = phonePatient;
+      patientError = phoneError;
+    } else {
+      // Search by email
+      const { data: emailPatient, error: emailError } = await supabase
+        .from('patients')
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
+        .eq('email', normalizedIdentifier)
+        .maybeSingle();
+      
+      patient = emailPatient;
+      patientError = emailError;
+    }
+
+    console.log(`[OTP-RESET] Query result - Data:`, patient);
+    console.log(`[OTP-RESET] Query result - Error:`, patientError);
+
+    if (patientError || !patient) {
+      console.log(`[OTP-RESET] User not found: ${normalizedIdentifier}`);
+      console.log(`[OTP-RESET] Error details:`, patientError?.message, patientError?.code);
+      
+      // Return success to prevent enumeration
+      return res.json({ 
+        success: true, 
+        message: `If this ${isPhoneNumber ? 'phone number' : 'email'} is registered, an OTP has been sent.`,
+        canResendAfter: 120
+      });
+    }
+
+    console.log(`[OTP-RESET] User found: ${patient.name} <${patient.email}>`);
+
+    // ========================================================================
+    // CHECK IF USER IS OAUTH USER (Google Sign-In) WITHOUT PASSWORD
+    // ========================================================================
+    try {
+      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(patient.user_id);
+      
+      if (authUser && authUser.user) {
+        console.log(`[OTP-RESET] Checking auth method for user: ${patient.email}`);
+        
+        // Check if user has OAuth identity (Google)
+        const hasGoogleIdentity = authUser.user.identities && 
+                                 authUser.user.identities.some(identity => identity.provider === 'google');
+        
+        // Check if user has password set (encrypted_password will be null for OAuth-only users)
+        const hasPassword = authUser.user.encrypted_password && 
+                           authUser.user.encrypted_password.length > 0;
+        
+        console.log(`[OTP-RESET] Auth check - Google: ${hasGoogleIdentity}, Has Password: ${hasPassword}`);
+        
+        // ✅ BLOCK PASSWORD RESET FOR OAUTH-ONLY USERS
+        if (hasGoogleIdentity && !hasPassword) {
+          console.log(`[OTP-RESET] ❌ Blocking password reset for OAuth-only user: ${patient.email}`);
+          console.log(`[OTP-RESET] User should use Google Sign-In to login`);
+          
+          return res.status(400).json({
+            success: false,
+            error: 'This account uses Google Sign-In. Please tap "Continue with Google" to login.',
+            isOAuthUser: true,
+            provider: 'google',
+            helpText: 'Your account is securely linked with Google. No password needed!',
+            suggestion: 'Use the "Continue with Google" button on the login screen.'
+          });
+        }
+        
+        // ✅ ALLOW PASSWORD RESET FOR USERS WITH PASSWORD (even if they also have OAuth)
+        if (hasPassword) {
+          console.log(`[OTP-RESET] ✅ User has password set, allowing reset: ${patient.email}`);
+          // Continue with normal password reset flow below
+        }
+      }
+    } catch (authCheckError) {
+      console.error(`[OTP-RESET] ⚠️  Failed to check OAuth status:`, authCheckError.message);
+      // Continue with password reset - fail open for better UX
+      console.log(`[OTP-RESET] Continuing with password reset despite auth check failure`);
+    }
+
+    // Check for resend cooldown (2 minutes) - ALWAYS use email as key
+    const storageKey = patient.email;
+    const existingOTP = await getPasswordResetOTP(storageKey);
     if (existingOTP && existingOTP.lastSentAt) {
       const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
       const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
@@ -4050,7 +4154,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
         const minutes = Math.floor(remainingTime / 60);
         const seconds = remainingTime % 60;
         
-        console.log(`[OTP-RESET] Cooldown active for ${normalizedEmail}. Remaining: ${minutes}m ${seconds}s`);
+        console.log(`[OTP-RESET] Cooldown active for ${storageKey}. Remaining: ${minutes}m ${seconds}s`);
         
         return res.status(429).json({ 
           error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
@@ -4060,67 +4164,23 @@ app.post('/send-password-reset-otp', async (req, res) => {
       }
     }
 
-    if (!supabase) {
-      console.error('[ERROR] Supabase client not initialized');
-      return res.status(500).json({ error: 'Database connection not available' });
-    }
-
-    
-    console.log(`[OTP-RESET] Querying database for email: ${normalizedEmail}`);
-    
-    const { data: patient, error: patientError } = await supabase
-  .from('patients')
-  .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
-  .eq('email', normalizedEmail)
-  .single();
-
-    console.log(`[OTP-RESET] Query result - Data:`, patient);
-    console.log(`[OTP-RESET] Query result - Error:`, patientError);
-
-    if (patientError || !patient) {
-      console.log(`[OTP-RESET] User not found: ${normalizedEmail}`);
-      console.log(`[OTP-RESET] Error details:`, patientError?.message, patientError?.code);
-      
-      // For debugging: Try case-insensitive search
-      console.log(`[OTP-RESET] Attempting case-insensitive search...`);
-      const { data: altPatient, error: altError } = await supabase
-        .from('patients')
-        .select('email, name, user_id')
-        .ilike('email', normalizedEmail);
-      
-      console.log(`[OTP-RESET] Case-insensitive result:`, altPatient);
-      
-      if (altPatient && altPatient.length > 0) {
-        console.log(`[OTP-RESET] Found user with case-insensitive match: ${altPatient[0].email}`);
-        console.log(`[OTP-RESET] Database has: "${altPatient[0].email}"`);
-        console.log(`[OTP-RESET] Frontend sent: "${normalizedEmail}"`);
-      }
-      
-      // Return success to prevent email enumeration
-      return res.json({ 
-        success: true, 
-        message: 'If this email exists, an OTP has been sent.',
-        canResendAfter: 120 // 2 minutes
-      });
-    }
-
-  console.log(`[OTP-RESET] User found: ${patient.name} <${patient.email}>`);
-
     // Generate 6-digit OTP
     const otp = generateOTP();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
     const lastSentAt = Date.now();
 
-    // Store OTP using Redis
-    await storePasswordResetOTP(normalizedEmail, {
+    // Store OTP using Redis (use email as key for consistency)
+    await storePasswordResetOTP(storageKey, {
       otp,
       expiresAt,
       attempts: 0,
       userId: patient.user_id,
-      lastSentAt
+      lastSentAt,
+      loginType: isPhoneNumber ? 'phone' : 'email',
+      phone: isPhoneNumber ? normalizedIdentifier : null
     });
 
-    console.log(`[OTP-RESET] Generated OTP for ${normalizedEmail}: ${otp} (expires in 10 min, can resend after 2 min)`);
+    console.log(`[OTP-RESET] Generated OTP for ${patient.email}: ${otp} (expires in 10 min, can resend after 2 min)`);
 
     // Create OTP email HTML
     const otpEmailHtml = `
@@ -4209,45 +4269,61 @@ app.post('/send-password-reset-otp', async (req, res) => {
       </html>
     `;
 
-    // Send OTP email (sendEmail handles mailer initialization)
-    console.log(`[OTP-RESET] Attempting to send OTP email...`);
+    // Send OTP via SMS and/or Email
+    console.log(`[OTP-RESET] Sending OTP via ${isPhoneNumber ? 'SMS and Email' : 'Email'}...`);
     
+    let emailSuccess = false;
     let smsSuccess = false;
+    const channels = [];
+    const contactDetails = [];
+    
     try {
-      await sendEmail({
-        to: normalizedEmail,
-        subject: 'Your Password Reset OTP - SR CareHive',
-        html: otpEmailHtml
-      });
+      // Always try to send email
+      try {
+        await sendEmail({
+          to: patient.email,
+          subject: 'Your Password Reset OTP - SR CareHive',
+          html: otpEmailHtml
+        });
+        emailSuccess = true;
+        channels.push('email');
+        contactDetails.push(`📧 Email: ${patient.email}`);
+        console.log(`[OTP-RESET] ✅ Email sent to: ${patient.email}`);
+      } catch (emailError) {
+        console.error(`[OTP-RESET] ❌ Email failed:`, emailError.message);
+      }
 
-      console.log(`[SUCCESS] ✅ OTP email sent to: ${normalizedEmail}`);
-
-      // Try SMS to both phone numbers if available
-      if (patient.aadhar_linked_phone || patient.alternative_phone) {
-        const phoneToTry = patient.aadhar_linked_phone || patient.alternative_phone;
-        console.log(`[OTP-RESET] 📱 Trying SMS to: ${phoneToTry}`);
+      // Send SMS if login was via phone OR if primary phone is available
+      const phoneToUse = isPhoneNumber ? normalizedIdentifier : patient.aadhar_linked_phone;
+      
+      if (phoneToUse) {
+        console.log(`[OTP-RESET] 📱 Trying SMS to: ${phoneToUse}`);
         try {
           smsSuccess = await sendOTPViaTubelight(
-            phoneToTry, 
+            phoneToUse, 
             otp, 
             patient.name,
             TUBELIGHT_PATIENT_RESET_OTP_TEMPLATE_ID,
             'patient password reset'
           );
+          if (smsSuccess) {
+            channels.push('SMS');
+            const maskedPhone = phoneToUse.slice(0, 2) + 'X'.repeat(6) + phoneToUse.slice(-2);
+            contactDetails.push(`📱 Phone: +91${maskedPhone}`);
+            console.log(`[OTP-RESET] ✅ SMS sent to: ${phoneToUse}`);
+          }
         } catch (smsError) {
           console.error(`[OTP-RESET] ❌ SMS error:`, smsError.message);
         }
       }
 
-      const channels = ['email'];
-      if (smsSuccess) channels.push('SMS');
-
-      // Build detailed message with actual contact info
-      const contactDetails = [];
-      contactDetails.push(`📧 Email: ${normalizedEmail}`);
-      if (smsSuccess && (patient.aadhar_linked_phone || patient.alternative_phone)) {
-        const phoneUsed = patient.aadhar_linked_phone || patient.alternative_phone;
-        contactDetails.push(`📱 Phone: +91${phoneUsed}`);
+      // Check if at least one delivery method succeeded
+      if (!emailSuccess && !smsSuccess) {
+        // Clear OTP if both failed
+        await deletePasswordResetOTP(storageKey);
+        return res.status(500).json({ 
+          error: 'Failed to send OTP. Please try again later.'
+        });
       }
 
       res.json({ 
@@ -4258,15 +4334,15 @@ app.post('/send-password-reset-otp', async (req, res) => {
         expiresIn: 600,
         canResendAfter: 120,
         deliveryChannels: channels,
-        sentTo: contactDetails  // ✅ Added contact details
+        sentTo: contactDetails,
+        email: patient.email  // Always return email for navigation
       });
-    } catch (emailError) {
-      console.error('[ERROR] Failed to send OTP email:', emailError.message);
-      console.error('[ERROR] Full error:', emailError);
+    } catch (error) {
+      console.error('[ERROR] send-password-reset-otp:', error.message);
       
       return res.status(500).json({ 
-        error: 'Failed to send OTP email. Please try again later.',
-        details: emailError.message
+        error: 'Failed to send OTP. Please try again later.',
+        details: error.message
       });
     }
 
@@ -4462,36 +4538,22 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     const { email, resend = false } = req.body;
     
     if (!email || !email.trim()) {
-      return res.status(400).json({ error: 'Email is required' });
+      return res.status(400).json({ error: 'Email or phone number is required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[PROVIDER-RESET] ${resend ? 'Resend' : 'New'} request for email: ${normalizedEmail}`);
+    const identifier = email.trim();
+    
+    // Detect if input is phone number (10 digits) or email
+    const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+    const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
+    
+    console.log(`[PROVIDER-RESET] ${resend ? 'Resend' : 'New'} request for ${isPhoneNumber ? 'phone' : 'email'}: ${normalizedIdentifier}`);
 
-    // Validate email format
-    const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-    if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    // Check for resend cooldown (2 minutes)
-    const existingOTP = await getProviderPasswordResetOTP(normalizedEmail);
-    if (existingOTP && existingOTP.lastSentAt) {
-      const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
-      const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
-      
-      if (timeSinceLastSend < cooldownPeriod) {
-        const remainingTime = Math.ceil((cooldownPeriod - timeSinceLastSend) / 1000); // seconds
-        const minutes = Math.floor(remainingTime / 60);
-        const seconds = remainingTime % 60;
-        
-        console.log(`[PROVIDER-RESET] Cooldown active for ${normalizedEmail}. Remaining: ${minutes}m ${seconds}s`);
-        
-        return res.status(429).json({ 
-          error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
-          remainingSeconds: remainingTime,
-          canResendAt: existingOTP.lastSentAt + cooldownPeriod
-        });
+    // Validate format
+    if (!isPhoneNumber) {
+      const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
+      if (!emailRegex.test(normalizedIdentifier)) {
+        return res.status(400).json({ error: 'Please enter a valid email address or phone number' });
       }
     }
 
@@ -4506,91 +4568,74 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     console.log(`[PROVIDER-RESET] 🔍 Database check starting...`);
-    console.log(`[PROVIDER-RESET] 📧 Looking for email: "${normalizedEmail}"`);
+    console.log(`[PROVIDER-RESET] 📧 Looking for ${isPhoneNumber ? 'phone' : 'email'}: "${normalizedIdentifier}"`);
     console.log(`[PROVIDER-RESET] 🔑 Using ${usingServiceRole ? 'SERVICE ROLE' : 'ANON'} key`);
     console.log(`[PROVIDER-RESET] 🗄️  Supabase initialized: ${supabaseInitialized}`);
 
-    // Query database with MULTIPLE approaches to find the issue
+    // Query database by phone or email
     let provider = null;
     let providerId = null;
     
     try {
-      console.log(`[PROVIDER-RESET] 🔍 Attempt 1: Direct query with explicit schema...`);
+      console.log(`[PROVIDER-RESET] 🔍 Querying healthcare_providers table...`);
       
-      // Query with 'full_name' and phone fields from healthcare_providers table
-      const { data: attempt1Data, error: attempt1Error, count: attempt1Count } = await supabase
-        .from('healthcare_providers')
-        .select('id, email, full_name, mobile_number, alternative_mobile', { count: 'exact' })
-        .ilike('email', normalizedEmail);
+      let queryResult;
+      if (isPhoneNumber) {
+        // Search by phone number (only mobile_number - primary)
+        queryResult = await supabase
+          .from('healthcare_providers')
+          .select('id, email, full_name, mobile_number, alternative_mobile, password_hash')
+          .eq('mobile_number', normalizedIdentifier)
+          .maybeSingle();
+      } else {
+        // Search by email
+        queryResult = await supabase
+          .from('healthcare_providers')
+          .select('id, email, full_name, mobile_number, alternative_mobile, password_hash')
+          .ilike('email', normalizedIdentifier)
+          .maybeSingle();
+      }
 
-      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Count:`, attempt1Count);
-      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Data:`, JSON.stringify(attempt1Data, null, 2));
-      console.log(`[PROVIDER-RESET] 📊 Attempt 1 - Error:`, attempt1Error);
+      const { data: providerData, error: providerError } = queryResult;
+      console.log(`[PROVIDER-RESET] 📊 healthcare_providers query - Data:`, providerData);
+      console.log(`[PROVIDER-RESET] 📊 healthcare_providers query - Error:`, providerError);
 
-      if (attempt1Data && attempt1Data.length > 0) {
-        provider = attempt1Data[0];
-        providerId = attempt1Data[0].id;
-        console.log(`[PROVIDER-RESET] ✅ FOUND via Attempt 1!`);
+      if (providerData) {
+        provider = providerData;
+        providerId = providerData.id;
+        console.log(`[PROVIDER-RESET] ✅ FOUND in healthcare_providers!`);
         console.log(`[PROVIDER-RESET] 👤 Provider: ${provider.email}`);
       }
 
-      // If not found, try selecting ALL and filtering (debugging)
+      // If not found in healthcare_providers, check nurses table
       if (!provider) {
-        console.log(`[PROVIDER-RESET] 🔍 Attempt 2: Fetching ALL providers to check if table is accessible...`);
+        console.log(`[PROVIDER-RESET] 🔍 Checking nurses table...`);
         
-        const { data: allProviders, error: allError, count: totalCount } = await supabase
-          .from('healthcare_providers')
-          .select('id, email, full_name', { count: 'exact' })
-          .limit(10);
-
-        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - Total count in table:`, totalCount);
-        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - First 10 emails:`, allProviders ? allProviders.map(p => p.email).join(', ') : 'none');
-        console.log(`[PROVIDER-RESET] 📊 Attempt 2 - Error:`, allError);
-
-        // Manual search in fetched data
-        if (allProviders && allProviders.length > 0) {
-          const found = allProviders.find(p => p.email.toLowerCase() === normalizedEmail);
-          if (found) {
-            provider = found;
-            providerId = found.id;
-            console.log(`[PROVIDER-RESET] ✅ FOUND via manual search in fetched data!`);
-            console.log(`[PROVIDER-RESET] ⚠️  Query filter not working but manual search worked!`);
-            console.log(`[PROVIDER-RESET] 👤 Provider email: ${provider.email}`);
-          } else {
-            console.log(`[PROVIDER-RESET] ❌ Not in first 10 records, checking if email matches any...`);
-            const emailList = allProviders.map(p => `"${p.email}"`).join(', ');
-            console.log(`[PROVIDER-RESET] 📝 Available emails: ${emailList}`);
-            console.log(`[PROVIDER-RESET] 📝 Searching for: "${normalizedEmail}"`);
-          }
+        let nurseQuery;
+        if (isPhoneNumber) {
+          // Search by phone number (only mobile_number - primary)
+          nurseQuery = await supabase
+            .from('nurses')
+            .select('id, email, full_name')
+            .eq('mobile_number', normalizedIdentifier)
+            .maybeSingle();
+        } else {
+          nurseQuery = await supabase
+            .from('nurses')
+            .select('id, email, full_name')
+            .ilike('email', normalizedIdentifier)
+            .maybeSingle();
         }
-      }
 
-      // If still not found, check nurses table
-      if (!provider) {
-        console.log(`[PROVIDER-RESET] 🔍 Attempt 3: Checking nurses table...`);
-        
-        const { data: nurseData, error: nurseError } = await supabase
-          .from('nurses')
-          .select('id, email, full_name')
-          .ilike('email', normalizedEmail);
+        const { data: nurseData, error: nurseError } = nurseQuery;
+        console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, nurseData);
+        console.log(`[PROVIDER-RESET] 📊 Nurses Query Error:`, nurseError);
 
-        console.log(`[PROVIDER-RESET] 📊 Nurses Query Data:`, JSON.stringify(nurseData, null, 2));
-        console.log(`[PROVIDER-RESET] 📊 Nurses Query Error:`, nurseError ? JSON.stringify(nurseError, null, 2) : 'None');
-
-        if (nurseData && nurseData.length > 0) {
-          provider = nurseData[0];
-          providerId = nurseData[0].id;
+        if (nurseData) {
+          provider = nurseData;
+          providerId = nurseData.id;
           console.log(`[PROVIDER-RESET] ✅ FOUND in nurses table!`);
           console.log(`[PROVIDER-RESET] 👤 Nurse: ${provider.email}`);
-        } else {
-          console.log(`[PROVIDER-RESET] ❌ NOT found in nurses table either`);
-          
-          // Fetch all nurses too for comparison
-          const { data: allNurses } = await supabase
-            .from('nurses')
-            .select('email')
-            .limit(5);
-          console.log(`[PROVIDER-RESET] 📝 Sample nurse emails:`, allNurses ? allNurses.map(n => n.email).join(', ') : 'none');
         }
       }
 
@@ -4603,15 +4648,15 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
 
     // Final check - if provider not found in BOTH tables
     if (!provider) {
-      console.log(`[PROVIDER-RESET] ❌ FINAL RESULT: Email NOT FOUND in any table`);
-      console.log(`[PROVIDER-RESET] 📧 Searched for: "${normalizedEmail}"`);
+      console.log(`[PROVIDER-RESET] ❌ FINAL RESULT: ${isPhoneNumber ? 'Phone' : 'Email'} NOT FOUND in any table`);
+      console.log(`[PROVIDER-RESET] 📧 Searched for: "${normalizedIdentifier}"`);
       console.log(`[PROVIDER-RESET] 🗄️  Tables checked: healthcare_providers, nurses`);
       
       return res.status(404).json({ 
         success: false, 
-        error: 'This email is not registered as a healthcare provider. Please check your email address or contact support.',
+        error: `This ${isPhoneNumber ? 'phone number' : 'email'} is not registered as a healthcare provider. Please check your ${isPhoneNumber ? 'phone number' : 'email address'} or contact support.`,
         notFound: true,
-        searchedEmail: normalizedEmail
+        searchedIdentifier: normalizedIdentifier
       });
     }
 
@@ -4622,6 +4667,28 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       full_name: provider.full_name
     });
 
+    // Check for resend cooldown (2 minutes) - ALWAYS use email as key
+    const storageKey = provider.email;
+    const existingOTP = await getProviderPasswordResetOTP(storageKey);
+    if (existingOTP && existingOTP.lastSentAt) {
+      const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
+      const cooldownPeriod = 2 * 60 * 1000; // 2 minutes in milliseconds
+      
+      if (timeSinceLastSend < cooldownPeriod) {
+        const remainingTime = Math.ceil((cooldownPeriod - timeSinceLastSend) / 1000); // seconds
+        const minutes = Math.floor(remainingTime / 60);
+        const seconds = remainingTime % 60;
+        
+        console.log(`[PROVIDER-RESET] Cooldown active for ${storageKey}. Remaining: ${minutes}m ${seconds}s`);
+        
+        return res.status(429).json({ 
+          error: `Please wait ${minutes > 0 ? minutes + ' minute(s) ' : ''}${seconds} second(s) before requesting a new OTP.`,
+          remainingSeconds: remainingTime,
+          canResendAt: existingOTP.lastSentAt + cooldownPeriod
+        });
+      }
+    }
+
     // Provider found - generate and send OTP
     console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.email}`);
 
@@ -4630,21 +4697,23 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
     const lastSentAt = Date.now();
 
-    // Store OTP using Redis
-    await storeProviderPasswordResetOTP(normalizedEmail, {
+    // Store OTP using Redis (use email as key for consistency)
+    await storeProviderPasswordResetOTP(storageKey, {
       otp,
       expiresAt,
       attempts: 0,
       providerId: providerId,
       lastSentAt,
-      verified: false
+      verified: false,
+      loginType: isPhoneNumber ? 'phone' : 'email',
+      phone: isPhoneNumber ? normalizedIdentifier : null
     });
 
     console.log(`[PROVIDER-RESET] 📧 OTP Generated: ${otp}`);
     console.log(`[PROVIDER-RESET] ⏰ Expires at: ${new Date(expiresAt).toLocaleString()}`);
-    console.log(`[PROVIDER-RESET] 💾 OTP stored in memory for: ${normalizedEmail}`);
+    console.log(`[PROVIDER-RESET] 💾 OTP stored in memory for: ${storageKey}`);
 
-    console.log(`[PROVIDER-RESET] 📧 Preparing to send OTP email to: ${normalizedEmail}`);
+    console.log(`[PROVIDER-RESET] 📧 Preparing to send OTP to provider...`);
 
     const otpEmailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -4700,43 +4769,61 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     `;
 
     try {
-      console.log(`[PROVIDER-RESET] 📤 Sending OTP email via sendEmail function...`);
+      console.log(`[PROVIDER-RESET] 📤 Sending OTP via ${isPhoneNumber ? 'SMS and Email' : 'Email'}...`);
       
-      const emailResult = await sendEmail({
-        to: normalizedEmail,
-        subject: 'Password Reset OTP - SR CareHive Healthcare Provider',
-        html: otpEmailHtml
-      });
-
-      console.log(`[PROVIDER-RESET] ✅ OTP email sent to ${normalizedEmail}`);
-
-      // Try SMS to both phone numbers if available
+      let emailSuccess = false;
       let smsSuccess = false;
-      if (provider.mobile_number || provider.alternative_mobile) {
-        const phoneToTry = provider.mobile_number || provider.alternative_mobile;
-        console.log(`[PROVIDER-RESET] 📱 Trying SMS to: ${phoneToTry}`);
+      const channels = [];
+      const contactDetails = [];
+
+      // Always try to send email
+      try {
+        await sendEmail({
+          to: provider.email,
+          subject: 'Password Reset OTP - SR CareHive Healthcare Provider',
+          html: otpEmailHtml
+        });
+        emailSuccess = true;
+        channels.push('email');
+        contactDetails.push(`📧 Email: ${provider.email}`);
+        console.log(`[PROVIDER-RESET] ✅ Email sent to ${provider.email}`);
+      } catch (emailError) {
+        console.error(`[PROVIDER-RESET] ❌ Email failed:`, emailError.message);
+      }
+
+      // Send SMS if login was via phone OR if primary phone is available
+      const phoneToUse = isPhoneNumber ? normalizedIdentifier : provider.mobile_number;
+      
+      if (phoneToUse) {
+        console.log(`[PROVIDER-RESET] 📱 Trying SMS to: ${phoneToUse}`);
         try {
           smsSuccess = await sendOTPViaTubelight(
-            phoneToTry, 
+            phoneToUse, 
             otp, 
             provider.full_name,
             TUBELIGHT_PROVIDER_RESET_OTP_TEMPLATE_ID,
             'provider password reset'
           );
+          if (smsSuccess) {
+            channels.push('SMS');
+            const maskedPhone = phoneToUse.slice(0, 2) + 'X'.repeat(6) + phoneToUse.slice(-2);
+            contactDetails.push(`📱 Phone: +91${maskedPhone}`);
+            console.log(`[PROVIDER-RESET] ✅ SMS sent to: ${phoneToUse}`);
+          }
         } catch (smsError) {
           console.error(`[PROVIDER-RESET] ❌ SMS error:`, smsError.message);
         }
       }
 
-      const channels = ['email'];
-      if (smsSuccess) channels.push('SMS');
-
-      // Build detailed message with actual contact info
-      const contactDetails = [];
-      contactDetails.push(`📧 Email: ${normalizedEmail}`);
-      if (smsSuccess && (provider.mobile_number || provider.alternative_mobile)) {
-        const phoneUsed = provider.mobile_number || provider.alternative_mobile;
-        contactDetails.push(`📱 Phone: +91${phoneUsed}`);
+      // Check if at least one delivery method succeeded
+      if (!emailSuccess && !smsSuccess) {
+        // Clear OTP if both failed
+        await deleteProviderPasswordResetOTP(storageKey);
+        return res.status(500).json({ 
+          success: false,
+          error: 'Failed to send OTP. Please try again later.',
+          serviceError: true
+        });
       }
 
       res.json({ 
@@ -4745,12 +4832,13 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
         expiresIn: 600,
         canResendAfter: 120,
         deliveryChannels: channels,
-        sentTo: contactDetails  // ✅ Added contact details
+        sentTo: contactDetails,
+        email: provider.email  // Always return email for navigation
       });
 
     } catch (emailError) {
       // Remove OTP from memory if email failed
-      await deleteProviderPasswordResetOTP(normalizedEmail);
+      await deleteProviderPasswordResetOTP(storageKey);
       
       console.error('[PROVIDER-RESET] ❌ Failed to send OTP email:', emailError.message);
       console.error('[PROVIDER-RESET] ❌ Error details:', emailError);

@@ -214,8 +214,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
   }
 
   Future<void> _handleForgotPassword() async {
-    final emailController = TextEditingController();
-    final phoneController = TextEditingController();
+    final emailOrPhoneController = TextEditingController();
     bool isLoading = false;
     
     await showDialog(
@@ -229,8 +228,8 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: emailOrPhoneController,
+                  keyboardType: TextInputType.text,
                   autocorrect: false,
                   enableSuggestions: false,
                   enableInteractiveSelection: true,
@@ -241,19 +240,6 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number (Optional)',
-                    hintText: '10-digit mobile number',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                    border: OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                ),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(10),
@@ -262,7 +248,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
-                    ' We\'ll send a 6-digit OTP to your email.\n If phone is provided and registered, SMS will also be sent.',
+                    'We\'ll send a 6-digit OTP to your email.\nIf phone is provided and registered, SMS will also be sent.',
                     style: TextStyle(fontSize: 11, color: Colors.black87),
                   ),
                 ),
@@ -278,66 +264,37 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
               onPressed: isLoading
                   ? null
                   : () async {
-                      final email = emailController.text.trim();
-                      final phone = phoneController.text.trim();
+                      final input = emailOrPhoneController.text.trim();
                       
-                      if (email.isEmpty) {
+                      if (input.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Please enter your email address or phone number')),
                         );
                         return;
                       }
                       
-                      // Basic email validation
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please enter a valid email address')),
-                        );
-                        return;
-                      }
-
-                      // Validate phone if provided
-                      if (phone.isNotEmpty && phone.length != 10) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Phone number must be 10 digits')),
-                        );
-                        return;
-                      }
+                      // Detect if input is a phone number (10 digits)
+                      final isPhoneNumber = RegExp(r'^\d{10}$').hasMatch(input);
                       
-                      // Check if user exists before sending OTP to avoid showing success for non-existing users
-                      try {
-                        final supabase = Supabase.instance.client;
-                        final existing = await supabase
-                            .from('patients')
-                            .select('email')
-                            .eq('email', email)
-                            .maybeSingle();
-                        if (existing == null) {
-                          if (!mounted) return;
+                      // Validate format
+                      if (!isPhoneNumber) {
+                        // Validate email format
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(input)) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('User does not exist. Please register to continue.'),
-                              duration: Duration(seconds: 4),
-                            ),
+                            const SnackBar(content: Text('Please enter a valid email address or 10-digit phone number')),
                           );
-                          return; // Stop here; do not call OTP API
+                          return;
                         }
-                      } catch (_) {
-                        // If the pre-check fails for any reason, continue with cautious behavior below
                       }
                       
                       setState(() => isLoading = true);
                       
                       try {
-                        print('📧 Sending OTP to: $email');
-                        if (phone.isNotEmpty) print('📱 Phone provided: $phone');
+                        print('📧 Sending OTP to: $input');
                         print('🌐 Using API: ${ApiConfig.sendPasswordResetOtp}');
                         
                         // Call backend to send OTP via email (and SMS if phone provided)
-                        final requestBody = {'email': email};
-                        if (phone.isNotEmpty) {
-                          requestBody['phone'] = phone;
-                        }
+                        final requestBody = {'email': input};  // Backend now handles both
                         
                         final response = await http.post(
                           Uri.parse(ApiConfig.sendPasswordResetOtp),
@@ -350,15 +307,100 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
 
                         if (!mounted) return;
                         
+                        // ✅ CHECK IF USER IS OAUTH USER (Google Sign-In)
+                        if (response.statusCode == 400 && data['isOAuthUser'] == true) {
+                          print('🔵 OAuth user detected: ${data['provider']}');
+                          
+                          Navigator.pop(context); // Close forgot password dialog
+                          
+                          // Show OAuth user dialog
+                          showDialog(
+                            context: context,
+                            builder: (dialogContext) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              title: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue, size: 28),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Google Account Detected',
+                                      style: TextStyle(fontSize: 18),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${data['error'] ?? 'This account uses Google Sign-In.'}',
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.blue.shade200),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.lightbulb_outline, color: Colors.blue, size: 20),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            data['suggestion'] ?? 'Tap "Continue with Google" button below to login instantly without password.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blue.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (data['helpText'] != null) ...[
+                                    SizedBox(height: 12),
+                                    Text(
+                                      data['helpText'],
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                  child: Text('Got it', style: TextStyle(fontSize: 16)),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          return;
+                        }
+                        
                         if (response.statusCode == 200 && data['success'] == true) {
                           print('✅ OTP sent successfully!');
                           
                           final deliveryChannels = data['deliveryChannels'] as List?;
-                          String successMsg = '✅ OTP sent to $email!';
+                          final emailForNavigation = data['email'] ?? input;  // Use email from response or original input
+                          
+                          String successMsg = '✅ OTP sent!';
                           if (deliveryChannels != null && deliveryChannels.contains('SMS')) {
-                            successMsg += ' Check your email and phone.';
+                            successMsg = '✅ OTP sent to your email and phone. Check your messages.';
                           } else {
-                            successMsg += ' Check your email and spam folder.';
+                            successMsg = '✅ OTP sent to your email. Check your inbox and spam folder.';
                           }
                           
                           Navigator.pop(context); // Close dialog
@@ -367,7 +409,7 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ForgotPasswordOTPScreen(email: email),
+                              builder: (_) => ForgotPasswordOTPScreen(email: emailForNavigation),
                             ),
                           );
                           

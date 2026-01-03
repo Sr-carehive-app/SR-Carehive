@@ -221,8 +221,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   }
 
   Future<void> _handleForgotPassword() async {
-    final forgotPasswordEmailController = TextEditingController();
-    final forgotPasswordPhoneController = TextEditingController();
+    final forgotPasswordController = TextEditingController();
     
     // Dialog returns a map with email and message, or null
     final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
@@ -249,18 +248,18 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Enter your registered email and phone number (optional) to receive a password reset OTP.',
+                  'Enter your registered email or phone number to receive a password reset OTP.',
                   style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                 ),
                 SizedBox(height: 20),
                 TextField(
-                  controller: forgotPasswordEmailController,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: forgotPasswordController,
+                  keyboardType: TextInputType.text,
                   autocorrect: false,
                   enableSuggestions: false,
                   decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    hintText: 'your.email@example.com',
+                    labelText: 'Email Address or Phone Number',
+                    hintText: 'your.email@example.com or 10-digit phone',
                     prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF2260FF)),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -273,29 +272,6 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
                     ),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: forgotPasswordPhoneController,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number (Optional)',
-                    hintText: '10-digit mobile number',
-                    prefixIcon: Icon(Icons.phone_outlined, color: Color(0xFF2260FF)),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Color(0xFF2260FF), width: 2),
-                    ),
-                    counterText: '',
                   ),
                 ),
                 SizedBox(height: 12),
@@ -313,7 +289,7 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'OTP will be sent to your email\n If phone is registered, SMS will also be sent',
+                          'OTP will be sent to your email.\nIf phone is registered, SMS will also be sent.',
                           style: TextStyle(fontSize: 11, color: Colors.blue[900]),
                         ),
                       ),
@@ -337,10 +313,9 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
               onPressed: isDialogLoading
                   ? null
                   : () async {
-                      final email = forgotPasswordEmailController.text.trim();
-                      final phone = forgotPasswordPhoneController.text.trim();
+                      final input = forgotPasswordController.text.trim();
                       
-                      if (email.isEmpty) {
+                      if (input.isEmpty) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(dialogContext).showSnackBar(
                           const SnackBar(
@@ -351,51 +326,47 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         return;
                       }
 
-                      // Validate email format
-                      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                      if (!emailRegex.hasMatch(email)) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter a valid email address'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        return;
-                      }
-
-                      // Validate phone if provided
-                      if (phone.isNotEmpty && phone.length != 10) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Phone number must be 10 digits'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        return;
+                      // Detect if input is a phone number (10 digits)
+                      final isPhoneNumber = RegExp(r'^\d{10}$').hasMatch(input);
+                      
+                      // Validate format
+                      if (!isPhoneNumber) {
+                        // Validate email format
+                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                        if (!emailRegex.hasMatch(input)) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a valid email address or 10-digit phone number'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                          return;
+                        }
                       }
 
                       setDialogState(() => isDialogLoading = true);
 
                       try {
-                        print('📧 Sending password reset OTP to: $email');
-                        if (phone.isNotEmpty) print('📱 Phone provided: $phone');
+                        print('📧 Sending password reset OTP to: $input');
                         
                         final result = await NurseApiService.sendPasswordResetOtp(
-                          email: email,
-                          phone: phone.isNotEmpty ? phone : null,
+                          email: input,
+                          phone: null,  // Backend now handles phone detection automatically
                         );
                         final success = result['success'] ?? false;
                         final message = result['message'] ?? 'OTP sent successfully';
                         final notFound = result['notFound'] ?? false;
                         final serviceError = result['serviceError'] ?? false;
+                        final isOAuthUser = result['isOAuthUser'] ?? false;
                         final deliveryChannels = result['deliveryChannels'] as List?;
+                        final emailForNavigation = result['email'] ?? input;  // Use email from response
                         
                         print('🔍 Backend response success: $success');
                         print('🔍 Backend response message: "$message"');
                         print('🔍 Backend response notFound: $notFound');
                         print('🔍 Backend response serviceError: $serviceError');
+                        print('🔍 Backend response isOAuthUser: $isOAuthUser');
                         if (deliveryChannels != null) {
                           print('🔍 Delivery channels: $deliveryChannels');
                         }
@@ -404,15 +375,98 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         
                         if (!mounted) return;
                         
+                        // ✅ CHECK IF USER IS OAUTH USER (Google Sign-In)
+                        if (!success && isOAuthUser) {
+                          print('🔵 OAuth provider detected: ${result['provider']}');
+                          
+                          Navigator.pop(dialogContext); // Close forgot password dialog
+                          
+                          // Show OAuth user dialog
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              title: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue, size: 28),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Google Account Detected',
+                                      style: TextStyle(fontSize: 18),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    message,
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.blue.shade200),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.lightbulb_outline, color: Colors.blue, size: 20),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            result['suggestion'] ?? 'Use "Continue with Google" button to login instantly without password.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blue.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (result['helpText'] != null) ...[
+                                    SizedBox(height: 12),
+                                    Text(
+                                      result['helpText'],
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: Text('Got it', style: TextStyle(fontSize: 16)),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          return;
+                        }
+                        
                         // Check success flag - if false, show specific error
                         if (!success) {
                           String errorMsg = message;
                           
                           // Customize error message based on error type
                           if (notFound) {
-                            errorMsg = '❌ This email is not registered as a healthcare provider.\n\nPlease check your email or contact support.';
+                            errorMsg = '❌ This email/phone is not registered as a healthcare provider.\n\nPlease check your information or contact support.';
                           } else if (serviceError) {
-                            errorMsg = '❌ Email service is temporarily unavailable.\n\nPlease try again in a few minutes.';
+                            errorMsg = '❌ Service is temporarily unavailable.\n\nPlease try again in a few minutes.';
                           }
                           
                           if (!mounted) return;
@@ -430,11 +484,13 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                         String successMessage = message;
                         if (deliveryChannels != null && deliveryChannels.contains('SMS')) {
                           successMessage = 'OTP sent to your email and phone!';
+                        } else {
+                          successMessage = 'OTP sent to your email!';
                         }
                         
                         // Success! Return email and message to show OUTSIDE dialog
                         Navigator.pop(dialogContext, {
-                          'email': email,
+                          'email': emailForNavigation,
                           'message': successMessage,
                         });
                       } catch (e) {

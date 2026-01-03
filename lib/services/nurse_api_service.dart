@@ -312,6 +312,30 @@ class NurseApiService {
           'success': data['success'] ?? true,
           'message': data['message'] ?? 'OTP sent successfully',
           'deliveryChannels': data['deliveryChannels'],
+          'email': data['email'],
+        };
+      }
+      
+      // Handle 400 - OAuth user or other bad request
+      if (resp.statusCode == 400) {
+        final data = resp.body.isNotEmpty ? jsonDecode(resp.body) : {};
+        
+        // Check if it's an OAuth user
+        if (data['isOAuthUser'] == true) {
+          return {
+            'success': false,
+            'message': data['error'] ?? 'This account uses Google Sign-In.',
+            'isOAuthUser': true,
+            'provider': data['provider'],
+            'helpText': data['helpText'],
+            'suggestion': data['suggestion'],
+          };
+        }
+        
+        // Other 400 errors
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Invalid request',
         };
       }
       
