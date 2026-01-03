@@ -84,19 +84,50 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
 
   Future<void> _saveSettings() async {
     setState(() => isSaving = true);
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-    final updateData = {
-      ...fieldMap.map((k, v) => MapEntry(v, settings[k])),
-      'updated_at': DateTime.now().toIso8601String(),
-    };
-    await supabase.from('notification_settings').update(updateData).eq('user_id', user.id);
-    setState(() => isSaving = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved successfully!'), backgroundColor: Colors.green),
-      );
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Session expired. Please login again.'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+      final updateData = {
+        ...fieldMap.map((k, v) => MapEntry(v, settings[k])),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      await supabase.from('notification_settings').update(updateData).eq('user_id', user.id);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Settings saved successfully!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      print('Error saving notification settings: $e');
+      if (mounted) {
+        String userMessage = 'Failed to save settings. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userMessage), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => isSaving = false);
+      }
     }
   }
 

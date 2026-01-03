@@ -46,12 +46,24 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
       
       print('✅ Applications updated');
     } catch (e, stackTrace) {
-      print('❌ Error loading applications');
+      print('❌ Error loading applications: $e');
       setState(() => _isLoading = false);
       if (mounted) {
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to load applications. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading applications: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
           ),
         );

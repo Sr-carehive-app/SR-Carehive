@@ -188,9 +188,16 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
               ),
             );
           } else {
+            String userMessage = 'Failed to send OTP. Please try again.';
+            final errorStr = e.toString().toLowerCase();
+            if (errorStr.contains('network') || errorStr.contains('connection')) {
+              userMessage = 'Network error. Please check your internet connection.';
+            } else if (errorStr.contains('invalid') && errorStr.contains('email')) {
+              userMessage = 'Invalid email or phone number format.';
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to send OTP: ${e.toString()}'),
+                content: Text(userMessage),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 3),
               ),
@@ -736,8 +743,19 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
           ),
         );
       } else {
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to resend OTP. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to resend OTP: $e')),
+          SnackBar(
+            content: Text(userMessage),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

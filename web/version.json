@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 27,
-  "timestamp": "2026-01-03T13:10:00Z",
-  "lastUpdated": "Build 27: Fixed profile update - removed legacy phone field causing database error"
+  "buildNumber": 28,
+  "timestamp": "2026-01-03T16:30:00Z",
+  "lastUpdated": "Build 28: Comprehensive error handling - converted 50+ technical database errors to user-friendly messages across patient and provider systems"
 }

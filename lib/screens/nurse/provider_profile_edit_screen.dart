@@ -124,8 +124,26 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       }
     } catch (e) {
       if (mounted) {
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to update profile. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('duplicate') && errorStr.contains('mobile')) {
+          userMessage = 'This mobile number is already registered with another provider.';
+        } else if (errorStr.contains('duplicate') && errorStr.contains('email')) {
+          userMessage = 'This email is already registered with another provider.';
+        } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        } else if (errorStr.contains('invalid') && errorStr.contains('mobile')) {
+          userMessage = 'Invalid mobile number format. Please enter a valid 10-digit number.';
+        } else if (errorStr.contains('invalid') && errorStr.contains('email')) {
+          userMessage = 'Invalid email format. Please enter a valid email address.';
+        }
+        
         Fluttertoast.showToast(
-          msg: "Failed to update profile: ${e.toString()}",
+          msg: userMessage,
           toastLength: Toast.LENGTH_LONG,
           backgroundColor: Colors.red,
           textColor: Colors.white,

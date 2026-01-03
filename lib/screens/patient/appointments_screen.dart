@@ -842,9 +842,23 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         print('[ERROR] Cancellation failed: $e');
         print('[ERROR] Appointment ID: $appointmentId');
         
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to cancel appointment. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        } else if (errorStr.contains('not found') || errorStr.contains('404')) {
+          userMessage = 'Appointment not found. It may have been already cancelled.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to cancel appointment: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -1784,10 +1798,23 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           );
         }
       } catch (e) {
+        print('Error submitting feedback: $e');
         if (mounted) {
+          // Convert technical errors to user-friendly messages
+          String userMessage = 'Failed to submit feedback. Please try again.';
+          final errorStr = e.toString().toLowerCase();
+          
+          if (errorStr.contains('network') || errorStr.contains('connection')) {
+            userMessage = 'Network error. Please check your internet connection.';
+          } else if (errorStr.contains('timeout')) {
+            userMessage = 'Request timed out. Please try again.';
+          } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+            userMessage = 'Session expired. Please login again.';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('❌ Failed to submit feedback: $e'),
+              content: Text(userMessage),
               backgroundColor: Colors.red,
             ),
           );

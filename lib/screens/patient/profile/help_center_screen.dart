@@ -117,17 +117,38 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> with SingleTickerPr
         subjectController.clear();
         messageController.clear();
       } else {
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to send message. Please try again.';
+        final responseBody = response.body.toLowerCase();
+        
+        if (responseBody.contains('network') || responseBody.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (responseBody.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (responseBody.contains('unauthorized') || responseBody.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        } else if (responseBody.contains('validation') || responseBody.contains('invalid')) {
+          userMessage = 'Please fill all required fields correctly.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error sending message: ${response.body}'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
           ),
         );
       }
     } catch (e) {
+      String userMessage = 'Failed to send message. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorStr.contains('timeout')) {
+        userMessage = 'Request timed out. Please try again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error sending message: $e'),
+          content: Text(userMessage),
           backgroundColor: Colors.red,
         ),
       );

@@ -494,10 +494,28 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to submit application. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('duplicate') && errorStr.contains('mobile')) {
+          userMessage = 'This mobile number is already registered. Please use a different number or login if you already have an account.';
+        } else if (errorStr.contains('duplicate') && errorStr.contains('email')) {
+          userMessage = 'This email is already registered. Please use a different email or login if you already have an account.';
+        } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('constraint') || errorStr.contains('check')) {
+          userMessage = 'Invalid data. Please verify all fields and try again.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error submitting application: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

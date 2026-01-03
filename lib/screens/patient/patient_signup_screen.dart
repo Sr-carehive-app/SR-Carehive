@@ -822,25 +822,65 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               );
             }
           } else {
-            // Other auth errors
+            // Other auth errors - convert to user-friendly message
             if (mounted) {
+              String userMessage = 'Registration failed. Please try again.';
+              final errorMsg = e.message.toLowerCase();
+              if (errorMsg.contains('already registered') || errorMsg.contains('already exists')) {
+                userMessage = 'This email or phone number is already registered. Please use the login option.';
+              } else if (errorMsg.contains('invalid email')) {
+                userMessage = 'Invalid email format. Please enter a valid email address.';
+              } else if (errorMsg.contains('weak password')) {
+                userMessage = 'Password is too weak. Please use a stronger password.';
+              } else if (errorMsg.contains('network')) {
+                userMessage = 'Network error. Please check your internet connection.';
+              }
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('❌ Registration error: ${e.message}')),
+                SnackBar(
+                  content: Text(userMessage),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                ),
               );
             }
           }
         } catch (e) {
           if (mounted) {
+            // Convert database errors to user-friendly messages
+            String userMessage = 'Registration failed. Please try again.';
+            final errorStr = e.toString().toLowerCase();
+            if (errorStr.contains('duplicate') && errorStr.contains('phone')) {
+              userMessage = 'This phone number is already registered. Please login or use a different number.';
+            } else if (errorStr.contains('duplicate') && errorStr.contains('email')) {
+              userMessage = 'This email is already registered. Please login or use a different email.';
+            } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+              userMessage = 'Network error. Please check your internet connection.';
+            }
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('❌ Error: ${e.toString()}')),
+              SnackBar(
+                content: Text(userMessage),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
             );
           }
         }
       }
     } catch (e) {
       if (mounted) {
+        String userMessage = 'Something went wrong. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unexpected error: ${e.toString()}')),
+          SnackBar(
+            content: Text(userMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } finally {
@@ -874,14 +914,28 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     } on AuthException catch (e) {
       print('❌ AuthException during Google sign-in: ${e.message}');
       if (!mounted) return;
+      String userMessage = 'Google sign-in failed. Please try again.';
+      final errorMsg = e.message.toLowerCase();
+      if (errorMsg.contains('popup') || errorMsg.contains('closed')) {
+        userMessage = 'Sign-in was cancelled. Please try again.';
+      } else if (errorMsg.contains('network')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(userMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       print('❌ Error during Google sign-in: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        const SnackBar(
+          content: Text('An error occurred during sign-in. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

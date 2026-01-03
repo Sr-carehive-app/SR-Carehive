@@ -207,7 +207,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Error picking image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: $e')),
+          const SnackBar(
+            content: Text('Failed to select image. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -252,7 +255,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Error removing avatar: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error removing avatar: $e')),
+        const SnackBar(
+          content: Text('Failed to remove profile photo. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() { isUploadingImage = false; });
@@ -493,9 +499,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       Navigator.of(context).pop();
       
       print('Error deleting account: $e');
+      String userMessage = 'Failed to delete account. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+        userMessage = 'Session expired. Please login again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error deleting account: $e'),
+          content: Text(userMessage),
           backgroundColor: Colors.red,
         ),
       );
@@ -616,8 +629,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Error during logout: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error logging out: $e'),
+          const SnackBar(
+            content: Text('Logout failed. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );

@@ -216,9 +216,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
     } catch (e) {
       print('Error: ${e.toString()}');
+      String userMessage = 'Failed to reset password. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorStr.contains('timeout')) {
+        userMessage = 'Request timed out. Please try again.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Error: ${e.toString()}'),
+          content: Text(userMessage),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 5),
         ),

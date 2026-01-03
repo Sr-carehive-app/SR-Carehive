@@ -83,7 +83,14 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Submit failed: $e')));
+      String userMessage = 'Failed to submit query. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorStr.contains('timeout')) {
+        userMessage = 'Request timed out. Please try again.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

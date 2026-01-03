@@ -183,14 +183,32 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
     } on AuthException catch (e) {
       print('❌ AuthException during Google sign-in: ${e.message}');
       if (!mounted) return;
+      
+      String userMessage = 'Google sign-in failed. Please try again.';
+      final errorMsg = e.message.toLowerCase();
+      if (errorMsg.contains('popup') || errorMsg.contains('closed')) {
+        userMessage = 'Sign-in was cancelled. Please try again.';
+      } else if (errorMsg.contains('network')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorMsg.contains('account') && errorMsg.contains('exist')) {
+        userMessage = 'No account found. Please sign up first.';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(userMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
       );
     } catch (e) {
       print('❌ Error during Google sign-in: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        const SnackBar(
+          content: Text('An error occurred. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

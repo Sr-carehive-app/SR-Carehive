@@ -117,7 +117,15 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
           available: available,
         );
         if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approved'))); _load();
-      } catch (e) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Approve failed: $e'))); }
+      } catch (e) {
+        if (!mounted) return;
+        String userMessage = 'Failed to approve appointment. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -136,7 +144,15 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     );
     if (ok == true) {
       if (reasonCtrl.text.trim().isEmpty) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a reason to reject.'))); return; }
-      try { await NurseApiService.rejectAppointment(id: (appt['id'] ?? '').toString(), reason: reasonCtrl.text.trim()); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected'))); _load(); } catch (e) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reject failed: $e'))); }
+      try { await NurseApiService.rejectAppointment(id: (appt['id'] ?? '').toString(), reason: reasonCtrl.text.trim()); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected'))); _load(); } catch (e) {
+        if (!mounted) return;
+        String userMessage = 'Failed to reject appointment. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -377,11 +393,25 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         
         _load(); // Reload appointments
       } catch (e) {
+        print('Error setting appointment amount: $e');
         if (!mounted) return;
         Navigator.pop(context); // Close loading if still open
+        
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to set amount. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to set amount: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -611,11 +641,25 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         
         _load(); // Reload appointments
       } catch (e) {
+        print('Error submitting consultation: $e');
         if (!mounted) return;
         Navigator.pop(context); // Close loading if still open
+        
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to submit consultation. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to submit: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -785,11 +829,27 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
       _load(); // Reload appointments
     } catch (e) {
+      print('Error removing appointment: $e');
       if (!mounted) return;
       Navigator.pop(context); // Close loading if still open
+      
+      // Convert technical errors to user-friendly messages
+      String userMessage = 'Failed to remove appointment. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorStr.contains('timeout')) {
+        userMessage = 'Request timed out. Please try again.';
+      } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+        userMessage = 'Session expired. Please login again.';
+      } else if (errorStr.contains('not found') || errorStr.contains('404')) {
+        userMessage = 'Appointment not found. It may have been already removed.';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to remove appointment: $e'),
+          content: Text(userMessage),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 3),
         ),

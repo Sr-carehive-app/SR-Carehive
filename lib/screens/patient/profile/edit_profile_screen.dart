@@ -298,7 +298,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       print('Error picking image: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error selecting image: $e')),
+        const SnackBar(
+          content: Text('Failed to select image. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -340,7 +343,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       print('Error removing avatar: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error removing avatar: $e')),
+        const SnackBar(
+          content: Text('Failed to remove profile photo. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() { isUploadingImage = false; });
@@ -417,8 +423,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       print('Error uploading image: $e');
+      String userMessage = 'Failed to upload photo. Please try again.';
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection.';
+      } else if (errorStr.contains('size') || errorStr.contains('large')) {
+        userMessage = 'Image is too large. Please select a smaller image.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error uploading image: $e')),
+        SnackBar(
+          content: Text(userMessage),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() {
@@ -551,8 +567,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      
+      // Convert technical database errors to user-friendly messages
+      String userMessage = 'Failed to update profile. Please try again.';
+      
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('duplicate') && errorStr.contains('aadhar_linked_phone')) {
+        userMessage = 'This phone number is already registered with another account. Please use a different number.';
+      } else if (errorStr.contains('duplicate') && errorStr.contains('email')) {
+        userMessage = 'This email is already registered with another account. Please use a different email.';
+      } else if (errorStr.contains('duplicate') && errorStr.contains('aadhar_number')) {
+        userMessage = 'This Aadhar number is already registered. Please verify your details.';
+      } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+        userMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (errorStr.contains('timeout')) {
+        userMessage = 'Request timed out. Please try again.';
+      } else if (errorStr.contains('invalid') && errorStr.contains('phone')) {
+        userMessage = 'Invalid phone number format. Please enter a valid 10-digit number.';
+      } else if (errorStr.contains('invalid') && errorStr.contains('email')) {
+        userMessage = 'Invalid email format. Please enter a valid email address.';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating profile: $e')),
+        SnackBar(
+          content: Text(userMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
       );
     } finally {
       setState(() {

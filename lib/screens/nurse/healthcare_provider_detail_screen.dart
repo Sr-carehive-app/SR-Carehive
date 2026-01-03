@@ -91,11 +91,26 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         );
       }
     } catch (e) {
+      print('Error updating provider application: $e');
       setState(() => _isProcessing = false);
       if (mounted) {
+        // Convert technical errors to user-friendly messages
+        String userMessage = 'Failed to update application. Please try again.';
+        final errorStr = e.toString().toLowerCase();
+        
+        if (errorStr.contains('network') || errorStr.contains('connection')) {
+          userMessage = 'Network error. Please check your internet connection.';
+        } else if (errorStr.contains('timeout')) {
+          userMessage = 'Request timed out. Please try again.';
+        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
+          userMessage = 'Session expired. Please login again.';
+        } else if (errorStr.contains('not found') || errorStr.contains('404')) {
+          userMessage = 'Application not found or already processed.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating application: $e'),
+            content: Text(userMessage),
             backgroundColor: Colors.red,
           ),
         );
