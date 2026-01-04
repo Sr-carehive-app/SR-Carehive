@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 40,
-  "timestamp": "2026-01-05T16:45:00Z",
-  "lastUpdated": "Build 40: Fixed UUID generation for phone-only user registration"
+  "buildNumber": 41,
+  "timestamp": "2026-01-05T17:15:00Z",
+  "lastUpdated": "Build 41: Fixed FK constraint - user_id NULL for phone-only users"
 }

@@ -3161,8 +3161,8 @@ app.post('/api/register-phone-only', async (req, res) => {
       });
     }
 
-    // Generate proper UUID for phone-only users (database requires UUID type)
-    const userId = crypto.randomUUID();
+    // For phone-only users: user_id = NULL (no auth.users entry since no email)
+    // Phone number itself is the unique identifier
     const fullName = `${firstName} ${middleName || ''} ${lastName}`.trim();
 
     // Hash password for phone-only users
@@ -3172,7 +3172,7 @@ app.post('/api/register-phone-only', async (req, res) => {
     const { data: patient, error: insertError } = await supabase
       .from('patients')
       .insert({
-        user_id: userId,
+        user_id: null, // ✅ NULL for phone-only users (no FK violation)
         salutation: salutation || null,
         name: fullName,
         first_name: firstName,
@@ -3211,7 +3211,7 @@ app.post('/api/register-phone-only', async (req, res) => {
     res.json({
       success: true,
       message: 'Phone-only registration successful',
-      userId: userId
+      patientId: patient.id // Use patient table's auto-generated ID
     });
 
   } catch (e) {
