@@ -5961,10 +5961,10 @@ app.post('/send-login-otp', async (req, res) => {
     let patientEmail = null;
     
     if (isEmail) {
-      // Search by email
+      // Search by email - MUST include password_hash for phone-registered users who added email later
       const { data, error: patientError } = await supabase
         .from('patients')
-        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone, password_hash')
         .eq('email', normalizedIdentifier)
         .maybeSingle();
       
@@ -5990,42 +5990,56 @@ app.post('/send-login-otp', async (req, res) => {
       patientEmail = data.email; // May be null for phone-only users
     }
 
-    // Step 2: Verify password (Supabase Auth for email users, password_hash for phone-only users)
+    // Step 2: Verify password
+    // Priority: 1. Supabase Auth (OAuth/Google users), 2. password_hash (phone-registered users)
     try {
-      if (isEmail || (isPhone && patientEmail)) {
-        // Email user OR phone user with linked email - use Supabase Auth
-        const authEmail = isEmail ? normalizedIdentifier : patientEmail;
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: authEmail,
-          password: password.trim()
-        });
+      let isPasswordValid = false;
+      let authMethod = null;
+      
+      // Check if user has Supabase Auth account (OAuth users or email-registered users)
+      if (patient.user_id) {
+        try {
+          const authEmail = isEmail ? normalizedIdentifier : patientEmail;
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: authEmail,
+            password: password.trim()
+          });
 
-        // Sign out immediately - we only validated credentials
-        if (authData?.session) {
-          await supabase.auth.signOut();
-        }
+          // Sign out immediately - we only validated credentials
+          if (authData?.session) {
+            await supabase.auth.signOut();
+          }
 
-        if (authError) {
-          console.log(`[LOGIN-OTP] Invalid password for email-based account`);
-          return res.status(401).json({ error: 'Invalid email/phone or password' });
+          if (!authError && authData) {
+            console.log(`[LOGIN-OTP] ✅ Password verified via Supabase Auth`);
+            isPasswordValid = true;
+            authMethod = 'supabase_auth';
+          }
+        } catch (authErr) {
+          console.log(`[LOGIN-OTP] Supabase Auth verification failed, will try password_hash`);
         }
-      } else if (isPhone && !patientEmail) {
-        // Phone-only user - check password_hash field
-        if (!patient.password_hash) {
-          console.log(`[LOGIN-OTP] Phone-only account missing password_hash`);
-          return res.status(500).json({ error: 'Account configuration error. Please contact support.' });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password.trim(), patient.password_hash);
-        if (!isPasswordValid) {
-          console.log(`[LOGIN-OTP] Invalid password for phone-only account`);
-          return res.status(401).json({ error: 'Invalid email/phone or password' });
-        }
-      } else {
-        // Should not reach here
-        console.error(`[LOGIN-OTP] Unexpected authentication path`);
-        return res.status(500).json({ error: 'Authentication error' });
       }
+      
+      // Fallback to password_hash if:
+      // 1. No user_id (phone-registered user), OR
+      // 2. Supabase Auth failed (phone-registered user who added email later)
+      if (!isPasswordValid && patient.password_hash) {
+        console.log(`[LOGIN-OTP] Trying password_hash verification...`);
+        isPasswordValid = await bcrypt.compare(password.trim(), patient.password_hash);
+        if (isPasswordValid) {
+          console.log(`[LOGIN-OTP] ✅ Password verified via password_hash (phone-registered user)`);
+          authMethod = 'password_hash';
+        }
+      }
+      
+      // Final check - if both methods failed
+      if (!isPasswordValid) {
+        console.log(`[LOGIN-OTP] ❌ Password verification failed (both methods tried)`);
+        return res.status(401).json({ error: 'Invalid email/phone or password' });
+      }
+      
+      console.log(`[LOGIN-OTP] ✅ Authentication successful via: ${authMethod}`);
+      
     } catch (authErr) {
       console.error(`[LOGIN-OTP] Auth error:`, authErr.message);
       return res.status(401).json({ error: 'Invalid email/phone or password' });

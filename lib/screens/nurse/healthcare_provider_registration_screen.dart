@@ -303,19 +303,21 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
     setState(() => _isLoading = true);
 
     try {
-      // Check if email already exists
-      final emailExists = await _checkEmailExists(emailController.text.trim());
-      if (emailExists) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This email is already registered. Please use a different email.'),
-              backgroundColor: Colors.red,
-            ),
-          );
+      // Check if email already exists (only if email is provided)
+      if (emailController.text.trim().isNotEmpty) {
+        final emailExists = await _checkEmailExists(emailController.text.trim());
+        if (emailExists) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This email is already registered. Please use a different email.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
         }
-        return;
       }
 
       // Check if mobile already exists
@@ -417,7 +419,9 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
         'alternative_mobile': alternativeMobileController.text.trim().isEmpty 
             ? null 
             : alternativeMobileController.text.trim(),
-        'email': emailController.text.trim(),
+        'email': emailController.text.trim().isEmpty 
+            ? null 
+            : emailController.text.trim(),
         'city': cityController.text.trim(),
         'password_hash': hashedPassword, // Hashed password using SHA-256
         'professional_role': selectedProfessionalRole,
@@ -467,16 +471,20 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
         // Don't block the flow if email fails
       }
 
-      // Send confirmation email to user
-      try {
-        await ProviderEmailService.sendUserConfirmationEmail(
-          userEmail: emailController.text.trim(),
-          userName: fullNameController.text.trim(),
-        );
-        print('✅ Confirmation email sent to user successfully');
-      } catch (emailError) {
-        print('⚠️ Failed to send user confirmation email: $emailError');
-        // Don't block the flow if email fails
+      // Send confirmation email to user (only if email is provided)
+      if (emailController.text.trim().isNotEmpty) {
+        try {
+          await ProviderEmailService.sendUserConfirmationEmail(
+            userEmail: emailController.text.trim(),
+            userName: fullNameController.text.trim(),
+          );
+          print('✅ Confirmation email sent to user successfully');
+        } catch (emailError) {
+          print('⚠️ Failed to send user confirmation email: $emailError');
+          // Don't block the flow if email fails
+        }
+      } else {
+        print('ℹ️ No email provided - skipping user confirmation email');
       }
 
       if (mounted) {

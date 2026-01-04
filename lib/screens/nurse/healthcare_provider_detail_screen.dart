@@ -53,32 +53,34 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           .update(updateData)
           .eq('id', widget.applicationData['id']);
 
-      // Send email notification
+      // Send email notification (only if email is provided)
       final userEmail = widget.applicationData['email'] ?? '';
       final userName = widget.applicationData['full_name'] ?? 'User';
       final professionalRole = widget.applicationData['professional_role'] ?? 'Healthcare Provider';
 
-      if (status == 'approved') {
-        // Send approval email (non-blocking)
-        ProviderEmailService.sendApprovalEmail(
-          userEmail: userEmail,
-          userName: userName,
-          professionalRole: professionalRole,
-          adminComments: comments,
-        ).catchError((e) {
-          // Silent error - don't expose email details
-          return false;
-        });
-      } else if (status == 'rejected') {
-        // Send rejection email (non-blocking)
-        ProviderEmailService.sendRejectionEmail(
-          userEmail: userEmail,
-          userName: userName,
-          rejectionReason: reason,
-        ).catchError((e) {
-          // Silent error - don't expose email details
-          return false;
-        });
+      if (userEmail.isNotEmpty) {
+        if (status == 'approved') {
+          // Send approval email (non-blocking)
+          ProviderEmailService.sendApprovalEmail(
+            userEmail: userEmail,
+            userName: userName,
+            professionalRole: professionalRole,
+            adminComments: comments,
+          ).catchError((e) {
+            // Silent error - don't expose email details
+            return false;
+          });
+        } else if (status == 'rejected') {
+          // Send rejection email (non-blocking)
+          ProviderEmailService.sendRejectionEmail(
+            userEmail: userEmail,
+            userName: userName,
+            rejectionReason: reason,
+          ).catchError((e) {
+            // Silent error - don't expose email details
+            return false;
+          });
+        }
       }
 
       if (mounted) {
@@ -370,7 +372,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
               _buildDetailRow('Full Name', widget.applicationData['full_name']),
               _buildDetailRow('Mobile Number', widget.applicationData['mobile_number']),
               _buildDetailRow('Alternative Mobile', widget.applicationData['alternative_mobile'] ?? 'Not provided'),
-              _buildDetailRow('Email', widget.applicationData['email']),
+              _buildDetailRow('Email', widget.applicationData['email'] ?? 'Not provided'),
               _buildDetailRow('City', widget.applicationData['city']),
               _buildDetailRow('Professional Role', widget.applicationData['professional_role']),
               if (widget.applicationData['other_profession'] != null)
