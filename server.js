@@ -1096,12 +1096,13 @@ async function deleteOTP(email) {
 }
 
 // Session Storage Functions
-async function createSession(email = null, isSuperAdmin = false) {
+async function createSession(email = null, isSuperAdmin = false, providerId = null) {
   const token = crypto.randomBytes(32).toString('hex');
   const sessionData = { 
     createdAt: Date.now(),
     email: email,
-    isSuperAdmin: isSuperAdmin
+    isSuperAdmin: isSuperAdmin,
+    providerId: providerId  // Store provider ID for phone-only users
   };
   const key = `session:${token}`;
   const ttl = Math.floor(SESSION_TTL_MS / 1000); // Convert to seconds
@@ -1371,7 +1372,7 @@ app.post('/api/nurse/login', async (req, res) => {
     // Status: APPROVED
     if (status === 'approved') {
       console.log('✅ Application is APPROVED - Creating session');
-      const token = await createSession(provider.email, false);
+      const token = await createSession(provider.email, false, provider.id);
       return res.json({ 
         success: true, 
         token, 
@@ -1987,6 +1988,140 @@ app.put('/api/provider/profile', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ============================================================================
+// PROVIDER PASSWORD CHANGE ENDPOINT
+// Handles both email-based and phone-only providers
+// ============================================================================
+app.post('/api/provider/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Check authentication
+    const h = req.headers['authorization'] || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    const session = await getSession(token);
+    if (!session) {
+      return res.status(401).json({ error: 'Unauthorized. Please login again.' });
+    }
+    
+    // Super admin cannot change provider password
+    if (session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Super admin cannot change password via this endpoint' });
+    }
+
+    // Provider ID is required (from session)
+    if (!session.providerId && !session.email) {
+      return res.status(401).json({ error: 'Invalid session. Please login again.' });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        error: 'Current password and new password are required' 
+      });
+    }
+
+    // Validate new password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ 
+        error: 'New password must be different from current password' 
+      });
+    }
+
+    console.log(`[PROVIDER-PASSWORD-CHANGE] Request for providerId: ${session.providerId || 'legacy-email-session'}`);
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Get provider record - query by providerId (for phone-only) or email (legacy)
+    let query = supabase
+      .from('healthcare_providers')
+      .select('id, email, mobile_number, password_hash');
+    
+    if (session.providerId) {
+      // New session format - query by provider ID
+      query = query.eq('id', session.providerId);
+    } else {
+      // Legacy session format - query by email
+      query = query.eq('email', session.email);
+    }
+    
+    const { data: provider, error: providerError } = await query.maybeSingle();
+
+    if (providerError || !provider) {
+      console.error('[PROVIDER-PASSWORD-CHANGE] Provider not found:', providerError?.message);
+      return res.status(404).json({ error: 'Provider not found' });
+    }
+
+    // Verify current password - support both bcrypt and SHA-256
+    const storedPasswordHash = provider.password_hash;
+    
+    if (!storedPasswordHash) {
+      console.error('[PROVIDER-PASSWORD-CHANGE] No password hash stored');
+      return res.status(500).json({ error: 'Account configuration error. Please contact support.' });
+    }
+
+    let isCurrentPasswordValid = false;
+    
+    // Try bcrypt first (for newly reset passwords)
+    if (storedPasswordHash.startsWith('$2a$') || storedPasswordHash.startsWith('$2b$')) {
+      console.log('[PROVIDER-PASSWORD-CHANGE] Using bcrypt verification');
+      isCurrentPasswordValid = await bcrypt.compare(currentPassword, storedPasswordHash);
+    } else {
+      // Legacy SHA-256 verification (for existing registrations)
+      console.log('[PROVIDER-PASSWORD-CHANGE] Using legacy SHA-256 verification');
+      const hashedInputPassword = crypto.createHash('sha256').update(currentPassword).digest('hex');
+      isCurrentPasswordValid = (storedPasswordHash === hashedInputPassword);
+    }
+    
+    if (!isCurrentPasswordValid) {
+      console.log('[PROVIDER-PASSWORD-CHANGE] Current password incorrect');
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password with bcrypt (upgrade from SHA-256 if needed)
+    console.log('[PROVIDER-PASSWORD-CHANGE] Hashing new password with bcrypt');
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    const { error: updateError } = await supabase
+      .from('healthcare_providers')
+      .update({ password_hash: newPasswordHash })
+      .eq('id', provider.id);
+
+    if (updateError) {
+      console.error('[PROVIDER-PASSWORD-CHANGE] Failed to update password:', updateError.message);
+      return res.status(500).json({ 
+        error: 'Failed to change password', 
+        details: updateError.message 
+      });
+    }
+
+    console.log('[PROVIDER-PASSWORD-CHANGE] ✅ Password changed successfully');
+    return res.json({ 
+      success: true, 
+      message: 'Password changed successfully!' 
+    });
+
+  } catch (e) {
+    console.error('[PROVIDER-PASSWORD-CHANGE] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Failed to change password', 
+      details: e.message 
+    });
+  }
+});
+
 
 // Create Razorpay order
 // Input: { amount, currency?, receipt?, notes?, appointment? }
@@ -2961,6 +3096,127 @@ app.post('/api/verify-signup-otp', async (req, res) => {
     console.error('[SIGNUP-OTP-VERIFY] ❌ Error:', e);
     res.status(500).json({ 
       error: 'Failed to verify OTP', 
+      details: e.message 
+    });
+  }
+});
+
+// ============================================
+// PHONE-ONLY SIGNUP ENDPOINT (No Email)
+// Uses service_role to bypass RLS
+// ============================================
+app.post('/api/register-phone-only', async (req, res) => {
+  try {
+    const {
+      salutation,
+      firstName,
+      middleName,
+      lastName,
+      countryCode,
+      aadharLinkedPhone,
+      alternativePhone,
+      age,
+      aadharNumber,
+      houseNumber,
+      town,
+      city,
+      state,
+      pincode,
+      gender,
+      password
+    } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !aadharLinkedPhone || !age || !city || !state || !pincode || !gender || !password) {
+      return res.status(400).json({ 
+        error: 'Missing required fields' 
+      });
+    }
+
+    // Clean phone numbers
+    const cleanedPhone = aadharLinkedPhone.replace(/^\+91/, '').replace(/[^\d]/g, '');
+    const cleanedAltPhone = alternativePhone ? alternativePhone.replace(/^\+91/, '').replace(/[^\d]/g, '') : null;
+
+    // Verify OTP was validated for this phone
+    const identifier = cleanedPhone || cleanedAltPhone;
+    const otpData = await getSignupOTP(identifier);
+    
+    if (!otpData || !otpData.verified) {
+      return res.status(400).json({ 
+        error: 'Phone number not verified. Please verify OTP first.' 
+      });
+    }
+
+    // Check for duplicate phone
+    const { data: existingPhone } = await supabase
+      .from('patients')
+      .select('aadhar_linked_phone')
+      .eq('aadhar_linked_phone', cleanedPhone)
+      .maybeSingle();
+
+    if (existingPhone) {
+      return res.status(409).json({ 
+        error: 'This phone number is already registered.' 
+      });
+    }
+
+    // Generate custom user_id for phone-only users (no Supabase auth)
+    const userId = `${Date.now()}_${cleanedPhone}`;
+    const fullName = `${firstName} ${middleName || ''} ${lastName}`.trim();
+
+    // Hash password for phone-only users
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert patient record using service_role (bypasses RLS)
+    const { data: patient, error: insertError } = await supabase
+      .from('patients')
+      .insert({
+        user_id: userId,
+        salutation: salutation || null,
+        name: fullName,
+        first_name: firstName,
+        middle_name: middleName || null,
+        last_name: lastName,
+        email: null, // Phone-only signup
+        country_code: countryCode || '+91',
+        aadhar_linked_phone: cleanedPhone,
+        alternative_phone: cleanedAltPhone,
+        age: parseInt(age),
+        aadhar_number: aadharNumber || null,
+        house_number: houseNumber || null,
+        town: town || null,
+        city: city,
+        state: state,
+        pincode: pincode,
+        gender: gender,
+        phone_verified: true,
+        otp_verified_at: new Date().toISOString(),
+        password_hash: passwordHash // Store password for phone-only users
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[PHONE-SIGNUP] Database error:', insertError);
+      return res.status(500).json({ 
+        error: 'Failed to create account',
+        details: insertError.message 
+      });
+    }
+
+    // Clean up OTP
+    await deleteSignupOTP(identifier);
+
+    res.json({
+      success: true,
+      message: 'Phone-only registration successful',
+      userId: userId
+    });
+
+  } catch (e) {
+    console.error('[PHONE-SIGNUP] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Registration failed', 
       details: e.message 
     });
   }
@@ -4430,21 +4686,58 @@ app.post('/reset-password-with-otp', async (req, res) => {
       return res.status(500).json({ error: 'Database connection not available' });
     }
 
-    // Update password in Supabase Auth
-    const { data, error } = await supabase.auth.admin.updateUserById(
-      otpData.userId,
-      { password: newPassword }
-    );
+    // Check if this is a phone-only user or email user
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('email, password_hash, user_id')
+      .eq('user_id', otpData.userId)
+      .maybeSingle();
 
-    if (error) {
-      console.error('[ERROR] Failed to update password:', error.message);
-      return res.status(500).json({ 
-        error: 'Failed to update password', 
-        details: error.message 
-      });
+    if (patientError || !patient) {
+      console.error('[ERROR] Patient not found:', patientError?.message);
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    console.log(`[SUCCESS] ✅ Password reset successfully for: ${normalizedEmail}`);
+    // Determine if phone-only user (no email, has password_hash)
+    const isPhoneOnlyUser = !patient.email && patient.password_hash;
+
+    if (isPhoneOnlyUser) {
+      // Phone-only user - update password_hash field
+      console.log(`[PASSWORD-RESET] Phone-only user detected, updating password_hash`);
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ password_hash: passwordHash })
+        .eq('user_id', otpData.userId);
+
+      if (updateError) {
+        console.error('[ERROR] Failed to update password_hash:', updateError.message);
+        return res.status(500).json({ 
+          error: 'Failed to update password', 
+          details: updateError.message 
+        });
+      }
+
+      console.log(`[SUCCESS] ✅ Password_hash updated for phone-only user`);
+    } else {
+      // Email user - update Supabase Auth password
+      console.log(`[PASSWORD-RESET] Email user detected, updating Supabase auth`);
+      const { data, error } = await supabase.auth.admin.updateUserById(
+        otpData.userId,
+        { password: newPassword }
+      );
+
+      if (error) {
+        console.error('[ERROR] Failed to update Supabase auth password:', error.message);
+        return res.status(500).json({ 
+          error: 'Failed to update password', 
+          details: error.message 
+        });
+      }
+
+      console.log(`[SUCCESS] ✅ Supabase auth password updated for email user`);
+    }
 
     // Delete OTP after successful password reset
     await deletePasswordResetOTP(normalizedEmail);
@@ -4481,6 +4774,138 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+// ============================================================================
+// PASSWORD CHANGE ENDPOINT (Dashboard)
+// Handles both email users (Supabase auth) and phone-only users (password_hash)
+// ============================================================================
+app.post('/api/change-password', async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        error: 'User ID, current password, and new password are required' 
+      });
+    }
+
+    // Validate new password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ 
+        error: 'New password must be different from current password' 
+      });
+    }
+
+    console.log(`[PASSWORD-CHANGE] Request for userId: ${userId}`);
+
+    // Get patient record
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('email, password_hash, user_id, aadhar_linked_phone')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (patientError || !patient) {
+      console.error('[PASSWORD-CHANGE] Patient not found:', patientError?.message);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Determine user type
+    const isPhoneOnlyUser = !patient.email && patient.password_hash;
+
+    if (isPhoneOnlyUser) {
+      // ========== PHONE-ONLY USER ==========
+      console.log(`[PASSWORD-CHANGE] Phone-only user detected`);
+      
+      // Verify current password against password_hash
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, patient.password_hash);
+      
+      if (!isCurrentPasswordValid) {
+        console.log(`[PASSWORD-CHANGE] Current password incorrect for phone-only user`);
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      // Hash new password and update
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ password_hash: newPasswordHash })
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.error('[PASSWORD-CHANGE] Failed to update password_hash:', updateError.message);
+        return res.status(500).json({ 
+          error: 'Failed to change password', 
+          details: updateError.message 
+        });
+      }
+
+      console.log(`[PASSWORD-CHANGE] ✅ Password changed successfully for phone-only user`);
+      return res.json({ 
+        success: true, 
+        message: 'Password changed successfully!' 
+      });
+
+    } else {
+      // ========== EMAIL USER (Supabase Auth) ==========
+      console.log(`[PASSWORD-CHANGE] Email user detected: ${patient.email}`);
+      
+      // Verify current password via Supabase auth
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: patient.email,
+          password: currentPassword
+        });
+
+        // Sign out immediately after verification
+        if (authData?.session) {
+          await supabase.auth.signOut();
+        }
+
+        if (authError) {
+          console.log(`[PASSWORD-CHANGE] Current password incorrect for email user`);
+          return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+      } catch (authErr) {
+        console.error(`[PASSWORD-CHANGE] Auth error:`, authErr.message);
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      // Update password in Supabase Auth
+      const { data, error } = await supabase.auth.admin.updateUserById(
+        userId,
+        { password: newPassword }
+      );
+
+      if (error) {
+        console.error('[PASSWORD-CHANGE] Failed to update Supabase auth password:', error.message);
+        return res.status(500).json({ 
+          error: 'Failed to change password', 
+          details: error.message 
+        });
+      }
+
+      console.log(`[PASSWORD-CHANGE] ✅ Password changed successfully for email user`);
+      return res.json({ 
+        success: true, 
+        message: 'Password changed successfully!' 
+      });
+    }
+
+  } catch (e) {
+    console.error('[PASSWORD-CHANGE] ❌ Error:', e);
+    res.status(500).json({ 
+      error: 'Failed to change password', 
+      details: e.message 
+    });
+  }
+});
 
 // ============================================================================
 // HEALTHCARE PROVIDER (NURSE) PASSWORD RESET SYSTEM
@@ -5509,7 +5934,7 @@ app.post('/send-login-otp', async (req, res) => {
       // Search by phone (check only aadhar_linked_phone, NOT alternative_phone)
       const { data, error: patientError } = await supabase
         .from('patients')
-        .select('email, name, user_id, aadhar_linked_phone, alternative_phone')
+        .select('email, name, user_id, aadhar_linked_phone, alternative_phone, password_hash')
         .eq('aadhar_linked_phone', normalizedIdentifier)
         .maybeSingle();
       
@@ -5518,29 +5943,44 @@ app.post('/send-login-otp', async (req, res) => {
         return res.status(401).json({ error: 'Invalid email/phone or password' });
       }
       patient = data;
-      patientEmail = data.email; // Need email for Supabase auth
-      
-      if (!patientEmail) {
-        console.log(`[LOGIN-OTP] Patient found by phone but no email in record`);
-        return res.status(401).json({ error: 'Account email not found. Please contact support.' });
-      }
+      patientEmail = data.email; // May be null for phone-only users
     }
 
-    // Step 2: Verify password with Supabase Auth (always use email for auth)
+    // Step 2: Verify password (Supabase Auth for email users, password_hash for phone-only users)
     try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: patientEmail, // Always use email for Supabase auth
-        password: password.trim()
-      });
+      if (isEmail || (isPhone && patientEmail)) {
+        // Email user OR phone user with linked email - use Supabase Auth
+        const authEmail = isEmail ? normalizedIdentifier : patientEmail;
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: password.trim()
+        });
 
-      // Sign out immediately - we only validated credentials
-      if (authData?.session) {
-        await supabase.auth.signOut();
-      }
+        // Sign out immediately - we only validated credentials
+        if (authData?.session) {
+          await supabase.auth.signOut();
+        }
 
-      if (authError) {
-        console.log(`[LOGIN-OTP] Invalid password for identifier: ${normalizedIdentifier}`);
-        return res.status(401).json({ error: 'Invalid email/phone or password' });
+        if (authError) {
+          console.log(`[LOGIN-OTP] Invalid password for email-based account`);
+          return res.status(401).json({ error: 'Invalid email/phone or password' });
+        }
+      } else if (isPhone && !patientEmail) {
+        // Phone-only user - check password_hash field
+        if (!patient.password_hash) {
+          console.log(`[LOGIN-OTP] Phone-only account missing password_hash`);
+          return res.status(500).json({ error: 'Account configuration error. Please contact support.' });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password.trim(), patient.password_hash);
+        if (!isPasswordValid) {
+          console.log(`[LOGIN-OTP] Invalid password for phone-only account`);
+          return res.status(401).json({ error: 'Invalid email/phone or password' });
+        }
+      } else {
+        // Should not reach here
+        console.error(`[LOGIN-OTP] Unexpected authentication path`);
+        return res.status(500).json({ error: 'Authentication error' });
       }
     } catch (authErr) {
       console.error(`[LOGIN-OTP] Auth error:`, authErr.message);

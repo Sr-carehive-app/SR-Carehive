@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'provider_profile_edit_screen.dart';
+import 'provider_password_manager_screen.dart';
 import 'package:care12/utils/safe_navigation.dart';
 
 class ProviderProfileViewScreen extends StatefulWidget {
@@ -104,6 +105,10 @@ class _ProviderProfileViewScreenState extends State<ProviderProfileViewScreen> {
                       children: [
                         // Header Card with Name
                         _buildHeaderCard(),
+                        const SizedBox(height: 16),
+
+                        // Password Manager Button
+                        _buildPasswordManagerButton(),
                         const SizedBox(height: 16),
 
                         // Basic Information Section
@@ -403,6 +408,82 @@ class _ProviderProfileViewScreenState extends State<ProviderProfileViewScreen> {
                     ),
                   ),
                 ),
+    );
+  }
+
+  Widget _buildPasswordManagerButton() {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const ProviderPasswordManagerScreen(),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [const Color(0xFF10B981), const Color(0xFF059669)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.lock_reset,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Password Manager',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Change your account password',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.white,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

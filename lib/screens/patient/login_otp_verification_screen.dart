@@ -150,73 +150,119 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       print('Response: $data');
 
       if (response.statusCode == 200 && data['success'] == true) {
-        print('✅ OTP verified! Proceeding with Supabase login...');
+        print('✅ OTP verified! Checking user type...');
         
-        // Get the actual email from backend response (important for phone login)
-        final actualEmail = data['email'] ?? widget.email;
-        print('📧 Email for Supabase login: $actualEmail');
-        print('🔑 Password length: ${widget.password.length}');
+        final userId = data['userId'];
+        final actualEmail = data['email']; // May be null for phone-only users
         
-        // OTP verified - now do actual Supabase login
         final supabase = Supabase.instance.client;
         
-        try {
-          final authResponse = await supabase.auth.signInWithPassword(
-            email: actualEmail,  // Use email returned from backend (not phone)
-            password: widget.password,
+        // Check if this is a phone-only user (no email) or email user
+        if (actualEmail == null || actualEmail.toString().isEmpty) {
+          // ========== PHONE-ONLY USER ==========
+          print('📱 Phone-only user detected, skipping Supabase auth');
+          
+          // Fetch patient data directly using userId
+          var patient = await supabase
+              .from('patients')
+              .select()
+              .eq('user_id', userId)
+              .maybeSingle();
+          
+          if (patient == null) {
+            if (!mounted) return;
+            setState(() {
+              _errorMessage = 'Patient record not found';
+            });
+            return;
+          }
+          
+          if (!mounted) return;
+          
+          // Save userId to SharedPreferences for phone-only users
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('userId', userId);
+          
+          // Build display name
+          final salutation = patient['salutation'] ?? '';
+          final name = patient['name'] ?? '';
+          final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ Login successful!')),
           );
           
-          final user = authResponse.user;
+          // Navigate to dashboard
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PatientDashboardScreen(userName: displayName),
+            ),
+            (route) => false,
+          );
+        } else {
+          // ========== EMAIL USER (Supabase Auth) ==========
+          print('📧 Email user detected: $actualEmail');
+          print('🔑 Password length: ${widget.password.length}');
           
-          if (user != null) {
-            // Fetch patient data
-            var patient = await supabase
-                .from('patients')
-                .select()
-                .eq('user_id', user.id)
-                .maybeSingle();
+          try {
+            final authResponse = await supabase.auth.signInWithPassword(
+              email: actualEmail,
+              password: widget.password,
+            );
             
-            if (patient == null) {
-              // Handle missing patient profile (same as original logic)
-              await _showCompleteProfileDialog(user);
-              
-              patient = await supabase
+            final user = authResponse.user;
+            
+            if (user != null) {
+              // Fetch patient data
+              var patient = await supabase
                   .from('patients')
                   .select()
                   .eq('user_id', user.id)
-                  .single();
+                  .maybeSingle();
+              
+              if (patient == null) {
+                // Handle missing patient profile
+                await _showCompleteProfileDialog(user);
+                
+                patient = await supabase
+                    .from('patients')
+                    .select()
+                    .eq('user_id', user.id)
+                    .single();
+              }
+              
+              if (!mounted) return;
+              
+              // Build display name
+              final salutation = patient?['salutation'] ?? '';
+              final name = patient?['name'] ?? '';
+              final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('✅ Login successful!')),
+              );
+              
+              // Navigate to dashboard
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PatientDashboardScreen(userName: displayName),
+                ),
+                (route) => false,
+              );
+            } else {
+              if (!mounted) return;
+              setState(() {
+                _errorMessage = 'Login failed after OTP verification';
+              });
             }
-            
-            if (!mounted) return;
-            
-            // Build display name
-            final salutation = patient?['salutation'] ?? '';
-            final name = patient?['name'] ?? '';
-            final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('✅ Login successful!')),
-            );
-            
-            // Navigate to dashboard
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PatientDashboardScreen(userName: displayName),
-              ),
-              (route) => false,
-            );
-          } else {
+          } on AuthException catch (e) {
             if (!mounted) return;
             setState(() {
-              _errorMessage = 'Login failed after OTP verification';
+              _errorMessage = 'Login error: ${e.message}';
             });
           }
-        } on AuthException catch (e) {
-          if (!mounted) return;
-          setState(() {
-            _errorMessage = 'Login error: ${e.message}';
-          });
         }
       } else {
         // Handle OTP verification errors

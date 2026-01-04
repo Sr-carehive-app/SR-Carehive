@@ -12,6 +12,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/services/otp_service.dart';
 import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class PatientSignUpScreen extends StatefulWidget {
   final Map<String, String>? prefillData;
@@ -761,68 +763,66 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         
         if (!hasEmail) {
           // ============================================================================
-          // PHONE-ONLY SIGNUP PATH (No email provided)
+          // PHONE-ONLY SIGNUP PATH (Backend API call with service_role)
           // ============================================================================
           try {
-            // Generate a UUID for user_id (since no Supabase auth)
-            final userId = '${DateTime.now().millisecondsSinceEpoch}_${aadharLinkedPhoneController.text.trim()}';
-            
-            // Create patient record directly without Supabase auth
-            await supabase.from('patients').insert({
-              'user_id': userId, // Custom UUID for phone-only users
-              'salutation': selectedSalutation,
-              'name': fullName,
-              'first_name': firstNameController.text.trim(),
-              'middle_name': middleNameController.text.trim().isNotEmpty ? middleNameController.text.trim() : null,
-              'last_name': lastNameController.text.trim(),
-              'email': null, // No email for phone-only signup
-              'country_code': selectedCountryCode,
-              'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
-              'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
-                  ? alternativePhoneController.text.trim() 
-                  : null,
-              'age': int.tryParse(ageController.text.trim()) ?? 0,
-              'aadhar_number': aadharController.text.trim().isNotEmpty ? aadharController.text.trim() : null,
-              'house_number': houseNumberController.text.trim().isNotEmpty ? houseNumberController.text.trim() : null,
-              // street removed from signup form
-              'town': townController.text.trim().isNotEmpty ? townController.text.trim() : null,
-              'city': cityController.text.trim(),
-              'state': stateController.text.trim(),
-              'pincode': pincodeController.text.trim(),
-              'gender': selectedGender,
-              'phone_verified': true, // Verified via OTP
-              'otp_verified_at': DateTime.now().toIso8601String(),
-            });
-            
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Registration successful! Please login with your phone number.'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-              
-              // Save signup prefills (age/aadhar/gender) for post-signup prompt if needed
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('signup_name', fullName);
-              await prefs.setString('signup_phone', phoneWithCode);
-              await prefs.setString('signup_age', ageController.text.trim());
-              await prefs.setString('signup_aadhar', aadharController.text.trim());
-              await prefs.setString('signup_address', '${houseNumberController.text.trim()}, ${townController.text.trim()}, ${cityController.text.trim()}');
-              await prefs.setString('signup_gender', selectedGender ?? '');
-              
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => PatientLoginScreen()),
-              );
+            // Call backend API for phone-only registration (bypasses RLS securely)
+            final response = await http.post(
+              Uri.parse('${dotenv.env['API_BASE_URL']}/api/register-phone-only'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'salutation': selectedSalutation,
+                'firstName': firstNameController.text.trim(),
+                'middleName': middleNameController.text.trim(),
+                'lastName': lastNameController.text.trim(),
+                'countryCode': selectedCountryCode,
+                'aadharLinkedPhone': aadharLinkedPhoneController.text.trim(),
+                'alternativePhone': alternativePhoneController.text.trim(),
+                'age': ageController.text.trim(),
+                'aadharNumber': aadharController.text.trim(),
+                'houseNumber': houseNumberController.text.trim(),
+                'town': townController.text.trim(),
+                'city': cityController.text.trim(),
+                'state': stateController.text.trim(),
+                'pincode': pincodeController.text.trim(),
+                'gender': selectedGender,
+                'password': passwordController.text.trim(),
+              }),
+            );
+
+            if (response.statusCode == 200) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('✅ Registration successful! Please login with your phone number.'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+                
+                // Save signup prefills
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('signup_name', fullName);
+                await prefs.setString('signup_phone', phoneWithCode);
+                await prefs.setString('signup_age', ageController.text.trim());
+                await prefs.setString('signup_aadhar', aadharController.text.trim());
+                await prefs.setString('signup_address', '${houseNumberController.text.trim()}, ${townController.text.trim()}, ${cityController.text.trim()}');
+                await prefs.setString('signup_gender', selectedGender ?? '');
+                
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => PatientLoginScreen()),
+                );
+              }
+            } else {
+              final errorData = jsonDecode(response.body);
+              throw Exception(errorData['error'] ?? 'Registration failed');
             }
           } catch (e) {
             if (mounted) {
-              // Convert database errors to user-friendly messages
               String userMessage = 'Registration failed. Please try again.';
               final errorStr = e.toString().toLowerCase();
-              if (errorStr.contains('duplicate') && errorStr.contains('phone')) {
+              if (errorStr.contains('duplicate') || errorStr.contains('already registered')) {
                 userMessage = 'This phone number is already registered. Please login or use a different number.';
               } else if (errorStr.contains('network') || errorStr.contains('connection')) {
                 userMessage = 'Network error. Please check your internet connection.';

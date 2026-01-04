@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class PasswordManagerScreen extends StatefulWidget {
-  const PasswordManagerScreen({super.key});
+class ProviderPasswordManagerScreen extends StatefulWidget {
+  const ProviderPasswordManagerScreen({super.key});
 
   @override
-  State<PasswordManagerScreen> createState() => _PasswordManagerScreenState();
+  State<ProviderPasswordManagerScreen> createState() => _ProviderPasswordManagerScreenState();
 }
 
-class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
+class _ProviderPasswordManagerScreenState extends State<ProviderPasswordManagerScreen> {
   final TextEditingController currentPasswordController = TextEditingController();
   final TextEditingController newPasswordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
@@ -45,7 +44,7 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
       return;
     }
     
-    // Simple password validation - minimum 6 characters
+    // Password validation - minimum 6 characters
     if (newPassword.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -77,44 +76,39 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
     }
     
     setState(() => _isLoading = true);
-    final supabase = Supabase.instance.client;
     
     try {
-      // Get current user
-      final user = supabase.auth.currentUser;
-      String? userId;
+      // Get provider session token from SharedPreferences (same key as NurseApiService)
+      final prefs = await SharedPreferences.getInstance();
+      final sessionToken = prefs.getString('nurse_auth_token');
       
-      if (user != null) {
-        // User logged in via Supabase auth (email/Google OAuth)
-        userId = user.id;
-      } else {
-        // Phone-only user - get userId from patients table using SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        userId = prefs.getString('userId');
-      }
-      
-      if (userId == null) {
+      if (sessionToken == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('❌ User not logged in'),
+            content: Text('❌ Not logged in. Please login again.'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
       
-      print('🔐 Calling backend password change API for userId: $userId');
+      print('🔐 Calling backend provider password change API');
       
-      // Call backend API (handles both email and phone-only users)
+      // Call backend API (handles both email and phone-only providers)
       final response = await http.post(
-        Uri.parse('${dotenv.env['API_BASE_URL']}/api/change-password'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('${dotenv.env['API_BASE_URL']}/api/provider/change-password'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $sessionToken',
+        },
         body: jsonEncode({
-          'userId': userId,
           'currentPassword': currentPassword,
           'newPassword': newPassword,
         }),
       );
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         print('✅ Password changed successfully');
@@ -132,9 +126,17 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
         newPasswordController.clear();
         confirmPasswordController.clear();
       } else {
-        final errorData = jsonDecode(response.body);
-        final errorMessage = errorData['error'] ?? 'Failed to change password';
-        print('❌ Password change failed: $errorMessage');
+        // Parse error message from backend
+        String errorMessage = 'Failed to change password';
+        try {
+          final errorData = jsonDecode(response.body);
+          errorMessage = errorData['error'] ?? errorMessage;
+        } catch (parseError) {
+          print('⚠️ Failed to parse error response: $parseError');
+          errorMessage = 'Server error. Please try again.';
+        }
+        
+        print('❌ Password change failed (${response.statusCode}): $errorMessage');
         
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,7 +175,8 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
   Widget build(BuildContext context) {
     final primaryColor = const Color(0xFF2260FF);
     return Scaffold(
-      appBar: AppBar(title: const Text('Password Manager', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+      appBar: AppBar(
+        title: const Text('Password Manager', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
@@ -210,7 +213,7 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '• At least 6 characters long',
+                    '• At least 6 characters long\n• Different from your current password',
                     style: TextStyle(fontSize: 12, color: Colors.black87),
                   ),
                 ],
