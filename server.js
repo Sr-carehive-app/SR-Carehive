@@ -4122,11 +4122,11 @@ app.post('/send-password-reset-otp', async (req, res) => {
           
           return res.status(400).json({
             success: false,
-            error: 'This account uses Google Sign-In. Please tap "Continue with Google" to login.',
+            error: 'This account uses Google Sign-In. Please tap "Login with Google" to login.',
             isOAuthUser: true,
             provider: 'google',
             helpText: 'Your account is securely linked with Google. No password needed!',
-            suggestion: 'Use the "Continue with Google" button on the login screen.'
+            suggestion: 'Use the "Login with Google" button on the login screen.'
           });
         }
         

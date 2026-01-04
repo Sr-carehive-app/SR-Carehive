@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import '../../config/api_config.dart';
+import 'nurse_login_screen.dart';
 
 class NurseForgotPasswordOTPScreen extends StatefulWidget {
   final String email;
@@ -241,10 +242,13 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
           ),
         );
 
-        // Navigate back to login
+        // Navigate back to login - use pushAndRemoveUntil to avoid splash screen conflict
         await Future.delayed(const Duration(seconds: 1));
         if (!mounted) return;
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const NurseLoginScreen()),
+          (route) => false,
+        );
       } else {
         print('❌ Password reset failed: ${data['error']}');
         

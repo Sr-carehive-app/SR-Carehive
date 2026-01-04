@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
 import 'package:care12/screens/nurse/healthcare_provider_applications_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
+import 'healthcare_provider_selection_screen.dart';
 
 class AdminDashboardSelectionScreen extends StatefulWidget {
   const AdminDashboardSelectionScreen({Key? key}) : super(key: key);
@@ -506,7 +507,10 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
       // Logout: clear session and navigate away
       await NurseApiService.logout();
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HealthcareProviderSelectionScreen()),
+        (route) => false,
+      );
     }
   }
 }

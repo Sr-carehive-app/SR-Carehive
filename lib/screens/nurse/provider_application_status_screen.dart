@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:care12/services/provider_email_service.dart';
+import 'healthcare_provider_selection_screen.dart';
 
 class ProviderApplicationStatusScreen extends StatefulWidget {
   final Map<String, dynamic> providerData;
@@ -108,7 +109,10 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+          onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HealthcareProviderSelectionScreen()),
+            (route) => false,
+          ),
         ),
         title: const Text(
           'Application Status',
