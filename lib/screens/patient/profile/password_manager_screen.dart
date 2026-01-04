@@ -82,18 +82,21 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
     try {
       // Get current user
       final user = supabase.auth.currentUser;
-      String? userId;
+      String? userIdentifier;
+      String? loginType;
       
       if (user != null) {
         // User logged in via Supabase auth (email/Google OAuth)
-        userId = user.id;
+        userIdentifier = user.id;
+        loginType = 'email';
       } else {
-        // Phone-only user - get userId from patients table using SharedPreferences
+        // Phone-only user - get phone from SharedPreferences
         final prefs = await SharedPreferences.getInstance();
-        userId = prefs.getString('userId');
+        userIdentifier = prefs.getString('phone');
+        loginType = prefs.getString('loginType');
       }
       
-      if (userId == null) {
+      if (userIdentifier == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('❌ User not logged in'),
@@ -103,14 +106,15 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
         return;
       }
       
-      print('🔐 Calling backend password change API for userId: $userId');
+      print('🔐 Calling backend password change API for user: $userIdentifier (type: $loginType)');
       
       // Call backend API (handles both email and phone-only users)
       final response = await http.post(
         Uri.parse('${dotenv.env['API_BASE_URL']}/api/change-password'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'userId': userId,
+          'userIdentifier': userIdentifier,
+          'loginType': loginType ?? 'email',
           'currentPassword': currentPassword,
           'newPassword': newPassword,
         }),

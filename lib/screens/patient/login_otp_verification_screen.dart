@@ -153,23 +153,30 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
         print('✅ OTP verified! Checking user type...');
         
         final userId = data['userId'];
-        final actualEmail = data['email']; // May be null for phone-only users
+        final actualEmail = data['email']; // NULL for phone-only users
+        final phone = data['phone']; // Phone number for phone-only users
+        final loginType = data['loginType']; // 'email' or 'phone'
+        
+        print('📋 Login type: $loginType');
+        print('📧 Email: $actualEmail');
+        print('📱 Phone: $phone');
+        print('🆔 User ID: $userId');
         
         final supabase = Supabase.instance.client;
         
-        // Check if this is a phone-only user (no email) or email user
-        if (actualEmail == null || actualEmail.toString().isEmpty) {
+        // Check if this is a phone-only user
+        if (loginType == 'phone' || (actualEmail == null && phone != null)) {
           // ========== PHONE-ONLY USER ==========
-          print('📱 Phone-only user detected, skipping Supabase auth');
+          print('📱 Phone-only user detected, querying by phone number');
           
-          // Fetch patient data directly using userId
-          var patient = await supabase
+          // Fetch patient data using phone number (since user_id is NULL)
+          final result = await supabase
               .from('patients')
               .select()
-              .eq('user_id', userId)
+              .eq('aadhar_linked_phone', phone)
               .maybeSingle();
           
-          if (patient == null) {
+          if (result == null) {
             if (!mounted) return;
             setState(() {
               _errorMessage = 'Patient record not found';
@@ -179,13 +186,14 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
           
           if (!mounted) return;
           
-          // Save userId to SharedPreferences for phone-only users
+          // Save phone to SharedPreferences for phone-only users
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('userId', userId);
+          await prefs.setString('phone', phone);
+          await prefs.setString('loginType', 'phone');
           
           // Build display name
-          final salutation = patient['salutation'] ?? '';
-          final name = patient['name'] ?? '';
+          final salutation = result['salutation'] ?? '';
+          final name = result['name'] ?? '';
           final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
           
           ScaffoldMessenger.of(context).showSnackBar(

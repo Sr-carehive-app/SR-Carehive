@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 41,
-  "timestamp": "2026-01-05T17:15:00Z",
-  "lastUpdated": "Build 41: Fixed FK constraint - user_id NULL for phone-only users"
+  "buildNumber": 42,
+  "timestamp": "2026-01-05T17:35:00Z",
+  "lastUpdated": "Build 42: Fixed phone-only login & password reset - query by phone not user_id"
 }

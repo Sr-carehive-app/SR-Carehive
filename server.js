@@ -4688,11 +4688,29 @@ app.post('/reset-password-with-otp', async (req, res) => {
     }
 
     // Check if this is a phone-only user or email user
-    const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('email, password_hash, user_id')
-      .eq('user_id', otpData.userId)
-      .maybeSingle();
+    // Query by email or phone (stored in otpData)
+    let patient = null;
+    let patientError = null;
+    
+    if (otpData.phone) {
+      // Phone-only user
+      const { data, error } = await supabase
+        .from('patients')
+        .select('email, password_hash, user_id, aadhar_linked_phone')
+        .eq('aadhar_linked_phone', otpData.phone)
+        .maybeSingle();
+      patient = data;
+      patientError = error;
+    } else if (otpData.email) {
+      // Email user
+      const { data, error } = await supabase
+        .from('patients')
+        .select('email, password_hash, user_id, aadhar_linked_phone')
+        .eq('email', otpData.email)
+        .maybeSingle();
+      patient = data;
+      patientError = error;
+    }
 
     if (patientError || !patient) {
       console.error('[ERROR] Patient not found:', patientError?.message);
@@ -4710,7 +4728,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
       const { error: updateError } = await supabase
         .from('patients')
         .update({ password_hash: passwordHash })
-        .eq('user_id', otpData.userId);
+        .eq('aadhar_linked_phone', patient.aadhar_linked_phone);
 
       if (updateError) {
         console.error('[ERROR] Failed to update password_hash:', updateError.message);
@@ -4782,11 +4800,11 @@ setInterval(() => {
 // ============================================================================
 app.post('/api/change-password', async (req, res) => {
   try {
-    const { userId, currentPassword, newPassword } = req.body;
+    const { userIdentifier, loginType, currentPassword, newPassword } = req.body;
 
-    if (!userId || !currentPassword || !newPassword) {
+    if (!userIdentifier || !currentPassword || !newPassword) {
       return res.status(400).json({ 
-        error: 'User ID, current password, and new password are required' 
+        error: 'User identifier, current password, and new password are required' 
       });
     }
 
@@ -4803,14 +4821,31 @@ app.post('/api/change-password', async (req, res) => {
       });
     }
 
-    console.log(`[PASSWORD-CHANGE] Request for userId: ${userId}`);
+    console.log(`[PASSWORD-CHANGE] Request for ${loginType}: ${userIdentifier}`);
 
-    // Get patient record
-    const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('email, password_hash, user_id, aadhar_linked_phone')
-      .eq('user_id', userId)
-      .maybeSingle();
+    // Get patient record based on login type
+    let patient = null;
+    let patientError = null;
+    
+    if (loginType === 'phone') {
+      // Phone-only user - query by phone
+      const { data, error } = await supabase
+        .from('patients')
+        .select('email, password_hash, user_id, aadhar_linked_phone')
+        .eq('aadhar_linked_phone', userIdentifier)
+        .maybeSingle();
+      patient = data;
+      patientError = error;
+    } else {
+      // Email user - query by user_id
+      const { data, error } = await supabase
+        .from('patients')
+        .select('email, password_hash, user_id, aadhar_linked_phone')
+        .eq('user_id', userIdentifier)
+        .maybeSingle();
+      patient = data;
+      patientError = error;
+    }
 
     if (patientError || !patient) {
       console.error('[PASSWORD-CHANGE] Patient not found:', patientError?.message);
@@ -4837,7 +4872,7 @@ app.post('/api/change-password', async (req, res) => {
       const { error: updateError } = await supabase
         .from('patients')
         .update({ password_hash: newPasswordHash })
-        .eq('user_id', userId);
+        .eq('aadhar_linked_phone', patient.aadhar_linked_phone);
 
       if (updateError) {
         console.error('[PASSWORD-CHANGE] Failed to update password_hash:', updateError.message);
@@ -6200,12 +6235,14 @@ app.post('/verify-login-otp', async (req, res) => {
     
     console.log(`[LOGIN-OTP] ✅ OTP verified for: ${normalizedIdentifier}`);
     
-    // Return stored email (needed for Supabase login even if user used phone)
+    // Return stored data for final login
     res.json({ 
       success: true,
       message: 'OTP verified successfully',
       userId: otpData.userId,
-      email: otpData.email || normalizedIdentifier // Use stored email
+      email: otpData.email, // NULL for phone-only users
+      phone: otpData.aadhar_linked_phone, // Phone number for phone-only users
+      loginType: otpData.loginType // 'email' or 'phone'
     });
 
   } catch (e) {
