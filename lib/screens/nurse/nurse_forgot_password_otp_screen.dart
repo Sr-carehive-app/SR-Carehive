@@ -57,6 +57,10 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
   @override
   void initState() {
     super.initState();
+    print('🔍 [Nurse OTP Screen] Constructor received:');
+    print('   email: ${widget.email}');
+    print('   deliveryChannels: ${widget.deliveryChannels}');
+    print('   sentTo: ${widget.sentTo}');
     _startResendCooldown();
   }
 

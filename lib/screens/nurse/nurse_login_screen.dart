@@ -488,10 +488,17 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
                           successMessage = 'OTP sent to your email!';
                         }
                         
-                        // Success! Return email and message to show OUTSIDE dialog
+                        print('📤 [Dialog Return] Passing to screen:');
+                        print('   email: $emailForNavigation');
+                        print('   deliveryChannels: $deliveryChannels');
+                        print('   sentTo: ${result['sentTo']}');
+                        
+                        // Success! Return email, message, and delivery info to show OUTSIDE dialog
                         Navigator.pop(dialogContext, {
                           'email': emailForNavigation,
                           'message': successMessage,
+                          'deliveryChannels': deliveryChannels?.cast<String>(),
+                          'sentTo': (result['sentTo'] as List?)?.cast<String>(),
                         });
                       } catch (e) {
                         setDialogState(() => isDialogLoading = false);
