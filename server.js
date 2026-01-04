@@ -2776,6 +2776,8 @@ app.post('/api/send-signup-otp', async (req, res) => {
     
     // Use aadhar_linked_phone as primary identifier, fallback to email
     const identifier = aadharLinkedPhone || alternativePhone || email;
+    console.log(`[SIGNUP-OTP] 🎯 IDENTIFIER SELECTED: "${identifier}"`);
+    console.log(`[SIGNUP-OTP] 🗝️  Redis Key: "signup-otp:${identifier}"`);
     
     // Store OTP in Redis
     await storeSignupOTP(identifier, {
@@ -2937,16 +2939,34 @@ app.post('/api/verify-signup-otp', async (req, res) => {
       });
     }
 
-    console.log(`[SIGNUP-OTP-VERIFY] 🔍 Verifying OTP for: ${identifier}`);
+    console.log('');
+    console.log('═'.repeat(70));
+    console.log(`[SIGNUP-OTP-VERIFY] 🔍 Verifying OTP for identifier: "${identifier}"`);
+    console.log(`[SIGNUP-OTP-VERIFY] 📧 Email received: ${email || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP-VERIFY] 📱 Aadhar Phone (cleaned): ${aadharLinkedPhone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP-VERIFY] 📱 Alt Phone (cleaned): ${alternativePhone || 'Not provided'}`);
+    console.log(`[SIGNUP-OTP-VERIFY] 🔑 OTP received: ${otp}`);
+    console.log(`[SIGNUP-OTP-VERIFY] 🗝️  Redis Key: "signup-otp:${identifier}"`);
+    console.log('═'.repeat(70));
+    console.log('');
 
     const otpData = await getSignupOTP(identifier);
 
     if (!otpData) {
       console.log(`[SIGNUP-OTP-VERIFY] ❌ No OTP found for: ${identifier}`);
+      console.log(`[SIGNUP-OTP-VERIFY] 💡 TIP: OTP may have expired (TTL: 120s) or never sent`);
       return res.status(400).json({ 
-        error: 'No OTP found or OTP expired. Please request a new one.' 
+        error: 'No OTP found or OTP expired. Please request a new one.',
+        identifier: process.env.NODE_ENV === 'development' ? identifier : undefined,
       });
     }
+
+    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP data found in Redis:`, {
+      storedOTP: otpData.otp,
+      expiresAt: new Date(otpData.expiresAt).toISOString(),
+      attempts: otpData.attempts,
+      timeRemaining: Math.max(0, Math.floor((otpData.expiresAt - Date.now()) / 1000)) + 's'
+    });
 
     // Check expiry
     if (Date.now() > otpData.expiresAt) {
@@ -2968,7 +2988,10 @@ app.post('/api/verify-signup-otp', async (req, res) => {
 
     // Verify OTP
     if (otp.trim() !== otpData.otp) {
-      console.log(`[SIGNUP-OTP-VERIFY] ❌ Invalid OTP for: ${identifier}`);
+      console.log(`[SIGNUP-OTP-VERIFY] ❌ OTP MISMATCH!`);
+      console.log(`[SIGNUP-OTP-VERIFY]   - Received: "${otp}" (trimmed: "${otp.trim()}")`);
+      console.log(`[SIGNUP-OTP-VERIFY]   - Expected: "${otpData.otp}"`);
+      console.log(`[SIGNUP-OTP-VERIFY]   - Match result: ${otp.trim() === otpData.otp}`);
       
       // Increment attempts
       otpData.attempts += 1;
@@ -2981,7 +3004,7 @@ app.post('/api/verify-signup-otp', async (req, res) => {
     }
 
     // Success! Delete OTP
-    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP verified successfully for: ${identifier}`);
+    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP MATCHED! Verification successful for: ${identifier}`);
     await deleteSignupOTP(identifier);
 
     res.json({

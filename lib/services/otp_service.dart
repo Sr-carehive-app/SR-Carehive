@@ -153,6 +153,8 @@ class OTPService {
       }
 
       print('[OTP-SERVICE] 🔍 Verifying signup OTP...');
+      print('[OTP-SERVICE] Request body: ${jsonEncode(requestBody)}');
+      print('[OTP-SERVICE] API URL: $apiUrl/api/verify-signup-otp');
 
       final response = await http.post(
         Uri.parse('$apiUrl/api/verify-signup-otp'),
@@ -161,6 +163,7 @@ class OTPService {
       );
 
       print('[OTP-SERVICE] Verify response: ${response.statusCode}');
+      print('[OTP-SERVICE] Verify response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

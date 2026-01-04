@@ -577,7 +577,11 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => NurseForgotPasswordOTPScreen(email: email),
+          builder: (context) => NurseForgotPasswordOTPScreen(
+            email: email,
+            deliveryChannels: result['deliveryChannels'] as List<String>?,
+            sentTo: result['sentTo'] as List<String>?,
+          ),
         ),
       );
     }

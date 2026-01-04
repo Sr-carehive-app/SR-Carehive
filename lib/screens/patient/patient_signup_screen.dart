@@ -216,11 +216,16 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     
     final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
     
-    print('📤 Sending signup OTP...');
+    print('');
+    print('═' * 60);
+    print('📤 [INITIAL SEND] Sending signup OTP...');
     print('📧 Email: ${email ?? "Not provided"}');
-    print('📱 Aadhar Phone: ${aadharPhone.isNotEmpty ? aadharPhone : "Not provided"}');
+    print('📱 Aadhar Phone (raw): ${aadharPhone.isNotEmpty ? aadharPhone : "Not provided"}');
     print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
     print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
+    print('👤 Full Name: $fullName');
+    print('═' * 60);
+    print('');
     
     final result = await OTPService.sendSignupOTP(
       email: email,
@@ -364,6 +369,16 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                           }
                         });
                         
+                        print('');
+                        print('═' * 60);
+                        print('🔄 [RESEND] Resending signup OTP...');
+                        print('📧 Email: ${email ?? "Not provided"}');
+                        print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
+                        print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
+                        print('👤 Full Name: $fullName');
+                        print('═' * 60);
+                        print('');
+                        
                         final resendResult = await OTPService.sendSignupOTP(
                           email: email,
                           phone: phoneWithCode,
@@ -412,6 +427,16 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                           }
 
                           setState(() => isVerifying = true);
+
+                          print('');
+                          print('═' * 60);
+                          print('✅ [VERIFY] Verifying signup OTP...');
+                          print('📧 Email: ${email ?? "Not provided"}');
+                          print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
+                          print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
+                          print('🔑 OTP entered: ${otpController.text}');
+                          print('═' * 60);
+                          print('');
 
                           // Verify OTP via backend
                           final verifyResult = await OTPService.verifySignupOTP(

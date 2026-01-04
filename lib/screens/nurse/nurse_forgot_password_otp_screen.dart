@@ -8,10 +8,14 @@ import 'nurse_login_screen.dart';
 
 class NurseForgotPasswordOTPScreen extends StatefulWidget {
   final String email;
+  final List<String>? deliveryChannels;
+  final List<String>? sentTo;
   
   const NurseForgotPasswordOTPScreen({
     Key? key,
     required this.email,
+    this.deliveryChannels,
+    this.sentTo,
   }) : super(key: key);
 
   @override
@@ -35,6 +39,20 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
   bool _canResend = false;
   int _resendCooldown = 120; // 2 minutes in seconds
   Timer? _cooldownTimer;
+
+  // Helper method to get OTP sent message based on backend response
+  String _getOTPSentMessage() {
+    if (widget.sentTo != null && widget.sentTo!.isNotEmpty) {
+      return widget.sentTo!.join('\n');
+    } else if (widget.deliveryChannels != null && widget.deliveryChannels!.isNotEmpty) {
+      // Fallback: Use delivery channels
+      final channels = widget.deliveryChannels!.join(' and ');
+      return 'OTP sent via $channels';
+    } else {
+      // Final fallback: Show email
+      return widget.email;
+    }
+  }
 
   @override
   void initState() {
@@ -390,7 +408,7 @@ class _NurseForgotPasswordOTPScreenState extends State<NurseForgotPasswordOTPScr
             Text(
               _otpVerified
                   ? 'Now set your new password'
-                  : 'We\'ve sent a 6-digit code to\n${widget.email}',
+                  : 'We\'ve sent a 6-digit code to:\n${_getOTPSentMessage()}',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[600],
