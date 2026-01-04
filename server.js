@@ -3084,8 +3084,9 @@ app.post('/api/verify-signup-otp', async (req, res) => {
       });
     }
 
-    // Success! Delete OTP
-    await deleteSignupOTP(identifier);
+    // ✅ FIX: Mark OTP as verified (don't delete yet - registration endpoint needs it!)
+    otpData.verified = true;
+    await storeSignupOTP(identifier, otpData);
 
     res.json({
       success: true,

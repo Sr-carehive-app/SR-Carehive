@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 38,
-  "timestamp": "2026-01-04T23:45:00Z",
-  "lastUpdated": "Build 38: Fixed SafeNavigation.pop() function call in password manager"
+  "buildNumber": 39,
+  "timestamp": "2026-01-05T12:30:00Z",
+  "lastUpdated": "Build 39: Fixed phone-only registration OTP verification flow"
 }
