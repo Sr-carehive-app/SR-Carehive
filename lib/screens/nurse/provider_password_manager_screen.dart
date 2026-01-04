@@ -179,7 +179,7 @@ class _ProviderPasswordManagerScreenState extends State<ProviderPasswordManagerS
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => safeNavigateBack(context),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'password_manager_back'),
         ),
         title: const Text('Password Manager', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,
