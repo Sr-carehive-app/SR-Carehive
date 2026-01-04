@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class ProviderPasswordManagerScreen extends StatefulWidget {
   const ProviderPasswordManagerScreen({super.key});
@@ -176,9 +177,12 @@ class _ProviderPasswordManagerScreenState extends State<ProviderPasswordManagerS
     final primaryColor = const Color(0xFF2260FF);
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => safeNavigateBack(context),
+        ),
         title: const Text('Password Manager', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
         backgroundColor: primaryColor,
-        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
