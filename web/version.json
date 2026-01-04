@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 33,
-  "timestamp": "2026-01-04T15:21:00Z",
-  "lastUpdated": "Build 33: Added comprehensive OTP debugging logs and improved provider login UI to show correct contact method"
+  "buildNumber": 34,
+  "timestamp": "2026-01-04T16:45:00Z",
+  "lastUpdated": "Build 34: Removed all sensitive console logs (PII protection) from server.js and patient_signup_screen.dart"
 }

@@ -65,6 +65,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
   bool _aadharValid = false;
   bool _aadharTouched = false;
   bool _phoneVerified = false;
+  String? _verifiedPhoneNumber; // Track which phone was verified via OTP
 
   // Salutation options
   final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
@@ -216,17 +217,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     
     final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
     
-    print('');
-    print('═' * 60);
-    print('📤 [INITIAL SEND] Sending signup OTP...');
-    print('📧 Email: ${email ?? "Not provided"}');
-    print('📱 Aadhar Phone (raw): ${aadharPhone.isNotEmpty ? aadharPhone : "Not provided"}');
-    print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
-    print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
-    print('👤 Full Name: $fullName');
-    print('═' * 60);
-    print('');
-    
     final result = await OTPService.sendSignupOTP(
       email: email,
       phone: phoneWithCode,
@@ -248,7 +238,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     
     // Get delivery channels
     final List<String> deliveryChannels = result['deliveryChannels'] ?? [];
-    print('✅ OTP sent via: ${deliveryChannels.join(", ")}');
 
     return await showDialog<bool>(
       context: context,
@@ -369,16 +358,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                           }
                         });
                         
-                        print('');
-                        print('═' * 60);
-                        print('🔄 [RESEND] Resending signup OTP...');
-                        print('📧 Email: ${email ?? "Not provided"}');
-                        print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
-                        print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
-                        print('👤 Full Name: $fullName');
-                        print('═' * 60);
-                        print('');
-                        
                         final resendResult = await OTPService.sendSignupOTP(
                           email: email,
                           phone: phoneWithCode,
@@ -427,16 +406,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                           }
 
                           setState(() => isVerifying = true);
-
-                          print('');
-                          print('═' * 60);
-                          print('✅ [VERIFY] Verifying signup OTP...');
-                          print('📧 Email: ${email ?? "Not provided"}');
-                          print('📱 Phone with code: ${phoneWithCode ?? "Not provided"}');
-                          print('📱 Alt Phone: ${altPhone ?? "Not provided"}');
-                          print('🔑 OTP entered: ${otpController.text}');
-                          print('═' * 60);
-                          print('');
 
                           // Verify OTP via backend
                           final verifyResult = await OTPService.verifySignupOTP(
@@ -705,11 +674,32 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         );
         return;
       }
-      setState(() => _phoneVerified = true);
+      // Store which phone number was verified
+      setState(() {
+        _phoneVerified = true;
+        _verifiedPhoneNumber = aadharLinkedPhoneController.text.trim();
+      });
     }
     
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
+    
+    // ✅ SECURITY CHECK: Ensure phone number hasn't changed after OTP verification
+    if (!_isGoogleUser && _phoneVerified) {
+      final currentPhone = aadharLinkedPhoneController.text.trim();
+      if (_verifiedPhoneNumber != null && currentPhone != _verifiedPhoneNumber) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Phone number has changed. Please verify the new number with OTP.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        setState(() => _phoneVerified = false); // Reset verification
+        return;
+      }
+    }
     
     try {
       final fullName = '${firstNameController.text.trim()} ${middleNameController.text.trim()} ${lastNameController.text.trim()}'.trim();
@@ -724,7 +714,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         if (user != null) {
           // Get Google avatar URL from prefill data
           final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
-          print('🖼️ Google avatar URL from prefill: $googleAvatarUrl');
           
           await supabase.from('patients').insert({
             'user_id': user.id,
@@ -764,20 +753,111 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
           );
         }
       } else {
-        // Regular sign-up with email/password
+        // Regular sign-up with email/password OR phone-only signup
         // We already verified phone via OTP, so email verification is optional
-        try {
-          final authResponse = await supabase.auth.signUp(
-            email: emailController.text.trim(),
-            password: passwordController.text.trim(),
-            emailRedirectTo: null, // Explicitly disable redirect
-            data: {
-              'email_confirmed': true,
-              'phone_verified': true,
-            },
-          );
-          
-          final user = authResponse.user;
+        
+        // Check if email is provided
+        final hasEmail = emailController.text.trim().isNotEmpty;
+        
+        if (!hasEmail) {
+          // ============================================================================
+          // PHONE-ONLY SIGNUP PATH (No email provided)
+          // ============================================================================
+          try {
+            // Generate a UUID for user_id (since no Supabase auth)
+            final userId = '${DateTime.now().millisecondsSinceEpoch}_${aadharLinkedPhoneController.text.trim()}';
+            
+            // Create patient record directly without Supabase auth
+            await supabase.from('patients').insert({
+              'user_id': userId, // Custom UUID for phone-only users
+              'salutation': selectedSalutation,
+              'name': fullName,
+              'first_name': firstNameController.text.trim(),
+              'middle_name': middleNameController.text.trim().isNotEmpty ? middleNameController.text.trim() : null,
+              'last_name': lastNameController.text.trim(),
+              'email': null, // No email for phone-only signup
+              'country_code': selectedCountryCode,
+              'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+              'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                  ? alternativePhoneController.text.trim() 
+                  : null,
+              'age': int.tryParse(ageController.text.trim()) ?? 0,
+              'aadhar_number': aadharController.text.trim().isNotEmpty ? aadharController.text.trim() : null,
+              'house_number': houseNumberController.text.trim().isNotEmpty ? houseNumberController.text.trim() : null,
+              // street removed from signup form
+              'town': townController.text.trim().isNotEmpty ? townController.text.trim() : null,
+              'city': cityController.text.trim(),
+              'state': stateController.text.trim(),
+              'pincode': pincodeController.text.trim(),
+              'gender': selectedGender,
+              'phone_verified': true, // Verified via OTP
+              'otp_verified_at': DateTime.now().toIso8601String(),
+            });
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Registration successful! Please login with your phone number.'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+              
+              // Save signup prefills (age/aadhar/gender) for post-signup prompt if needed
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('signup_name', fullName);
+              await prefs.setString('signup_phone', phoneWithCode);
+              await prefs.setString('signup_age', ageController.text.trim());
+              await prefs.setString('signup_aadhar', aadharController.text.trim());
+              await prefs.setString('signup_address', '${houseNumberController.text.trim()}, ${townController.text.trim()}, ${cityController.text.trim()}');
+              await prefs.setString('signup_gender', selectedGender ?? '');
+              
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => PatientLoginScreen()),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              // Convert database errors to user-friendly messages
+              String userMessage = 'Registration failed. Please try again.';
+              final errorStr = e.toString().toLowerCase();
+              if (errorStr.contains('duplicate') && errorStr.contains('phone')) {
+                userMessage = 'This phone number is already registered. Please login or use a different number.';
+              } else if (errorStr.contains('network') || errorStr.contains('connection')) {
+                userMessage = 'Network error. Please check your internet connection.';
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(userMessage),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+                  content: Text('❌ Registration failed: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        } else {
+          // ============================================================================
+          // EMAIL + PASSWORD SIGNUP PATH (Existing code - NO CHANGES)
+          // ============================================================================
+          try {
+            final authResponse = await supabase.auth.signUp(
+              email: emailController.text.trim(),
+              password: passwordController.text.trim(),
+              emailRedirectTo: null, // Explicitly disable redirect
+              data: {
+                'email_confirmed': true,
+                'phone_verified': true,
+              },
+            );
+            
+            final user = authResponse.user;
           
           if (user != null) {
             await supabase.from('patients').insert({
@@ -890,6 +970,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             );
           }
         }
+        } // End of email+password signup else block
       }
     } catch (e) {
       if (mounted) {

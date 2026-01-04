@@ -14,8 +14,6 @@ function registerNurseOtpRoutes(app) {
       const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
       const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
       
-      console.log(`[OTP] Input type: ${isPhoneNumber ? 'Phone' : 'Email'}, Identifier: ${normalizedIdentifier}`);
-      
       // Validate format
       if (!isPhoneNumber) {
         const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
@@ -47,7 +45,6 @@ function registerNurseOtpRoutes(app) {
       // Send OTP via appropriate channel
       if (isPhoneNumber) {
         // Send OTP via SMS
-        console.log(`[OTP] Sending OTP via SMS to: ${normalizedIdentifier}`);
         const smsSent = await sendOTPViaTubelight(
           normalizedIdentifier, 
           otp, 
@@ -57,7 +54,6 @@ function registerNurseOtpRoutes(app) {
         );
         
         if (smsSent) {
-          console.log(`[OTP] SMS sent successfully to: ${normalizedIdentifier}`);
           const maskedPhone = normalizedIdentifier.slice(0, 2) + 'X'.repeat(6) + normalizedIdentifier.slice(-2);
           return res.json({ 
             success: true, 
@@ -77,13 +73,11 @@ function registerNurseOtpRoutes(app) {
         // Send OTP email (sendEmail function handles mailer initialization internally)
         const otpEmailHtml = `<div style="font-family:sans-serif"><h2>SR CareHive Healthcare Provider Login OTP</h2><p>Your OTP is: <b>${otp}</b></p><p>This OTP is valid for 5 minutes.</p></div>`;
         try {
-          console.log('[OTP] Sending OTP email to healthcare provider:', normalizedIdentifier);
           await sendEmail({
             to: normalizedIdentifier,
             subject: 'SR CareHive Healthcare Provider Login OTP',
             html: otpEmailHtml
           });
-          console.log('[OTP] OTP email sent successfully to:', normalizedIdentifier);
           const maskedEmail = normalizedIdentifier.replace(/(.{2})(.*)(@.*)/, '$1' + '*'.repeat(5) + '$3');
           return res.json({ 
             success: true, 
@@ -1274,10 +1268,8 @@ async function deleteProviderPasswordResetOTP(email) {
 app.post('/api/nurse/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    console.log('🔐 Healthcare Provider Login Attempt:', { identifier: email, hasPassword: !!password });
     
     if (!email || !password) {
-      console.log('❌ Missing identifier or password');
       return res.status(400).json({ success: false, error: 'Email/Phone and password required' });
     }
     
@@ -1286,7 +1278,6 @@ app.post('/api/nurse/login', async (req, res) => {
     
     // Detect if input is phone number (10 digits)
     const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
-    console.log('📱 Input type:', isPhoneNumber ? 'Phone Number' : 'Email');
     
     // Check if super admin credentials (only for email)
     if (!isPhoneNumber && NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
@@ -2624,7 +2615,6 @@ async function storeSignupOTP(identifier, otpData) {
   try {
     if (redisEnabled) {
       await redis.setex(key, ttl, JSON.stringify(otpData));
-      console.log(`✅ [REDIS] Stored signup OTP for: ${identifier}`);
       return true;
     }
   } catch (error) {
@@ -2632,7 +2622,6 @@ async function storeSignupOTP(identifier, otpData) {
   }
   
   // Fallback to in-memory (not ideal for signup but better than nothing)
-  console.log(`⚠️ [FALLBACK] Using in-memory for signup OTP: ${identifier}`);
   if (!global.signupOTPs) global.signupOTPs = new Map();
   global.signupOTPs.set(identifier, otpData);
   return true;
@@ -2645,7 +2634,6 @@ async function getSignupOTP(identifier) {
     if (redisEnabled) {
       const data = await redis.get(key);
       if (data) {
-        console.log(`✅ [REDIS] Retrieved signup OTP for: ${identifier}`);
         return typeof data === 'string' ? JSON.parse(data) : data;
       }
       return null;
@@ -2665,7 +2653,6 @@ async function deleteSignupOTP(identifier) {
   try {
     if (redisEnabled) {
       await redis.del(key);
-      console.log(`✅ [REDIS] Deleted signup OTP for: ${identifier}`);
       return true;
     }
   } catch (error) {
@@ -2713,7 +2700,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
     try {
       // Check if primary phone number already exists (only check primary phone, not alternative)
       if (aadharLinkedPhone) {
-        console.log(`[SIGNUP-OTP] 🔍 Checking if phone ${aadharLinkedPhone} already exists...`);
         const { data: existingPhoneUser, error: phoneCheckError } = await supabase
           .from('patients')
           .select('aadhar_linked_phone, email')
@@ -2726,7 +2712,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
         }
 
         if (existingPhoneUser) {
-          console.log(`[SIGNUP-OTP] ❌ Phone ${aadharLinkedPhone} already registered`);
           return res.status(409).json({ 
             error: 'This phone number is already registered. Please use a different phone number or login to your existing account.',
             field: 'aadharLinkedPhone'
@@ -2737,7 +2722,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
       // Check if email already exists
       if (email) {
         const normalizedEmail = email.toLowerCase().trim();
-        console.log(`[SIGNUP-OTP] 🔍 Checking if email ${normalizedEmail} already exists...`);
         const { data: existingEmailUser, error: emailCheckError } = await supabase
           .from('patients')
           .select('email, aadhar_linked_phone')
@@ -2750,7 +2734,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
         }
 
         if (existingEmailUser) {
-          console.log(`[SIGNUP-OTP] ❌ Email ${normalizedEmail} already registered`);
           return res.status(409).json({ 
             error: 'This email address is already registered. Please use a different email or login to your existing account.',
             field: 'email'
@@ -2758,7 +2741,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
         }
       }
 
-      console.log(`[SIGNUP-OTP] ✅ Phone and Email are available for registration`);
     } catch (dbCheckError) {
       console.error('[SIGNUP-OTP] ❌ Database check failed:', dbCheckError);
       return res.status(500).json({ error: 'Failed to verify registration details. Please try again.' });
@@ -2769,15 +2751,8 @@ app.post('/api/send-signup-otp', async (req, res) => {
     const now = Date.now();
     const expiresAt = now + (2 * 60 * 1000); // 2 minutes
     
-    console.log(`[SIGNUP-OTP] 🔑 Generated OTP: ${otp}`);
-    console.log(`[SIGNUP-OTP] 📧 Email: ${email || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP] 📱 Aadhar Linked Phone (cleaned): ${aadharLinkedPhone || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP] 📱 Alt Phone (cleaned): ${alternativePhone || 'Not provided'}`);
-    
     // Use aadhar_linked_phone as primary identifier, fallback to email
     const identifier = aadharLinkedPhone || alternativePhone || email;
-    console.log(`[SIGNUP-OTP] 🎯 IDENTIFIER SELECTED: "${identifier}"`);
-    console.log(`[SIGNUP-OTP] 🗝️  Redis Key: "signup-otp:${identifier}"`);
     
     // Store OTP in Redis
     await storeSignupOTP(identifier, {
@@ -2826,7 +2801,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
           html: emailHtml
         });
 
-        console.log(`[SIGNUP-OTP] ✅ Email sent to: ${email}`);
         emailSuccess = true;
         deliveryChannels.push('email');
       } catch (emailError) {
@@ -2845,7 +2819,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
           'registration'
         );
         if (smsSuccess) {
-          console.log(`[SIGNUP-OTP] ✅ SMS sent to primary phone: ${aadharLinkedPhone.slice(0,6)}***`);
           deliveryChannels.push('SMS (primary)');
         }
       } catch (smsError) {
@@ -2864,7 +2837,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
           'registration'
         );
         if (altSmsSuccess) {
-          console.log(`[SIGNUP-OTP] ✅ SMS sent to alt phone: ${alternativePhone.slice(0,6)}***`);
           deliveryChannels.push('SMS (alternative)');
         }
       } catch (smsError) {
@@ -2939,38 +2911,17 @@ app.post('/api/verify-signup-otp', async (req, res) => {
       });
     }
 
-    console.log('');
-    console.log('═'.repeat(70));
-    console.log(`[SIGNUP-OTP-VERIFY] 🔍 Verifying OTP for identifier: "${identifier}"`);
-    console.log(`[SIGNUP-OTP-VERIFY] 📧 Email received: ${email || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP-VERIFY] 📱 Aadhar Phone (cleaned): ${aadharLinkedPhone || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP-VERIFY] 📱 Alt Phone (cleaned): ${alternativePhone || 'Not provided'}`);
-    console.log(`[SIGNUP-OTP-VERIFY] 🔑 OTP received: ${otp}`);
-    console.log(`[SIGNUP-OTP-VERIFY] 🗝️  Redis Key: "signup-otp:${identifier}"`);
-    console.log('═'.repeat(70));
-    console.log('');
-
     const otpData = await getSignupOTP(identifier);
 
     if (!otpData) {
-      console.log(`[SIGNUP-OTP-VERIFY] ❌ No OTP found for: ${identifier}`);
-      console.log(`[SIGNUP-OTP-VERIFY] 💡 TIP: OTP may have expired (TTL: 120s) or never sent`);
       return res.status(400).json({ 
         error: 'No OTP found or OTP expired. Please request a new one.',
         identifier: process.env.NODE_ENV === 'development' ? identifier : undefined,
       });
     }
 
-    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP data found in Redis:`, {
-      storedOTP: otpData.otp,
-      expiresAt: new Date(otpData.expiresAt).toISOString(),
-      attempts: otpData.attempts,
-      timeRemaining: Math.max(0, Math.floor((otpData.expiresAt - Date.now()) / 1000)) + 's'
-    });
-
     // Check expiry
     if (Date.now() > otpData.expiresAt) {
-      console.log(`[SIGNUP-OTP-VERIFY] ❌ OTP expired for: ${identifier}`);
       await deleteSignupOTP(identifier);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
@@ -2979,7 +2930,6 @@ app.post('/api/verify-signup-otp', async (req, res) => {
 
     // Check attempts (max 5)
     if (otpData.attempts >= 5) {
-      console.log(`[SIGNUP-OTP-VERIFY] ❌ Max attempts exceeded for: ${identifier}`);
       await deleteSignupOTP(identifier);
       return res.status(429).json({ 
         error: 'Maximum verification attempts exceeded. Please request a new OTP.' 
@@ -2988,10 +2938,6 @@ app.post('/api/verify-signup-otp', async (req, res) => {
 
     // Verify OTP
     if (otp.trim() !== otpData.otp) {
-      console.log(`[SIGNUP-OTP-VERIFY] ❌ OTP MISMATCH!`);
-      console.log(`[SIGNUP-OTP-VERIFY]   - Received: "${otp}" (trimmed: "${otp.trim()}")`);
-      console.log(`[SIGNUP-OTP-VERIFY]   - Expected: "${otpData.otp}"`);
-      console.log(`[SIGNUP-OTP-VERIFY]   - Match result: ${otp.trim() === otpData.otp}`);
       
       // Increment attempts
       otpData.attempts += 1;
@@ -3004,7 +2950,6 @@ app.post('/api/verify-signup-otp', async (req, res) => {
     }
 
     // Success! Delete OTP
-    console.log(`[SIGNUP-OTP-VERIFY] ✅ OTP MATCHED! Verification successful for: ${identifier}`);
     await deleteSignupOTP(identifier);
 
     res.json({
@@ -3059,7 +3004,6 @@ app.post('/api/send-otp-email', async (req, res) => {
       html
     });
 
-    console.log(`[DEPRECATED] [SUCCESS] OTP email sent to: ${email}`);
     res.json({ success: true, message: 'OTP sent successfully' });
   } catch (e) {
     console.error('[DEPRECATED] [ERROR] send-otp-email:', e);
@@ -4102,12 +4046,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
       patientError = emailError;
     }
 
-    console.log(`[OTP-RESET] Query result - Data:`, patient);
-    console.log(`[OTP-RESET] Query result - Error:`, patientError);
-
     if (patientError || !patient) {
-      console.log(`[OTP-RESET] User not found: ${normalizedIdentifier}`);
-      console.log(`[OTP-RESET] Error details:`, patientError?.message, patientError?.code);
       
       // Return success to prevent enumeration
       return res.json({ 
@@ -4117,8 +4056,6 @@ app.post('/send-password-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`[OTP-RESET] User found: ${patient.name} <${patient.email}>`);
-
     // ========================================================================
     // CHECK IF USER IS OAUTH USER (Google Sign-In) WITHOUT PASSWORD
     // ========================================================================
@@ -4126,7 +4063,6 @@ app.post('/send-password-reset-otp', async (req, res) => {
       const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(patient.user_id);
       
       if (authUser && authUser.user) {
-        console.log(`[OTP-RESET] Checking auth method for user: ${patient.email}`);
         
         // Check if user has OAuth identity (Google)
         const hasGoogleIdentity = authUser.user.identities && 
@@ -4135,8 +4071,6 @@ app.post('/send-password-reset-otp', async (req, res) => {
         // Check if user has password set (encrypted_password will be null for OAuth-only users)
         const hasPassword = authUser.user.encrypted_password && 
                            authUser.user.encrypted_password.length > 0;
-        
-        console.log(`[OTP-RESET] Auth check - Google: ${hasGoogleIdentity}, Has Password: ${hasPassword}`);
         
         // ✅ BLOCK PASSWORD RESET FOR OAUTH-ONLY USERS
         if (hasGoogleIdentity && !hasPassword) {
@@ -4591,16 +4525,11 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     console.log(`[PROVIDER-RESET] 🔍 Database check starting...`);
-    console.log(`[PROVIDER-RESET] 📧 Looking for ${isPhoneNumber ? 'phone' : 'email'}: "${normalizedIdentifier}"`);
-    console.log(`[PROVIDER-RESET] 🔑 Using ${usingServiceRole ? 'SERVICE ROLE' : 'ANON'} key`);
-    console.log(`[PROVIDER-RESET] 🗄️  Supabase initialized: ${supabaseInitialized}`);
-
-    // Query database by phone or email
+// Query database by phone or email
     let provider = null;
     let providerId = null;
     
     try {
-      console.log(`[PROVIDER-RESET] 🔍 Querying healthcare_providers table...`);
       
       let queryResult;
       if (isPhoneNumber) {
@@ -4620,19 +4549,14 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
       }
 
       const { data: providerData, error: providerError } = queryResult;
-      console.log(`[PROVIDER-RESET] 📊 healthcare_providers query - Data:`, providerData);
-      console.log(`[PROVIDER-RESET] 📊 healthcare_providers query - Error:`, providerError);
 
       if (providerData) {
         provider = providerData;
         providerId = providerData.id;
-        console.log(`[PROVIDER-RESET] ✅ FOUND in healthcare_providers!`);
-        console.log(`[PROVIDER-RESET] 👤 Provider: ${provider.email}`);
       }
 
       // If not found in healthcare_providers, check nurses table
       if (!provider) {
-        console.log(`[PROVIDER-RESET] 🔍 Checking nurses table...`);
         
         let nurseQuery;
         if (isPhoneNumber) {
@@ -4713,7 +4637,6 @@ app.post('/api/nurse/send-password-reset-otp', async (req, res) => {
     }
 
     // Provider found - generate and send OTP
-    console.log(`[PROVIDER-RESET] Provider FOUND: ${provider.email}`);
 
     // Generate 6-digit OTP
     const otp = generateOTP();
@@ -5644,8 +5567,6 @@ app.post('/send-login-otp', async (req, res) => {
       loginType: isEmail ? 'email' : 'phone',
       identifier: normalizedIdentifier
     });
-
-    console.log(`[LOGIN-OTP] OTP generated for ${normalizedIdentifier} (${isEmail ? 'email' : 'phone'}): ${otp}`);
 
     // Create OTP email
     const otpEmailHtml = `
