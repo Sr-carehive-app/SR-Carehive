@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 34,
-  "timestamp": "2026-01-04T16:45:00Z",
-  "lastUpdated": "Build 34: Removed all sensitive console logs (PII protection) from server.js and patient_signup_screen.dart"
+  "buildNumber": 35,
+  "timestamp": "2026-01-04T17:10:00Z",
+  "lastUpdated": "Build 35: Fixed duplicate error handling code syntax error in patient signup"
 }

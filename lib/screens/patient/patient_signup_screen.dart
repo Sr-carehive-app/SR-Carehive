@@ -836,12 +836,6 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               );
             }
           }
-                  content: Text('❌ Registration failed: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          }
         } else {
           // ============================================================================
           // EMAIL + PASSWORD SIGNUP PATH (Existing code - NO CHANGES)
