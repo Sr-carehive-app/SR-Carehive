@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 39,
-  "timestamp": "2026-01-05T12:30:00Z",
-  "lastUpdated": "Build 39: Fixed phone-only registration OTP verification flow"
+  "buildNumber": 40,
+  "timestamp": "2026-01-05T16:45:00Z",
+  "lastUpdated": "Build 40: Fixed UUID generation for phone-only user registration"
 }

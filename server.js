@@ -3161,8 +3161,8 @@ app.post('/api/register-phone-only', async (req, res) => {
       });
     }
 
-    // Generate custom user_id for phone-only users (no Supabase auth)
-    const userId = `${Date.now()}_${cleanedPhone}`;
+    // Generate proper UUID for phone-only users (database requires UUID type)
+    const userId = crypto.randomUUID();
     const fullName = `${firstName} ${middleName || ''} ${lastName}`.trim();
 
     // Hash password for phone-only users
