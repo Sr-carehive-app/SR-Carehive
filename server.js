@@ -4356,8 +4356,8 @@ app.post('/send-password-reset-otp', async (req, res) => {
       console.log(`[OTP-RESET] Continuing with password reset despite auth check failure`);
     }
 
-    // Check for resend cooldown (2 minutes) - ALWAYS use email as key
-    const storageKey = patient.email;
+    // Check for resend cooldown (2 minutes) - Use phone for phone-only users, email for email users
+    const storageKey = isPhoneNumber ? normalizedIdentifier : patient.email;
     const existingOTP = await getPasswordResetOTP(storageKey);
     if (existingOTP && existingOTP.lastSentAt) {
       const timeSinceLastSend = Date.now() - existingOTP.lastSentAt;
@@ -4383,7 +4383,7 @@ app.post('/send-password-reset-otp', async (req, res) => {
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes expiry
     const lastSentAt = Date.now();
 
-    // Store OTP using Redis (use email as key for consistency)
+    // Store OTP using Redis (use phone for phone users, email for email users)
     await storePasswordResetOTP(storageKey, {
       otp,
       expiresAt,
@@ -4391,10 +4391,11 @@ app.post('/send-password-reset-otp', async (req, res) => {
       userId: patient.user_id,
       lastSentAt,
       loginType: isPhoneNumber ? 'phone' : 'email',
-      phone: isPhoneNumber ? normalizedIdentifier : null
+      phone: isPhoneNumber ? normalizedIdentifier : null,
+      email: patient.email || null
     });
 
-    console.log(`[OTP-RESET] Generated OTP for ${patient.email}: ${otp} (expires in 10 min, can resend after 2 min)`);
+    console.log(`[OTP-RESET] Generated OTP for ${storageKey}: ${otp} (expires in 10 min, can resend after 2 min)`);
 
     // Create OTP email HTML
     const otpEmailHtml = `
@@ -4572,21 +4573,23 @@ app.post('/send-password-reset-otp', async (req, res) => {
 // Verify OTP
 app.post('/verify-password-reset-otp', async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp } = req.body; // 'email' param accepts email OR phone
     
     if (!email || !otp) {
       return res.status(400).json({ error: 'OTP required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const normalizedOTP = otp.trim();
+    // Detect if input is phone or email
+    const identifier = email.trim();
+    const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+    const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
 
-    console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedEmail}`);
+    console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedIdentifier}`);
 
-    const otpData = await getPasswordResetOTP(normalizedEmail);
+    const otpData = await getPasswordResetOTP(normalizedIdentifier);
 
     if (!otpData) {
-      console.log(`[OTP-VERIFY] No OTP found for: ${normalizedEmail}`);
+      console.log(`[OTP-VERIFY] No OTP found for: ${normalizedIdentifier}`);
       return res.status(400).json({ 
         error: 'Invalid or expired OTP. Please request a new one.' 
       });
@@ -4594,8 +4597,8 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     // Check expiry
     if (Date.now() > otpData.expiresAt) {
-      console.log(`[OTP-VERIFY] OTP expired for: ${normalizedEmail}`);
-      await deletePasswordResetOTP(normalizedEmail);
+      console.log(`[OTP-VERIFY] OTP expired for: ${normalizedIdentifier}`);
+      await deletePasswordResetOTP(normalizedIdentifier);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -4603,20 +4606,21 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     // Check attempts (max 5 attempts)
     if (otpData.attempts >= 5) {
-      console.log(`[OTP-VERIFY] Too many attempts for: ${normalizedEmail}`);
-      await deletePasswordResetOTP(normalizedEmail);
+      console.log(`[OTP-VERIFY] Too many attempts for: ${normalizedIdentifier}`);
+      await deletePasswordResetOTP(normalizedIdentifier);
       return res.status(429).json({ 
         error: 'Too many failed attempts. Please request a new OTP.' 
       });
     }
 
     // Verify OTP
+    const normalizedOTP = otp.trim();
     if (normalizedOTP !== otpData.otp) {
       otpData.attempts += 1;
-      await storePasswordResetOTP(normalizedEmail, otpData);
+      await storePasswordResetOTP(normalizedIdentifier, otpData);
       
       const remainingAttempts = 5 - otpData.attempts;
-      console.log(`[OTP-VERIFY] Invalid OTP for: ${normalizedEmail}. Remaining attempts: ${remainingAttempts}`);
+      console.log(`[OTP-VERIFY] Invalid OTP for: ${normalizedIdentifier}. Remaining attempts: ${remainingAttempts}`);
       
       return res.status(400).json({ 
         error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
@@ -4624,11 +4628,11 @@ app.post('/verify-password-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`[OTP-VERIFY] OTP verified successfully for: ${normalizedEmail}`);
+    console.log(`[OTP-VERIFY] OTP verified successfully for: ${normalizedIdentifier}`);
 
     // OTP verified - mark as verified but don't delete yet
     otpData.verified = true;
-    await storePasswordResetOTP(normalizedEmail, otpData);
+    await storePasswordResetOTP(normalizedIdentifier, otpData);
 
     res.json({ 
       success: true, 
@@ -4648,19 +4652,23 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 // Reset password with OTP (final step)
 app.post('/reset-password-with-otp', async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body; // 'email' param accepts email OR phone
     
     if (!email || !otp || !newPassword) {
-      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+      return res.status(400).json({ error: 'Email/Phone, OTP, and new password are required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[PASSWORD-RESET] Reset attempt for: ${normalizedEmail}`);
+    // Detect if input is phone or email
+    const identifier = email.trim();
+    const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
+    const normalizedIdentifier = isPhoneNumber ? identifier.replace(/[^\d]/g, '') : identifier.toLowerCase();
+    
+    console.log(`[PASSWORD-RESET] Reset attempt for: ${normalizedIdentifier}`);
 
-    const otpData = await getPasswordResetOTP(normalizedEmail);
+    const otpData = await getPasswordResetOTP(normalizedIdentifier);
 
     if (!otpData || !otpData.verified) {
-      console.log(`[PASSWORD-RESET] OTP not verified for: ${normalizedEmail}`);
+      console.log(`[PASSWORD-RESET] OTP not verified for: ${normalizedIdentifier}`);
       return res.status(400).json({ 
         error: 'OTP not verified. Please verify OTP first.' 
       });
@@ -4668,8 +4676,8 @@ app.post('/reset-password-with-otp', async (req, res) => {
 
     // Check if OTP is still valid
     if (Date.now() > otpData.expiresAt) {
-      console.log(`[PASSWORD-RESET] OTP expired for: ${normalizedEmail}`);
-      await deletePasswordResetOTP(normalizedEmail);
+      console.log(`[PASSWORD-RESET] OTP expired for: ${normalizedIdentifier}`);
+      await deletePasswordResetOTP(normalizedIdentifier);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -4759,7 +4767,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
     }
 
     // Delete OTP after successful password reset
-    await deletePasswordResetOTP(normalizedEmail);
+    await deletePasswordResetOTP(normalizedIdentifier);
 
     res.json({ 
       success: true, 
