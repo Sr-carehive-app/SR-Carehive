@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 43,
-  "timestamp": "2026-01-05T17:55:00Z",
-  "lastUpdated": "Build 43: Fixed phone-only login & password reset"
+  "buildNumber": 44,
+  "timestamp": "2026-01-05T18:10:00Z",
+  "lastUpdated": "Build 43: Fixed profile icon display problem"
 }

@@ -1246,7 +1246,12 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leadingWidth: widget.isSuperAdmin ? 56 : 110,
-        title: Text(_isSelectionMode ? '${_selectedIds.length} Selected' : 'Manage Appointments'),
+        title: Text(
+          _isSelectionMode ? '${_selectedIds.length} Selected' : 'Manage Appointments',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
         leading: _isSelectionMode 
           ? IconButton(
               icon: const Icon(Icons.close),
