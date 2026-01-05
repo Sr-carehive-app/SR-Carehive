@@ -169,6 +169,18 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
           // ========== PHONE-ONLY USER ==========
           print('📱 Phone-only user detected, querying by phone number');
           
+          // CRITICAL FIX: Sign out any existing Supabase Auth session
+          // Phone-only users don't use Auth, so clear any stale sessions
+          try {
+            final currentUser = supabase.auth.currentUser;
+            if (currentUser != null) {
+              print('🔓 Clearing existing Auth session for phone-only login');
+              await supabase.auth.signOut();
+            }
+          } catch (e) {
+            print('⚠️ Could not sign out existing session: $e');
+          }
+          
           // Fetch patient data using phone number (since user_id is NULL)
           final result = await supabase
               .from('patients')

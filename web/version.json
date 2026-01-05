@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 61,
-  "timestamp": "2026-01-06T00:45:00Z",
-  "lastUpdated": "Build 61: Fixed account deletion for phone-only users by adding aadhar_linked_phone delete logic"
+  "buildNumber": 62,
+  "timestamp": "2026-01-06T01:15:00Z",
+  "lastUpdated": "Build 62: Fixed phone-only user session by clearing Auth and using maybeSingle in profile queries"
 }

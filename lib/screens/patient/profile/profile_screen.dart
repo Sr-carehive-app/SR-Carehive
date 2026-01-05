@@ -65,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .from('patients')
               .select()
               .eq('aadhar_linked_phone', phone)
-              .single();
+              .maybeSingle(); // Use maybeSingle to handle 0 or 1 rows gracefully
         }
       }
       
