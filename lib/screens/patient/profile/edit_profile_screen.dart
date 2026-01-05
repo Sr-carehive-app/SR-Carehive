@@ -601,17 +601,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       
+      // Build full name from parts (for ALL users - Auth + Phone)
+      String fullName = firstNameController.text.trim();
+      if (middleNameController.text.trim().isNotEmpty) {
+        fullName += ' ${middleNameController.text.trim()}';
+      }
+      fullName += ' ${lastNameController.text.trim()}';
+      
+      final newEmail = emailController.text.trim().isNotEmpty 
+          ? emailController.text.trim().toLowerCase() 
+          : null;
+      
+      // Handle Auth users (Email/OAuth)
       if (user != null) {
-        // Build full name from parts
-        String fullName = firstNameController.text.trim();
-        if (middleNameController.text.trim().isNotEmpty) {
-          fullName += ' ${middleNameController.text.trim()}';
-        }
-        fullName += ' ${lastNameController.text.trim()}';
-        
-        final newEmail = emailController.text.trim().isNotEmpty 
-            ? emailController.text.trim().toLowerCase() 
-            : null;
         
         // CRITICAL FIX: Handle email updates for ALL user types
         // SCENARIOS:

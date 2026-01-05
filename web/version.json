@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 64,
-  "timestamp": "2026-01-06T01:38:00Z",
-  "lastUpdated": "Build 64: Fixed profile/edit_profile session priority - phone FIRST, Auth SECOND (NO IMPACT on email/OAuth users)"
+  "buildNumber": 65,
+  "timestamp": "2026-01-06T01:48:00Z",
+  "lastUpdated": "Build 65: Fixed profile/edit_profile session priority"
 }

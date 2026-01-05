@@ -8,6 +8,7 @@ import 'package:care12/services/payment_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ScheduleNurseScreen extends StatefulWidget {
   final VoidCallback? onBackToHome;
@@ -106,26 +107,43 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
+      
+      Map<String, dynamic>? patient;
+      
+      // PRIORITY 1: Check Auth user FIRST
       if (user != null) {
-        final patient = await supabase
+        patient = await supabase
             .from('patients')
             .select('salutation, name, aadhar_linked_phone, permanent_address, aadhar_number, email, age, country_code')
             .eq('user_id', user.id)
             .maybeSingle();
+      } else {
+        // PRIORITY 2: Check phone user (fallback)
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
         
-        if (patient != null) {
-          setState(() {
-            // Include salutation with name if available
-            final salutation = patient['salutation'] ?? '';
-            final name = patient['name'] ?? '';
-            fullNameController.text = salutation.isNotEmpty ? '$salutation $name' : name;
-            phoneController.text = patient['aadhar_linked_phone'] ?? '';
-            addressController.text = patient['permanent_address'] ?? '';
-            aadharController.text = patient['aadhar_number'] ?? '';
-            patientEmailController.text = (patient['email'] ?? user.email ?? '').toString();
-            ageController.text = patient['age'] != null ? patient['age'].toString() : ageController.text;
-          });
+        if (phone != null && loginType == 'phone') {
+          patient = await supabase
+              .from('patients')
+              .select('salutation, name, aadhar_linked_phone, permanent_address, aadhar_number, email, age, country_code')
+              .eq('aadhar_linked_phone', phone)
+              .maybeSingle();
         }
+      }
+      
+      if (patient != null) {
+        setState(() {
+          // Include salutation with name if available
+          final salutation = patient!['salutation'] ?? '';
+          final name = patient!['name'] ?? '';
+          fullNameController.text = salutation.isNotEmpty ? '$salutation $name' : name;
+          phoneController.text = patient!['aadhar_linked_phone'] ?? '';
+          addressController.text = patient!['permanent_address'] ?? '';
+          aadharController.text = patient!['aadhar_number'] ?? '';
+          patientEmailController.text = (patient!['email'] ?? user?.email ?? '').toString();
+          ageController.text = patient!['age'] != null ? patient!['age'].toString() : ageController.text;
+        });
       }
     } catch (e) {
       print('Error loading user data: $e');
@@ -356,6 +374,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       final user = supabase.auth.currentUser;
       String? patientId;
       
+      // PRIORITY 1: Check Auth user FIRST
       if (user != null) {
         try {
           final patient = await supabase
@@ -365,6 +384,23 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
               .maybeSingle();
           final dynamic pid = patient?['id'];
           if (pid != null) patientId = pid.toString();
+        } catch (_) {}
+      } else {
+        // PRIORITY 2: Check phone user (fallback)
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final phone = prefs.getString('phone');
+          final loginType = prefs.getString('loginType');
+          
+          if (phone != null && loginType == 'phone') {
+            final patient = await supabase
+                .from('patients')
+                .select('id')
+                .eq('aadhar_linked_phone', phone)
+                .maybeSingle();
+            final dynamic pid = patient?['id'];
+            if (pid != null) patientId = pid.toString();
+          }
         } catch (_) {}
       }
       
