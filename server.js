@@ -5145,12 +5145,21 @@ app.post('/api/change-password', async (req, res) => {
       patient = data;
       patientError = error;
     } else {
-      // Email user - query by user_id
-      const { data, error } = await supabase
+      // Email user - query by user_id OR email (for phone users who added email later)
+      let query = supabase
         .from('patients')
-        .select('email, password_hash, user_id, aadhar_linked_phone')
-        .eq('user_id', userIdentifier)
-        .maybeSingle();
+        .select('email, password_hash, user_id, aadhar_linked_phone');
+      
+      // Try user_id first, then fallback to email
+      if (userIdentifier && userIdentifier.includes('-')) {
+        // UUID format - query by user_id
+        query = query.eq('user_id', userIdentifier);
+      } else {
+        // Email format - query by email (for phone users who added email)
+        query = query.eq('email', userIdentifier);
+      }
+      
+      const { data, error } = await query.maybeSingle();
       patient = data;
       patientError = error;
     }
@@ -5161,11 +5170,11 @@ app.post('/api/change-password', async (req, res) => {
     }
 
     // Determine user type
-    const isPhoneOnlyUser = !patient.email && patient.password_hash;
+    const isPhoneOnlyUser = !patient.user_id && patient.password_hash;
 
     if (isPhoneOnlyUser) {
-      // ========== PHONE-ONLY USER ==========
-      console.log(`[PASSWORD-CHANGE] Phone-only user detected`);
+      // ========== PHONE-ONLY USER (with or without email) ==========
+      console.log(`[PASSWORD-CHANGE] Phone-only user detected (registered via phone)`);
       
       // Verify current password against password_hash
       const isCurrentPasswordValid = await bcrypt.compare(currentPassword, patient.password_hash);
@@ -5223,7 +5232,7 @@ app.post('/api/change-password', async (req, res) => {
 
       // Update password in Supabase Auth
       const { data, error } = await supabase.auth.admin.updateUserById(
-        userId,
+        patient.user_id,
         { password: newPassword }
       );
 

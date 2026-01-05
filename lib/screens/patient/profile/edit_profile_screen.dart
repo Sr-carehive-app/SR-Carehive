@@ -771,6 +771,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         
         await updateQuery;
         
+        // ✅ CRITICAL FIX: Update SharedPreferences if phone number changed
+        if (user == null) {
+          // Phone-only user - update phone in SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          final newPhone = aadharLinkedPhoneController.text.trim();
+          await prefs.setString('phone', newPhone);
+          print('[PROFILE-UPDATE] ✅ Updated phone in SharedPreferences: $newPhone');
+        }
+        
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
