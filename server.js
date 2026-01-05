@@ -4886,10 +4886,34 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedIdentifier}`);
 
-    const otpData = await getPasswordResetOTP(normalizedIdentifier);
+    // CRITICAL FIX: Get patient data to determine storage key (same logic as send endpoint)
+    let storageKey = normalizedIdentifier; // default
+    
+    if (supabase) {
+      try {
+        if (isPhoneNumber) {
+          // Phone number - storage key is phone itself
+          storageKey = normalizedIdentifier;
+        } else {
+          // Email - storage key is email from patient record
+          const { data: patient } = await supabase
+            .from('patients')
+            .select('email')
+            .eq('email', normalizedIdentifier)
+            .maybeSingle();
+          
+          storageKey = patient?.email?.toLowerCase() || normalizedIdentifier;
+        }
+        console.log(`[OTP-VERIFY] Using storage key: ${storageKey}`);
+      } catch (dbError) {
+        console.error(`[OTP-VERIFY] DB lookup failed, using identifier as key:`, dbError.message);
+      }
+    }
+
+    const otpData = await getPasswordResetOTP(storageKey);
 
     if (!otpData) {
-      console.log(`[OTP-VERIFY] No OTP found for: ${normalizedIdentifier}`);
+      console.log(`[OTP-VERIFY] No OTP found for: ${storageKey}`);
       return res.status(400).json({ 
         error: 'Invalid or expired OTP. Please request a new one.' 
       });
@@ -4897,8 +4921,8 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     // Check expiry
     if (Date.now() > otpData.expiresAt) {
-      console.log(`[OTP-VERIFY] OTP expired for: ${normalizedIdentifier}`);
-      await deletePasswordResetOTP(normalizedIdentifier);
+      console.log(`[OTP-VERIFY] OTP expired for: ${storageKey}`);
+      await deletePasswordResetOTP(storageKey);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -4906,8 +4930,8 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     // Check attempts (max 5 attempts)
     if (otpData.attempts >= 5) {
-      console.log(`[OTP-VERIFY] Too many attempts for: ${normalizedIdentifier}`);
-      await deletePasswordResetOTP(normalizedIdentifier);
+      console.log(`[OTP-VERIFY] Too many attempts for: ${storageKey}`);
+      await deletePasswordResetOTP(storageKey);
       return res.status(429).json({ 
         error: 'Too many failed attempts. Please request a new OTP.' 
       });
@@ -4917,10 +4941,10 @@ app.post('/verify-password-reset-otp', async (req, res) => {
     const normalizedOTP = otp.trim();
     if (normalizedOTP !== otpData.otp) {
       otpData.attempts += 1;
-      await storePasswordResetOTP(normalizedIdentifier, otpData);
+      await storePasswordResetOTP(storageKey, otpData);
       
       const remainingAttempts = 5 - otpData.attempts;
-      console.log(`[OTP-VERIFY] Invalid OTP for: ${normalizedIdentifier}. Remaining attempts: ${remainingAttempts}`);
+      console.log(`[OTP-VERIFY] Invalid OTP for: ${storageKey}. Remaining attempts: ${remainingAttempts}`);
       
       return res.status(400).json({ 
         error: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
@@ -4928,11 +4952,11 @@ app.post('/verify-password-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`[OTP-VERIFY] OTP verified successfully for: ${normalizedIdentifier}`);
+    console.log(`[OTP-VERIFY] OTP verified successfully for: ${storageKey}`);
 
     // OTP verified - mark as verified but don't delete yet
     otpData.verified = true;
-    await storePasswordResetOTP(normalizedIdentifier, otpData);
+    await storePasswordResetOTP(storageKey, otpData);
 
     res.json({ 
       success: true, 

@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 57,
-  "timestamp": "2026-01-05T23:30:00Z",
-  "lastUpdated": "Build 57: Fixed email update - direct Auth sync without confirmation emails"
+  "buildNumber": 58,
+  "timestamp": "2026-01-06T00:00:00Z",
+  "lastUpdated": "Build 58: Fixed password reset OTP verification storage key mismatch for phone users"
 }
