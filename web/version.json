@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 60,
-  "timestamp": "2026-01-06T00:30:00Z",
-  "lastUpdated": "Build 60: Fixed password reset endpoint to use same fallback key lookup as verify endpoint"
+  "buildNumber": 61,
+  "timestamp": "2026-01-06T00:45:00Z",
+  "lastUpdated": "Build 61: Fixed account deletion for phone-only users by adding aadhar_linked_phone delete logic"
 }

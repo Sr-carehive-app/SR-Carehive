@@ -11,15 +11,29 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   Timer? _timer;
+  bool _navigated = false;
+  
   @override
   void initState() {
     super.initState();
+    // CRITICAL FIX: Prevent navigation if main.dart session check replaces this screen
     _timer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
+      if (!mounted || _navigated) return;
+      
+      // Double-check we're still the current route before navigating
+      // If main.dart found a session, it would have replaced this screen via setState
+      _navigated = true;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const RegisterScreen()),
       );
     });
+  }
+  
+  @override
+  void deactivate() {
+    // Mark as navigated if being deactivated (replaced by another screen)
+    _navigated = true;
+    super.deactivate();
   }
 
   @override

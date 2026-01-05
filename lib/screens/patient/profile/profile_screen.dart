@@ -489,8 +489,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('phone');
       
-      if (user == null) {
+      // Check if user exists (either Auth user or phone-only user)
+      if (user == null && phone == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No user found'), backgroundColor: Colors.red),
         );
@@ -512,19 +515,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
-      // Delete patient record and related data first
-      await supabase.from('patients').delete().eq('user_id', user.id);
-      
-      // Call your existing server endpoint to delete user from Supabase Auth
-      final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
-      final response = await http.post(
-        Uri.parse('$apiBase/api/admin/delete-user'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'user_id': user.id}),
-      );
-      
-      if (response.statusCode != 200) {
-        throw Exception('Failed to delete user from auth: ${response.body}');
+      // CRITICAL FIX: Handle both Auth users and phone-only users
+      if (user != null) {
+        // Auth users (email/OAuth) - delete by user_id
+        print('[DELETE-ACCOUNT] Deleting Auth user: ${user.id}');
+        await supabase.from('patients').delete().eq('user_id', user.id);
+        
+        // Call server endpoint to delete user from Supabase Auth
+        final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+        final response = await http.post(
+          Uri.parse('$apiBase/api/admin/delete-user'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'user_id': user.id}),
+        );
+        
+        if (response.statusCode != 200) {
+          throw Exception('Failed to delete user from auth: ${response.body}');
+        }
+      } else if (phone != null) {
+        // Phone-only users - delete by aadhar_linked_phone
+        print('[DELETE-ACCOUNT] Deleting phone-only user: $phone');
+        await supabase.from('patients').delete().eq('aadhar_linked_phone', phone);
+        
+        // Clear SharedPreferences for phone-only users
+        await prefs.remove('phone');
+        await prefs.remove('loginType');
       }
       
      
