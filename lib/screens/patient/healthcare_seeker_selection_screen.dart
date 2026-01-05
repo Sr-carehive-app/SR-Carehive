@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'patient_login_screen.dart';
 import 'patient_signup_screen.dart';
-import 'package:care12/utils/safe_navigation.dart';
+import '../register_screen.dart';
 
 class HealthcareSeekerSelectionScreen extends StatelessWidget {
   const HealthcareSeekerSelectionScreen({Key? key}) : super(key: key);
@@ -13,7 +13,13 @@ class HealthcareSeekerSelectionScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => SafeNavigation.pop(context, debugLabel: 'seeker_selection_back'),
+          onPressed: () {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+              (route) => false,
+            );
+          },
         ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,

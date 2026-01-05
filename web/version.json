@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 51,
-  "timestamp": "2026-01-05T20:30:00Z",
-  "lastUpdated": "Build 51: Fixed frozen/unresponsive back buttons after login/logout/OTP operations"
+  "buildNumber": 52,
+  "timestamp": "2026-01-05T20:40:00Z",
+  "lastUpdated": "Build 52: Fixed selection screen frozen/unresponsive back buttons after login/logout/OTP operations"
 }
