@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 47,
-  "timestamp": "2026-01-05T18:40:00Z",
-  "lastUpdated": "Build 47: Fixed edit email and then login with it problem in healthcare seeker area"
+  "buildNumber": 48,
+  "timestamp": "2026-01-05T19:15:00Z",
+  "lastUpdated": "Build 48: Fixed profile access, password management & forgot password flow for phone-only healthcare providers"
 }
