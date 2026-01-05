@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 55,
-  "timestamp": "2026-01-05T22:45:00Z",
-  "lastUpdated": "Build 55: Fixed session management for phone users - app restart auto-login & complete logout"
+  "buildNumber": 56,
+  "timestamp": "2026-01-05T23:15:00Z",
+  "lastUpdated": "Build 56: Fixed email update - direct Auth sync without confirmation emails"
 }

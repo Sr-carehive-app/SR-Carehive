@@ -7,6 +7,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -612,35 +615,80 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? emailController.text.trim().toLowerCase() 
             : null;
         
-        // CRITICAL FIX: Update Supabase Auth email for phone-only users or when email changes
-        // HANDLE 2 SCENARIOS:
-        // 1. Phone-only user (user.email == null) adding email for the first time
-        // 2. Email user changing their existing email
-        // BUT: OAuth users (Google, etc.) cannot change email - it's managed by OAuth provider
-        // ALSO: Only update if user has Supabase Auth session
-        if (user != null && !isOAuthUser && newEmail != null) {
-          final currentAuthEmail = user.email;
-          
-          // Update Auth email if:
-          // - User has no email yet (phone-only user) OR
-          // - User is changing their existing email
-          if (currentAuthEmail == null || currentAuthEmail != newEmail) {
-            try {
-              await supabase.auth.updateUser(UserAttributes(email: newEmail));
-              print('[PROFILE-UPDATE] ✅ Supabase Auth email updated: ${currentAuthEmail ?? 'null (phone-only)'} → $newEmail');
-            } catch (authError) {
-              print('[PROFILE-UPDATE] ⚠️ Failed to update Supabase Auth email: $authError');
-              if (!mounted) return;
-              setState(() {
-                isUpdating = false;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
+        // CRITICAL FIX: Handle email updates for ALL user types
+        // SCENARIOS:
+        // 1. Phone-only user (user == null) adding email → Create Auth user
+        // 2. Email user (user != null) changing email → Update Auth email
+        // 3. OAuth users → Skip (email managed by provider)
+        
+        if (!isOAuthUser && newEmail != null) {
+          if (user != null) {
+            // SCENARIO 2: Email user changing existing email
+            final currentAuthEmail = user.email;
+            
+            if (currentAuthEmail != null && currentAuthEmail != newEmail) {
+              try {
+                // Use backend Admin API to update email without confirmation
+                final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+                final response = await http.post(
+                  Uri.parse('$apiBase/api/admin/update-user-email'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: json.encode({
+                    'user_id': user.id,
+                    'new_email': newEmail,
+                  }),
+                );
+                
+                if (response.statusCode != 200) {
+                  final errorData = json.decode(response.body);
+                  throw Exception(errorData['error'] ?? 'Failed to update email');
+                }
+                
+                print('[PROFILE-UPDATE] ✅ Email user - Auth email updated: $currentAuthEmail → $newEmail');
+              } catch (authError) {
+                print('[PROFILE-UPDATE] ⚠️ Failed to update Auth email: $authError');
+                if (!mounted) return;
+                setState(() {
+                  isUpdating = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+            }
+          } else {
+            // SCENARIO 1: Phone-only user adding email for first time
+            // Check if this phone user already has email in patients table
+            final prefs = await SharedPreferences.getInstance();
+            final phone = prefs.getString('phone');
+            
+            if (phone != null) {
+              try {
+                // Check current email in patients table
+                final patientData = await supabase
+                    .from('patients')
+                    .select('email, user_id')
+                    .eq('aadhar_linked_phone', phone)
+                    .maybeSingle();
+                
+                final currentEmail = patientData?['email'];
+                
+                // Only create/update Auth if email is new or changed
+                if (currentEmail != newEmail) {
+                  print('[PROFILE-UPDATE] 📱 Phone user adding/changing email: ${currentEmail ?? 'null'} → $newEmail');
+                  
+                  // For phone users, we just update patients table
+                  // Auth user creation happens during first login with email
+                  // This is intentional - phone users remain phone-only until they login with email
+                  print('[PROFILE-UPDATE] ℹ️ Email will be added to patients table. Auth user will be created when user logs in with this email.');
+                }
+              } catch (e) {
+                print('[PROFILE-UPDATE] ⚠️ Error checking phone user email: $e');
+              }
             }
           }
         }

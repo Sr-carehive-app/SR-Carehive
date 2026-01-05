@@ -2923,6 +2923,38 @@ app.get('/api/pg/razorpay/debug-cred-check', (req, res) => {
   });
 });
 
+// Update user email (admin operation - no confirmation email sent)
+app.post('/api/admin/update-user-email', async (req, res) => {
+  try {
+    const { user_id, new_email } = req.body || {};
+    if (!user_id || !new_email) {
+      return res.status(400).json({ error: 'user_id and new_email are required' });
+    }
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+
+    // Update user email using admin API - bypasses email confirmation
+    const { data, error } = await supabase.auth.admin.updateUserById(user_id, {
+      email: new_email.toLowerCase(),
+      email_confirm: true  // Auto-confirm email without sending confirmation
+    });
+    
+    if (error) {
+      console.error('Error updating user email:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log(`✅ Email updated for user ${user_id}: ${new_email}`);
+    return res.json({ 
+      success: true, 
+      message: 'Email updated successfully',
+      user: data.user 
+    });
+  } catch (e) {
+    console.error('Error in update-user-email endpoint:', e);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Delete user account (admin operation)
 app.post('/api/admin/delete-user', async (req, res) => {
   try {
