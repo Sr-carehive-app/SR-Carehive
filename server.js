@@ -4886,38 +4886,72 @@ app.post('/verify-password-reset-otp', async (req, res) => {
 
     console.log(`[OTP-VERIFY] Verification attempt for: ${normalizedIdentifier}`);
 
-    // CRITICAL FIX: Get patient data to determine storage key (same logic as send endpoint)
-    let storageKey = normalizedIdentifier; // default
+    // CRITICAL FIX: Try multiple storage keys because user might send OTP with phone but verify with email
+    let otpData = null;
+    let storageKey = null;
+    let patient = null;
     
     if (supabase) {
       try {
+        // Fetch patient record to get both email and phone
         if (isPhoneNumber) {
-          // Phone number - storage key is phone itself
-          storageKey = normalizedIdentifier;
-        } else {
-          // Email - storage key is email from patient record
-          const { data: patient } = await supabase
+          const { data } = await supabase
             .from('patients')
-            .select('email')
+            .select('email, aadhar_linked_phone')
+            .eq('aadhar_linked_phone', normalizedIdentifier)
+            .maybeSingle();
+          patient = data;
+        } else {
+          const { data } = await supabase
+            .from('patients')
+            .select('email, aadhar_linked_phone')
             .eq('email', normalizedIdentifier)
             .maybeSingle();
-          
-          storageKey = patient?.email?.toLowerCase() || normalizedIdentifier;
+          patient = data;
         }
-        console.log(`[OTP-VERIFY] Using storage key: ${storageKey}`);
+        
+        // Try to retrieve OTP with multiple possible keys
+        if (isPhoneNumber) {
+          // User sent phone - try phone key first
+          storageKey = normalizedIdentifier;
+          otpData = await getPasswordResetOTP(storageKey);
+          console.log(`[OTP-VERIFY] Tried phone key: ${storageKey} - ${otpData ? 'Found' : 'Not found'}`);
+        } else {
+          // User sent email - try email key first, then phone key as fallback
+          storageKey = patient?.email?.toLowerCase() || normalizedIdentifier;
+          otpData = await getPasswordResetOTP(storageKey);
+          console.log(`[OTP-VERIFY] Tried email key: ${storageKey} - ${otpData ? 'Found' : 'Not found'}`);
+          
+          // If not found with email and patient has phone, try phone key
+          if (!otpData && patient?.aadhar_linked_phone) {
+            const phoneKey = patient.aadhar_linked_phone;
+            otpData = await getPasswordResetOTP(phoneKey);
+            console.log(`[OTP-VERIFY] Tried phone key as fallback: ${phoneKey} - ${otpData ? 'Found' : 'Not found'}`);
+            if (otpData) {
+              storageKey = phoneKey; // Update storage key for later operations
+            }
+          }
+        }
       } catch (dbError) {
-        console.error(`[OTP-VERIFY] DB lookup failed, using identifier as key:`, dbError.message);
+        console.error(`[OTP-VERIFY] DB lookup failed:`, dbError.message);
+        // Fallback to direct lookup
+        otpData = await getPasswordResetOTP(normalizedIdentifier);
+        storageKey = normalizedIdentifier;
       }
+    } else {
+      // No database connection - use identifier directly
+      otpData = await getPasswordResetOTP(normalizedIdentifier);
+      storageKey = normalizedIdentifier;
     }
 
-    const otpData = await getPasswordResetOTP(storageKey);
-
     if (!otpData) {
-      console.log(`[OTP-VERIFY] No OTP found for: ${storageKey}`);
+      console.log(`[OTP-VERIFY] ❌ No OTP found for identifier: ${normalizedIdentifier}`);
       return res.status(400).json({ 
         error: 'Invalid or expired OTP. Please request a new one.' 
       });
     }
+    
+    console.log(`[OTP-VERIFY] ✅ OTP found with storage key: ${storageKey}`);
 
     // Check expiry
     if (Date.now() > otpData.expiresAt) {

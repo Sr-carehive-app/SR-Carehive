@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 58,
-  "timestamp": "2026-01-06T00:00:00Z",
-  "lastUpdated": "Build 58: Fixed password reset OTP verification storage key mismatch for phone users"
+  "buildNumber": 59,
+  "timestamp": "2026-01-06T00:15:00Z",
+  "lastUpdated": "Build 59: Fixed password reset OTP verification with fallback key lookup for cross-identifier requests"
 }
