@@ -539,6 +539,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
         fullName += ' ${lastNameController.text.trim()}';
         
+        final newEmail = emailController.text.trim().isNotEmpty 
+            ? emailController.text.trim().toLowerCase() 
+            : null;
+        
+        // CRITICAL FIX: If user has Supabase Auth account and email changed, update Supabase Auth email too
+        // BUT: OAuth users (Google, etc.) cannot change email - it's managed by OAuth provider
+        if (!isOAuthUser && user.email != null && newEmail != null && user.email != newEmail) {
+          try {
+            await supabase.auth.updateUser(UserAttributes(email: newEmail));
+            print('[PROFILE-UPDATE] ✅ Supabase Auth email updated: ${user.email} → $newEmail');
+          } catch (authError) {
+            print('[PROFILE-UPDATE] ⚠️ Failed to update Supabase Auth email: $authError');
+            if (!mounted) return;
+            setState(() {
+              isUpdating = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+        
         await supabase
             .from('patients')
             .update({
@@ -552,9 +578,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               'name': fullName, // Keep legacy field
               
               // Email (CRITICAL: Allow phone-only users to add email later)
-              'email': emailController.text.trim().isNotEmpty 
-                  ? emailController.text.trim().toLowerCase() 
-                  : null,
+              'email': newEmail,
               
               // Phone fields
               'country_code': selectedCountryCode,
