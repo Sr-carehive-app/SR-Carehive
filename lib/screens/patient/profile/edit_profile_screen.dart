@@ -543,25 +543,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? emailController.text.trim().toLowerCase() 
             : null;
         
-        // CRITICAL FIX: If user has Supabase Auth account and email changed, update Supabase Auth email too
+        // CRITICAL FIX: Update Supabase Auth email for phone-only users or when email changes
+        // HANDLE 2 SCENARIOS:
+        // 1. Phone-only user (user.email == null) adding email for the first time
+        // 2. Email user changing their existing email
         // BUT: OAuth users (Google, etc.) cannot change email - it's managed by OAuth provider
-        if (!isOAuthUser && user.email != null && newEmail != null && user.email != newEmail) {
-          try {
-            await supabase.auth.updateUser(UserAttributes(email: newEmail));
-            print('[PROFILE-UPDATE] ✅ Supabase Auth email updated: ${user.email} → $newEmail');
-          } catch (authError) {
-            print('[PROFILE-UPDATE] ⚠️ Failed to update Supabase Auth email: $authError');
-            if (!mounted) return;
-            setState(() {
-              isUpdating = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
+        if (!isOAuthUser && newEmail != null) {
+          final currentAuthEmail = user.email;
+          
+          // Update Auth email if:
+          // - User has no email yet (phone-only user) OR
+          // - User is changing their existing email
+          if (currentAuthEmail == null || currentAuthEmail != newEmail) {
+            try {
+              await supabase.auth.updateUser(UserAttributes(email: newEmail));
+              print('[PROFILE-UPDATE] ✅ Supabase Auth email updated: ${currentAuthEmail ?? 'null (phone-only)'} → $newEmail');
+            } catch (authError) {
+              print('[PROFILE-UPDATE] ⚠️ Failed to update Supabase Auth email: $authError');
+              if (!mounted) return;
+              setState(() {
+                isUpdating = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
           }
         }
         
