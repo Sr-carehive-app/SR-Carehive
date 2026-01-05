@@ -1898,7 +1898,7 @@ app.put('/api/provider/profile', async (req, res) => {
     }
     
     // Extract updatable fields from request body
-    // Only these fields can be updated by the provider
+    // Now ALL fields can be updated (except consent checkboxes)
     const {
       full_name,
       mobile_number,
@@ -1908,13 +1908,36 @@ app.put('/api/provider/profile', async (req, res) => {
       workplace,
       service_areas,
       home_visit_fee,
-      teleconsultation_fee
+      teleconsultation_fee,
+      // NEW: Professional details
+      professional_role,
+      other_profession,
+      doctor_specialty,
+      highest_qualification,
+      completion_year,
+      registration_number,
+      // NEW: Current work profile
+      current_work_role,
+      years_of_experience,
+      // NEW: Service preferences
+      services_offered,
+      availability_days,
+      time_slots,
+      languages,
+      community_experience
     } = req.body || {};
-    
+
     // Validate required fields
     if (!full_name || !mobile_number || !city || !workplace) {
       return res.status(400).json({ 
         error: 'Missing required fields: full_name, mobile_number, city, workplace' 
+      });
+    }
+    
+    // Validate professional required fields
+    if (!professional_role || !highest_qualification || !registration_number || !current_work_role) {
+      return res.status(400).json({
+        error: 'Missing required professional fields: professional_role, highest_qualification, registration_number, current_work_role'
       });
     }
     
@@ -1969,14 +1992,38 @@ app.put('/api/provider/profile', async (req, res) => {
       }
     }
     
-    // Build update payload with only allowed fields
+    // Build update payload with ALL allowed fields
     const updatePayload = {
+      // Basic Information
       full_name: full_name.trim(),
       mobile_number: mobile_number.replace(/[^\d]/g, ''),
       alternative_mobile: alternative_mobile ? alternative_mobile.replace(/[^\d]/g, '') : null,
-      email: email ? email.toLowerCase().trim() : (session.email || null), // Keep old email if not provided
+      email: email ? email.toLowerCase().trim() : (session.email || null),
       city: city.trim(),
+      
+      // Professional Details
+      professional_role: professional_role,
+      other_profession: other_profession ? other_profession.trim() : null,
+      doctor_specialty: doctor_specialty ? doctor_specialty.trim() : null,
+      highest_qualification: highest_qualification.trim(),
+      completion_year: completion_year !== undefined && completion_year !== null 
+        ? parseInt(completion_year) 
+        : null,
+      registration_number: registration_number.trim(),
+      
+      // Current Work Profile
+      current_work_role: current_work_role.trim(),
       workplace: workplace.trim(),
+      years_of_experience: years_of_experience !== undefined && years_of_experience !== null 
+        ? parseInt(years_of_experience) 
+        : null,
+      
+      // Service Information
+      services_offered: services_offered || [],
+      availability_days: availability_days || [],
+      time_slots: time_slots || [],
+      languages: languages || [],
+      community_experience: community_experience ? community_experience.trim() : null,
       service_areas: service_areas ? service_areas.trim() : null,
       home_visit_fee: home_visit_fee !== undefined && home_visit_fee !== null 
         ? parseFloat(home_visit_fee) 
@@ -2017,6 +2064,16 @@ app.put('/api/provider/profile', async (req, res) => {
     
     const identifier = session.email || `ID:${session.providerId}` || 'Unknown';
     console.log('✅ Provider profile updated successfully:', identifier);
+    
+    // Send email notification to admin about profile update
+    try {
+      await sendProviderUpdateNotification(updatedProvider, identifier);
+      console.log('📧 Profile update notification sent to admin');
+    } catch (emailError) {
+      console.error('❌ Failed to send update notification email:', emailError.message);
+      // Don't fail the update if email fails
+    }
+    
     res.json({ 
       success: true, 
       message: 'Profile updated successfully',
@@ -2027,6 +2084,117 @@ app.put('/api/provider/profile', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Helper function to send provider update notification
+async function sendProviderUpdateNotification(providerData, updatedBy) {
+  const {
+    id,
+    full_name,
+    email,
+    mobile_number,
+    alternative_mobile,
+    city,
+    professional_role,
+    other_profession,
+    doctor_specialty,
+    highest_qualification,
+    completion_year,
+    registration_number,
+    current_work_role,
+    workplace,
+    years_of_experience,
+    services_offered,
+    availability_days,
+    time_slots,
+    languages,
+    community_experience,
+    service_areas,
+    home_visit_fee,
+    teleconsultation_fee,
+    updated_at
+  } = providerData;
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🔄 Healthcare Provider Profile Updated</h1>
+      </div>
+      <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+        
+        <div style="background: #dbeafe; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #1E40AF;">ℹ️ Update Information</h3>
+          <p style="margin: 5px 0;"><strong>Provider ID:</strong> ${id}</p>
+          <p style="margin: 5px 0;"><strong>Updated By:</strong> ${updatedBy}</p>
+          <p style="margin: 5px 0;"><strong>Updated At:</strong> ${new Date(updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+        </div>
+
+        <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2260FF;">📋 Basic Information</h3>
+          <p style="margin: 5px 0;"><strong>Full Name:</strong> ${full_name || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Email:</strong> ${email || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Mobile:</strong> ${mobile_number || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Alternative Mobile:</strong> ${alternative_mobile || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>City:</strong> ${city || 'Not provided'}</p>
+        </div>
+
+        <div style="background: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #f57c00;">👨‍⚕️ Professional Details</h3>
+          <p style="margin: 5px 0;"><strong>Role:</strong> ${professional_role || 'Not provided'}</p>
+          ${professional_role === 'Other Allied Health Professional' ? `<p style="margin: 5px 0;"><strong>Other Profession:</strong> ${other_profession || 'Not provided'}</p>` : ''}
+          ${professional_role === 'Doctor' ? `<p style="margin: 5px 0;"><strong>Specialty:</strong> ${doctor_specialty || 'Not provided'}</p>` : ''}
+          <p style="margin: 5px 0;"><strong>Qualification:</strong> ${highest_qualification || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Completion Year:</strong> ${completion_year || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Registration Number:</strong> ${registration_number || 'Not provided'}</p>
+        </div>
+
+        <div style="background: #fce4ec; border-left: 4px solid #e91e63; padding: 15px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #c2185b;">💼 Current Work Profile</h3>
+          <p style="margin: 5px 0;"><strong>Current Role:</strong> ${current_work_role || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Workplace:</strong> ${workplace || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Experience:</strong> ${years_of_experience || 'Not provided'} years</p>
+        </div>
+
+        <div style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2e7d32;">💼 Service Information</h3>
+          <p style="margin: 5px 0;"><strong>Services Offered:</strong> ${Array.isArray(services_offered) ? services_offered.join(', ') : (services_offered || 'Not provided')}</p>
+          <p style="margin: 5px 0;"><strong>Availability:</strong> ${Array.isArray(availability_days) ? availability_days.join(', ') : (availability_days || 'Not provided')}</p>
+          <p style="margin: 5px 0;"><strong>Time Slots:</strong> ${Array.isArray(time_slots) ? time_slots.join(', ') : (time_slots || 'Not provided')}</p>
+          <p style="margin: 5px 0;"><strong>Languages:</strong> ${Array.isArray(languages) ? languages.join(', ') : (languages || 'Not provided')}</p>
+          <p style="margin: 5px 0;"><strong>Service Areas:</strong> ${service_areas || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Home Visit Fee:</strong> ₹${home_visit_fee || 'Not provided'}</p>
+          <p style="margin: 5px 0;"><strong>Teleconsultation Fee:</strong> ₹${teleconsultation_fee || 'Not provided'}</p>
+          ${community_experience && community_experience !== 'Not provided' ? `<p style="margin: 5px 0;"><strong>Community Experience:</strong> ${community_experience}</p>` : ''}
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <p style="font-size: 14px; color: #666;">
+            This is an automated notification for profile updates in the SR CareHive system.
+          </p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+        
+        <p style="font-size: 13px; color: #999; text-align: center;">
+          SR CareHive Provider Management System
+        </p>
+      </div>
+    </div>
+  `;
+
+  // Send to admin emails
+  const adminEmail = NURSE_EMAIL || 'srcarehive@gmail.com';
+  const adminEmails = [adminEmail, 'ns.srcarehive@gmail.com'];
+  
+  for (const email of adminEmails) {
+    if (email && email.trim()) {
+      await sendEmail({
+        to: email,
+        subject: `🔄 Provider Profile Updated - ${full_name} (ID: ${id})`,
+        html: emailHtml
+      });
+    }
+  }
+}
 
 // ============================================================================
 // PROVIDER PASSWORD CHANGE ENDPOINT

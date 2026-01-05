@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 48,
-  "timestamp": "2026-01-05T19:15:00Z",
-  "lastUpdated": "Build 48: Fixed profile access, password management & forgot password flow for phone-only healthcare providers"
+  "buildNumber": 49,
+  "timestamp": "2026-01-05T20:00:00Z",
+  "lastUpdated": "Build 49: Full profile edit for providers - all fields editable, admin email notification on updates"
 }
