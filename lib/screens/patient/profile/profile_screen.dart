@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userName;
@@ -42,24 +43,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
+      
+      Map<String, dynamic>? patient;
+      
       if (user != null) {
-        final patient = await supabase
+        // Auth users (email/OAuth) - query by user_id
+        patient = await supabase
             .from('patients')
             .select()
             .eq('user_id', user.id)
             .single();
+      } else {
+        // Phone-only users - query by phone
+        print('[PROFILE] No Auth user - checking for phone-only user');
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
         
+        if (phone != null) {
+          print('[PROFILE] Phone-only user: $phone');
+          patient = await supabase
+              .from('patients')
+              .select()
+              .eq('aadhar_linked_phone', phone)
+              .single();
+        }
+      }
+      
+      if (patient != null) {
         // Build full name from parts if available, otherwise use legacy name field
-        String displayName = patient['name'] ?? widget.userName;
-        final salutation = patient['salutation'] ?? '';
+        String displayName = patient!['name'] ?? widget.userName;
+        final salutation = patient!['salutation'] ?? '';
         
-        if (patient['first_name'] != null) {
-          displayName = patient['first_name'];
-          if (patient['middle_name'] != null && patient['middle_name'].toString().isNotEmpty) {
-            displayName += ' ${patient['middle_name']}';
+        if (patient!['first_name'] != null) {
+          displayName = patient!['first_name'];
+          if (patient!['middle_name'] != null && patient!['middle_name'].toString().isNotEmpty) {
+            displayName += ' ${patient!['middle_name']}';
           }
-          if (patient['last_name'] != null) {
-            displayName += ' ${patient['last_name']}';
+          if (patient!['last_name'] != null) {
+            displayName += ' ${patient!['last_name']}';
           }
         }
         
@@ -69,7 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
         
         setState(() {
-          profileImageUrl = patient['profile_image_url'];
+          profileImageUrl = patient!['profile_image_url'] as String?;
           userName = displayName;
           isLoading = false;
         });
@@ -222,7 +243,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      if (user == null) return;
       
       // Delete old image from Storage if exists
       if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
@@ -235,7 +255,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       
       // Update database to remove avatar URL
-      await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
+      if (user != null) {
+        // Auth users - update by user_id
+        await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
+      } else {
+        // Phone-only users - update by phone
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        if (phone != null) {
+          await supabase.from('patients').update({'profile_image_url': null}).eq('aadhar_linked_phone', phone);
+        }
+      }
       
       setState(() { 
         profileImageUrl = null;
@@ -271,7 +301,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      if (user == null) return;
       
       // Delete old image if exists
       if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
@@ -297,8 +326,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final cleanUserId = user.id.replaceAll('-', '').substring(0, 12); // Shorten UUID
-      final fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
+      
+      // Generate filename based on user type
+      String fileName;
+      if (user != null) {
+        final cleanUserId = user.id.replaceAll('-', '').substring(0, 12);
+        fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
+      } else {
+        // Phone-only user - use phone number
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone') ?? 'unknown';
+        final cleanPhone = phone.replaceAll('+', '').substring(phone.length > 10 ? phone.length - 10 : 0);
+        fileName = 'avatar_phone_${cleanPhone}_$timestamp.$fileExtension';
+      }
       
       String imageUrl = '';
       if (kIsWeb) {
@@ -319,7 +359,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       
       // Update database
-      await supabase.from('patients').update({'profile_image_url': imageUrl}).eq('user_id', user.id);
+      if (user != null) {
+        // Auth users - update by user_id
+        await supabase.from('patients').update({'profile_image_url': imageUrl}).eq('user_id', user.id);
+      } else {
+        // Phone-only users - update by phone
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        if (phone != null) {
+          await supabase.from('patients').update({'profile_image_url': imageUrl}).eq('aadhar_linked_phone', phone);
+        }
+      }
       
       setState(() { 
         profileImageUrl = imageUrl;
@@ -610,7 +660,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
+      // Sign out from Supabase Auth (for email/OAuth users)
       await Supabase.instance.client.auth.signOut();
+      
+      // CRITICAL: Also clear phone-only user session from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('phone');
+      await prefs.remove('loginType');
+      print('✅ Phone session cleared from SharedPreferences');
       
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();

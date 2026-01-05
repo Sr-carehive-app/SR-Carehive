@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -177,8 +178,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       
+      // CRITICAL FIX: Handle phone-only users who don't have Supabase Auth session
       if (user != null) {
-        // Check if user is OAuth user (Google, etc.)
+        // Email/OAuth users with Supabase Auth
         isOAuthUser = user.appMetadata['provider'] != null && user.appMetadata['provider'] != 'email';
         
         final patient = await supabase
@@ -188,46 +190,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             .single();
         
         setState(() {
-          // Load salutation
-          selectedSalutation = patient['salutation'];
-          
-          // Load split name fields (with fallback to legacy name field)
-          if (patient['first_name'] != null) {
-            firstNameController.text = patient['first_name'] ?? '';
-            middleNameController.text = patient['middle_name'] ?? '';
-            lastNameController.text = patient['last_name'] ?? '';
-          } else if (patient['name'] != null) {
-            // Fallback: split legacy name field
-            final nameParts = (patient['name'] as String).split(' ');
-            firstNameController.text = nameParts.isNotEmpty ? nameParts[0] : '';
-            lastNameController.text = nameParts.length > 1 ? nameParts.last : '';
-            if (nameParts.length > 2) {
-              middleNameController.text = nameParts.sublist(1, nameParts.length - 1).join(' ');
-            }
-          }
-          
-          // Load phone fields
-          selectedCountryCode = patient['country_code'] ?? '+91';
-          aadharLinkedPhoneController.text = patient['aadhar_linked_phone'] ?? patient['phone'] ?? '';
-          alternativePhoneController.text = patient['alternative_phone'] ?? '';
-          
-          // Load address fields (street removed from visible form)
-          houseNumberController.text = patient['house_number'] ?? '';
-          // keep streetController for backward compatibility but do not populate it from DB to avoid schema issues
-          townController.text = patient['town'] ?? '';
-          cityController.text = patient['city'] ?? '';
-          stateController.text = patient['state'] ?? '';
-          pincodeController.text = patient['pincode'] ?? '';
-          
-          // Load other fields
-          emailController.text = patient['email'] ?? '';
-          // Load age if available (new preferred field).
-          ageController.text = patient['age'] != null ? patient['age'].toString() : '';
-          aadharController.text = patient['aadhar_number'] ?? '';
-          selectedGender = patient['gender'];
-          profileImageUrl = patient['profile_image_url'];
+          _loadPatientData(patient);
           isLoading = false;
         });
+      } else {
+        // Phone-only users without Supabase Auth - use SharedPreferences
+        print('[PROFILE] No Auth user - checking for phone-only user');
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
+        
+        if (phone != null && loginType == 'phone') {
+          print('[PROFILE] Phone-only user detected: $phone');
+          
+          // Query by phone number instead of user_id
+          final patient = await supabase
+              .from('patients')
+              .select()
+              .eq('aadhar_linked_phone', phone)
+              .single();
+          
+          setState(() {
+            isOAuthUser = false; // Phone users are not OAuth
+            _loadPatientData(patient);
+            isLoading = false;
+          });
+        } else {
+          // No valid session found
+          print('[PROFILE] ERROR: No valid user session found');
+          setState(() {
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading user data: $e');
@@ -235,6 +229,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         isLoading = false;
       });
     }
+  }
+  
+  // Helper method to load patient data (reduces code duplication)
+  void _loadPatientData(Map<String, dynamic> patient) {
+    // Load salutation
+    selectedSalutation = patient['salutation'];
+    
+    // Load split name fields (with fallback to legacy name field)
+    if (patient['first_name'] != null) {
+      firstNameController.text = patient['first_name'] ?? '';
+      middleNameController.text = patient['middle_name'] ?? '';
+      lastNameController.text = patient['last_name'] ?? '';
+    } else if (patient['name'] != null) {
+      // Fallback: split legacy name field
+      final nameParts = (patient['name'] as String).split(' ');
+      firstNameController.text = nameParts.isNotEmpty ? nameParts[0] : '';
+      lastNameController.text = nameParts.length > 1 ? nameParts.last : '';
+      if (nameParts.length > 2) {
+        middleNameController.text = nameParts.sublist(1, nameParts.length - 1).join(' ');
+      }
+    }
+    
+    // Load phone fields
+    selectedCountryCode = patient['country_code'] ?? '+91';
+    aadharLinkedPhoneController.text = patient['aadhar_linked_phone'] ?? patient['phone'] ?? '';
+    alternativePhoneController.text = patient['alternative_phone'] ?? '';
+    
+    // Load address fields (street removed from visible form)
+    houseNumberController.text = patient['house_number'] ?? '';
+    // keep streetController for backward compatibility but do not populate it from DB to avoid schema issues
+    townController.text = patient['town'] ?? '';
+    cityController.text = patient['city'] ?? '';
+    stateController.text = patient['state'] ?? '';
+    pincodeController.text = patient['pincode'] ?? '';
+    
+    // Load other fields
+    emailController.text = patient['email'] ?? '';
+    // Load age if available (new preferred field).
+    ageController.text = patient['age'] != null ? patient['age'].toString() : '';
+    aadharController.text = patient['aadhar_number'] ?? '';
+    selectedGender = patient['gender'];
+    profileImageUrl = patient['profile_image_url'];
   }
 
   Future<void> _showImageOptions() async {
@@ -311,7 +347,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      if (user == null) return;
       
       // Delete old image from Storage if exists
       if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
@@ -323,8 +358,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
       
-      
-      await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
+      // Update database
+      if (user != null) {
+        // Auth users - update by user_id
+        await supabase.from('patients').update({'profile_image_url': null}).eq('user_id', user.id);
+      } else {
+        // Phone-only users - update by phone
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        if (phone != null) {
+          await supabase.from('patients').update({'profile_image_url': null}).eq('aadhar_linked_phone', phone);
+        }
+      }
       
       setState(() { 
         profileImageUrl = null;
@@ -362,65 +407,89 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       
+      // Delete old image if exists
+      if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
+        try {
+          final oldFileName = profileImageUrl!.split('/').last.split('?').first;
+          await supabase.storage.from('profile-images').remove([oldFileName]);
+        } catch (e) {
+          print('Could not delete old image: $e');
+        }
+      }
+      
+      // Generate unique filename (fix for web blob URLs)
+      String fileExtension = 'jpg'; // Default to jpg
+      if (kIsWeb) {
+        // For web, try to get extension from image name or default to jpg
+        final imageName = image.name;
+        if (imageName.contains('.')) {
+          fileExtension = imageName.split('.').last.toLowerCase();
+        }
+      } else {
+        // For mobile, use path
+        fileExtension = image.path.split('.').last.split('?').first;
+      }
+      
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Generate filename based on user type
+      String fileName;
       if (user != null) {
-        // Delete old image if exists
-        if (profileImageUrl != null && profileImageUrl!.isNotEmpty) {
-          try {
-            final oldFileName = profileImageUrl!.split('/').last.split('?').first;
-            await supabase.storage.from('profile-images').remove([oldFileName]);
-          } catch (e) {
-            print('Could not delete old image: $e');
-          }
-        }
-        
-        // Generate unique filename (fix for web blob URLs)
-        String fileExtension = 'jpg'; // Default to jpg
-        if (kIsWeb) {
-          // For web, try to get extension from image name or default to jpg
-          final imageName = image.name;
-          if (imageName.contains('.')) {
-            fileExtension = imageName.split('.').last.toLowerCase();
-          }
-        } else {
-          // For mobile, use path
-          fileExtension = image.path.split('.').last.split('?').first;
-        }
-        
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
         final cleanUserId = user.id.replaceAll('-', '').substring(0, 12);
-        final fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
-        
-        String imageUrl = '';
-        if (kIsWeb) {
-          final bytes = await image.readAsBytes();
-          await supabase.storage
-              .from('profile-images')
-              .uploadBinary(fileName, bytes, fileOptions: FileOptions(cacheControl: '3600', upsert: true));
-          imageUrl = supabase.storage
-              .from('profile-images')
-              .getPublicUrl(fileName);
-        } else {
-          await supabase.storage
-              .from('profile-images')
-              .upload(fileName, File(image.path), fileOptions: FileOptions(cacheControl: '3600', upsert: true));
-          imageUrl = supabase.storage
-              .from('profile-images')
-              .getPublicUrl(fileName);
-        }
-        // Update database
+        fileName = 'avatar_${cleanUserId}_$timestamp.$fileExtension';
+      } else {
+        // Phone-only user - use phone number
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone') ?? 'unknown';
+        final cleanPhone = phone.replaceAll('+', '').substring(phone.length > 10 ? phone.length - 10 : 0);
+        fileName = 'avatar_phone_${cleanPhone}_$timestamp.$fileExtension';
+      }
+      
+      String imageUrl = '';
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        await supabase.storage
+            .from('profile-images')
+            .uploadBinary(fileName, bytes, fileOptions: FileOptions(cacheControl: '3600', upsert: true));
+        imageUrl = supabase.storage
+            .from('profile-images')
+            .getPublicUrl(fileName);
+      } else {
+        await supabase.storage
+            .from('profile-images')
+            .upload(fileName, File(image.path), fileOptions: FileOptions(cacheControl: '3600', upsert: true));
+        imageUrl = supabase.storage
+            .from('profile-images')
+            .getPublicUrl(fileName);
+      }
+      
+      // Update database
+      if (user != null) {
+        // Auth users - update by user_id
         await supabase
             .from('patients')
             .update({'profile_image_url': imageUrl})
             .eq('user_id', user.id);
-        setState(() {
-          profileImageUrl = imageUrl;
-          selectedImageFile = null;
-          selectedImageBytes = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile photo updated successfully!')),
-        );
+      } else {
+        // Phone-only users - update by phone
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        if (phone != null) {
+          await supabase
+              .from('patients')
+              .update({'profile_image_url': imageUrl})
+              .eq('aadhar_linked_phone', phone);
+        }
       }
+      
+      setState(() {
+        profileImageUrl = imageUrl;
+        selectedImageFile = null;
+        selectedImageBytes = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile photo updated successfully!')),
+      );
     } catch (e) {
       print('Error uploading image: $e');
       String userMessage = 'Failed to upload photo. Please try again.';
@@ -548,7 +617,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         // 1. Phone-only user (user.email == null) adding email for the first time
         // 2. Email user changing their existing email
         // BUT: OAuth users (Google, etc.) cannot change email - it's managed by OAuth provider
-        if (!isOAuthUser && newEmail != null) {
+        // ALSO: Only update if user has Supabase Auth session
+        if (user != null && !isOAuthUser && newEmail != null) {
           final currentAuthEmail = user.email;
           
           // Update Auth email if:
@@ -575,42 +645,83 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           }
         }
         
-        await supabase
-            .from('patients')
-            .update({
-              // Salutation
-              'salutation': selectedSalutation,
-              
-              // Split name fields
-              'first_name': firstNameController.text.trim(),
-              'middle_name': middleNameController.text.trim(),
-              'last_name': lastNameController.text.trim(),
-              'name': fullName, // Keep legacy field
-              
-              // Email (CRITICAL: Allow phone-only users to add email later)
-              'email': newEmail,
-              
-              // Phone fields
-              'country_code': selectedCountryCode,
-              'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
-              'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
-                  ? alternativePhoneController.text.trim() 
-                  : null,
-              
-              // Address fields
-              'house_number': houseNumberController.text.trim(),
-              // 'street' removed from form by design; keep column unchanged if present
-              'town': townController.text.trim(),
-              'city': cityController.text.trim(),
-              'state': stateController.text.trim(),
-              'pincode': pincodeController.text.trim(),
-              
-              // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
-              'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
-              'aadhar_number': aadharController.text.trim(),
-              'gender': selectedGender,
-            })
-            .eq('user_id', user.id);
+        // Determine how to update: by user_id (Auth users) or phone (phone-only users)
+        final updateQuery = user != null 
+            ? supabase.from('patients').update({
+                // Salutation
+                'salutation': selectedSalutation,
+                
+                // Split name fields
+                'first_name': firstNameController.text.trim(),
+                'middle_name': middleNameController.text.trim(),
+                'last_name': lastNameController.text.trim(),
+                'name': fullName, // Keep legacy field
+                
+                // Email (CRITICAL: Allow phone-only users to add email later)
+                'email': newEmail,
+                
+                // Phone fields
+                'country_code': selectedCountryCode,
+                'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+                'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                    ? alternativePhoneController.text.trim() 
+                    : null,
+                
+                // Address fields
+                'house_number': houseNumberController.text.trim(),
+                // 'street' removed from form by design; keep column unchanged if present
+                'town': townController.text.trim(),
+                'city': cityController.text.trim(),
+                'state': stateController.text.trim(),
+                'pincode': pincodeController.text.trim(),
+                
+                // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
+                'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
+                'aadhar_number': aadharController.text.trim(),
+                'gender': selectedGender,
+              }).eq('user_id', user.id)
+            : () async {
+                // Phone-only user - update by phone number
+                final prefs = await SharedPreferences.getInstance();
+                final phone = prefs.getString('phone');
+                if (phone == null) throw Exception('Phone session not found');
+                
+                return supabase.from('patients').update({
+                  // Salutation
+                  'salutation': selectedSalutation,
+                  
+                  // Split name fields
+                  'first_name': firstNameController.text.trim(),
+                  'middle_name': middleNameController.text.trim(),
+                  'last_name': lastNameController.text.trim(),
+                  'name': fullName, // Keep legacy field
+                  
+                  // Email (CRITICAL: Allow phone-only users to add email later)
+                  'email': newEmail,
+                  
+                  // Phone fields
+                  'country_code': selectedCountryCode,
+                  'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+                  'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+                      ? alternativePhoneController.text.trim() 
+                      : null,
+                  
+                  // Address fields
+                  'house_number': houseNumberController.text.trim(),
+                  // 'street' removed from form by design; keep column unchanged if present
+                  'town': townController.text.trim(),
+                  'city': cityController.text.trim(),
+                  'state': stateController.text.trim(),
+                  'pincode': pincodeController.text.trim(),
+                  
+                  // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
+                  'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
+                  'aadhar_number': aadharController.text.trim(),
+                  'gender': selectedGender,
+                }).eq('aadhar_linked_phone', phone);
+              }();
+        
+        await updateQuery;
         
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 54,
-  "timestamp": "2026-01-05T21:30:00Z",
-  "lastUpdated": "Build 54: Fixed phone-only users email addition to sync with Supabase Auth"
+  "buildNumber": 55,
+  "timestamp": "2026-01-05T22:45:00Z",
+  "lastUpdated": "Build 55: Fixed session management for phone users - app restart auto-login & complete logout"
 }

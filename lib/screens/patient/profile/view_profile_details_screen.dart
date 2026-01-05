@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ViewProfileDetailsScreen extends StatefulWidget {
   const ViewProfileDetailsScreen({Key? key}) : super(key: key);
@@ -24,17 +25,39 @@ class _ViewProfileDetailsScreenState extends State<ViewProfileDetailsScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
+      
+      Map<String, dynamic>? patient;
 
       if (user != null) {
-        final patient =
-            await supabase
+        // Auth users (email/OAuth) - query by user_id
+        patient = await supabase
                 .from('patients')
                 .select()
                 .eq('user_id', user.id)
                 .single();
-
+      } else {
+        // Phone-only users - query by phone
+        print('[VIEW-PROFILE] No Auth user - checking for phone-only user');
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        
+        if (phone != null) {
+          print('[VIEW-PROFILE] Phone-only user: $phone');
+          patient = await supabase
+              .from('patients')
+              .select()
+              .eq('aadhar_linked_phone', phone)
+              .single();
+        }
+      }
+      
+      if (patient != null) {
         setState(() {
           profileData = patient;
+          isLoading = false;
+        });
+      } else {
+        setState(() {
           isLoading = false;
         });
       }

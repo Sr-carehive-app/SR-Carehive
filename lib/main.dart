@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'config/api_config.dart';
 import 'utils/web_utils.dart';
 import 'package:in_app_update/in_app_update.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -56,6 +57,10 @@ Future<void> main() async {
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL'] ?? 'YOUR_SUPABASE_URL_HERE',
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? 'YOUR_SUPABASE_ANON_KEY_HERE',
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+      autoRefreshToken: true, // Automatically refresh tokens
+    ),
   );
   runApp(MyApp());
 }
@@ -237,7 +242,7 @@ class _MyAppState extends State<MyApp> {
     print('🔍 Checking auth state for user: ${user?.email}');
     
     if (user != null) {
-      // User is already logged in, check if they have a healthcare seeker record
+      // Auth users (Email/OAuth) - already logged in
       try {
         final patient = await supabase
             .from('patients')
@@ -259,7 +264,43 @@ class _MyAppState extends State<MyApp> {
         print('❌ Error checking healthcare seeker record: $e');
       }
     } else {
-      print('👤 No authenticated user found');
+      // No Auth user - check for phone-only user session
+      print('👤 No authenticated user found - checking for phone-only session');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
+        
+        if (phone != null && loginType == 'phone') {
+          print('📱 Phone-only session found: $phone');
+          
+          // Fetch patient data
+          final patient = await supabase
+              .from('patients')
+              .select()
+              .eq('aadhar_linked_phone', phone)
+              .maybeSingle();
+          
+          if (patient != null) {
+            print('✅ Phone user session restored - navigating to dashboard');
+            final salutation = patient['salutation'] ?? '';
+            final name = patient['name'] ?? '';
+            final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+            
+            setState(() {
+              _homeWidget = PatientDashboardScreen(userName: displayName);
+            });
+          } else {
+            print('⚠️ Phone session found but patient record missing - clearing session');
+            await prefs.remove('phone');
+            await prefs.remove('loginType');
+          }
+        } else {
+          print('👤 No valid session found - showing splash screen');
+        }
+      } catch (e) {
+        print('❌ Error checking phone-only session: $e');
+      }
     }
   }
 
