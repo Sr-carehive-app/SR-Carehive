@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 62,
-  "timestamp": "2026-01-06T01:15:00Z",
-  "lastUpdated": "Build 62: Fixed phone-only user session by clearing Auth and using maybeSingle in profile queries"
+  "buildNumber": 63,
+  "timestamp": "2026-01-06T01:30:00Z",
+  "lastUpdated": "Build 63: Fixed phone session priority - check SharedPreferences BEFORE Auth to prevent override"
 }

@@ -237,8 +237,47 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _checkAuthState() async {
     final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
+    final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString('phone');
+    final loginType = prefs.getString('loginType');
     
+    // CRITICAL FIX: Check phone session FIRST (priority over Auth)
+    // This prevents stale Auth sessions from interfering with phone-only logins
+    if (phone != null && loginType == 'phone') {
+      print('📱 Phone-only session found: $phone (checking BEFORE Auth)');
+      
+      try {
+        // Fetch patient data
+        final patient = await supabase
+            .from('patients')
+            .select()
+            .eq('aadhar_linked_phone', phone)
+            .maybeSingle();
+        
+        if (patient != null) {
+          print('✅ Phone user session restored - navigating to dashboard');
+          final salutation = patient['salutation'] ?? '';
+          final name = patient['name'] ?? '';
+          final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
+          
+          setState(() {
+            _homeWidget = PatientDashboardScreen(userName: displayName);
+          });
+          return; // Exit early - phone session found and loaded
+        } else {
+          print('⚠️ Phone session found but patient record missing - clearing session');
+          await prefs.remove('phone');
+          await prefs.remove('loginType');
+          // Continue to check Auth session below
+        }
+      } catch (e) {
+        print('❌ Error checking phone-only session: $e');
+        // Continue to check Auth session below
+      }
+    }
+    
+    // Check Auth users (Email/OAuth) only if no phone session found
+    final user = supabase.auth.currentUser;
     print('🔍 Checking auth state for user: ${user?.email}');
     
     if (user != null) {
@@ -264,43 +303,8 @@ class _MyAppState extends State<MyApp> {
         print('❌ Error checking healthcare seeker record: $e');
       }
     } else {
-      // No Auth user - check for phone-only user session
-      print('👤 No authenticated user found - checking for phone-only session');
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final phone = prefs.getString('phone');
-        final loginType = prefs.getString('loginType');
-        
-        if (phone != null && loginType == 'phone') {
-          print('📱 Phone-only session found: $phone');
-          
-          // Fetch patient data
-          final patient = await supabase
-              .from('patients')
-              .select()
-              .eq('aadhar_linked_phone', phone)
-              .maybeSingle();
-          
-          if (patient != null) {
-            print('✅ Phone user session restored - navigating to dashboard');
-            final salutation = patient['salutation'] ?? '';
-            final name = patient['name'] ?? '';
-            final displayName = salutation.isNotEmpty ? '$salutation $name' : name;
-            
-            setState(() {
-              _homeWidget = PatientDashboardScreen(userName: displayName);
-            });
-          } else {
-            print('⚠️ Phone session found but patient record missing - clearing session');
-            await prefs.remove('phone');
-            await prefs.remove('loginType');
-          }
-        } else {
-          print('👤 No valid session found - showing splash screen');
-        }
-      } catch (e) {
-        print('❌ Error checking phone-only session: $e');
-      }
+      // No Auth user and no phone session - show splash
+      print('👤 No authenticated user found - showing splash screen');
     }
   }
 
