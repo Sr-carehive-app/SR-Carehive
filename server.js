@@ -1941,6 +1941,59 @@ app.put('/api/provider/profile', async (req, res) => {
       });
     }
     
+    // Validate conditional required fields based on professional_role
+    if (professional_role === 'Doctor' && (!doctor_specialty || !doctor_specialty.trim())) {
+      return res.status(400).json({
+        error: 'Doctor specialty is required for doctors'
+      });
+    }
+    
+    if (professional_role === 'Other Allied Health Professional' && (!other_profession || !other_profession.trim())) {
+      return res.status(400).json({
+        error: 'Please specify your profession for Other Allied Health Professional'
+      });
+    }
+    
+    // Validate completion_year if provided
+    if (completion_year !== undefined && completion_year !== null && completion_year !== '') {
+      const yearValue = parseInt(completion_year);
+      const currentYear = new Date().getFullYear();
+      if (isNaN(yearValue) || yearValue < 1950 || yearValue > currentYear + 10) {
+        return res.status(400).json({
+          error: 'Invalid completion year. Must be between 1950 and ' + (currentYear + 10)
+        });
+      }
+    }
+    
+    // Validate years_of_experience if provided
+    if (years_of_experience !== undefined && years_of_experience !== null && years_of_experience !== '') {
+      const expValue = parseInt(years_of_experience);
+      if (isNaN(expValue) || expValue < 0 || expValue > 70) {
+        return res.status(400).json({
+          error: 'Invalid years of experience. Must be between 0 and 70'
+        });
+      }
+    }
+    
+    // Validate fees if provided
+    if (home_visit_fee !== undefined && home_visit_fee !== null && home_visit_fee !== '') {
+      const feeValue = parseFloat(home_visit_fee);
+      if (isNaN(feeValue) || feeValue < 0 || feeValue > 1000000) {
+        return res.status(400).json({
+          error: 'Invalid home visit fee. Must be between 0 and 1000000'
+        });
+      }
+    }
+    
+    if (teleconsultation_fee !== undefined && teleconsultation_fee !== null && teleconsultation_fee !== '') {
+      const feeValue = parseFloat(teleconsultation_fee);
+      if (isNaN(feeValue) || feeValue < 0 || feeValue > 1000000) {
+        return res.status(400).json({
+          error: 'Invalid teleconsultation fee. Must be between 0 and 1000000'
+        });
+      }
+    }
+    
     // Validate mobile number format
     if (!/^\d{10}$/.test(mobile_number.replace(/[^\d]/g, ''))) {
       return res.status(400).json({ error: 'Primary mobile number must be 10 digits' });
@@ -2019,10 +2072,18 @@ app.put('/api/provider/profile', async (req, res) => {
         : null,
       
       // Service Information
-      services_offered: services_offered || [],
-      availability_days: availability_days || [],
-      time_slots: time_slots || [],
-      languages: languages || [],
+      services_offered: Array.isArray(services_offered) 
+        ? services_offered.filter(s => s && s.trim()) 
+        : [],
+      availability_days: Array.isArray(availability_days) 
+        ? availability_days.filter(d => d && d.trim()) 
+        : [],
+      time_slots: Array.isArray(time_slots) 
+        ? time_slots.filter(t => t && t.trim()) 
+        : [],
+      languages: Array.isArray(languages) 
+        ? languages.filter(l => l && l.trim()) 
+        : [],
       community_experience: community_experience ? community_experience.trim() : null,
       service_areas: service_areas ? service_areas.trim() : null,
       home_visit_fee: home_visit_fee !== undefined && home_visit_fee !== null 

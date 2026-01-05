@@ -917,3 +917,4 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
       ),
     );
   }
+}
