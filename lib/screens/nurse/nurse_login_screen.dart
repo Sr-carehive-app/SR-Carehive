@@ -6,6 +6,7 @@ import 'package:care12/screens/nurse/provider_application_status_screen.dart';
 import 'package:care12/screens/nurse/admin_dashboard_selection_screen.dart';
 import 'appointments_manage_screen.dart';
 import 'nurse_forgot_password_otp_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class NurseLoginScreen extends StatefulWidget {
   const NurseLoginScreen({Key? key}) : super(key: key);
@@ -598,7 +599,10 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'nurse_login_back'),
+        ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),

@@ -6,7 +6,7 @@ import 'dart:async';
 class SafeNavigation {
   // Debounce timer to prevent multiple rapid clicks
   static final Map<String, Timer> _debouncers = {};
-  static const Duration _debounceDuration = Duration(milliseconds: 300);
+  static const Duration _debounceDuration = Duration(milliseconds: 100);
   
   /// Safe Navigator.pop with debouncing and context validation
   /// Use this instead of direct Navigator.pop(context)
@@ -33,13 +33,7 @@ class SafeNavigation {
   
   /// Internal safe pop with all validation checks
   static void _safePop(BuildContext context, {dynamic result}) {
-    // Check 1: Widget must still be mounted
-    if (context is StatefulWidget && !(context as dynamic).mounted) {
-      debugPrint('[SafeNav] Widget not mounted, skipping pop');
-      return;
-    }
-    
-    // Check 2: Context must be valid
+    // Check 1: Context must be mounted
     try {
       if (!context.mounted) {
         debugPrint('[SafeNav] Context not mounted, skipping pop');
@@ -50,21 +44,29 @@ class SafeNavigation {
       return;
     }
     
-    // Check 3: Navigator must be able to pop
-    final navigator = Navigator.of(context, rootNavigator: false);
-    if (!navigator.canPop()) {
-      debugPrint('[SafeNav] Navigator cannot pop, skipping');
-      return;
-    }
-    
-    // Safe to pop
+    // Check 2: Navigator must exist and be able to pop
     try {
+      final navigator = Navigator.maybeOf(context, rootNavigator: false);
+      if (navigator == null) {
+        debugPrint('[SafeNav] No navigator found, skipping pop');
+        return;
+      }
+      
+      if (!navigator.canPop()) {
+        debugPrint('[SafeNav] Navigator cannot pop, skipping');
+        return;
+      }
+      
+      // Safe to pop
       navigator.pop(result);
     } catch (e) {
       debugPrint('[SafeNav] Error during pop: $e');
       // Fallback: try root navigator
       try {
-        Navigator.of(context, rootNavigator: true).pop(result);
+        final rootNav = Navigator.maybeOf(context, rootNavigator: true);
+        if (rootNav != null && rootNav.canPop()) {
+          rootNav.pop(result);
+        }
       } catch (e2) {
         debugPrint('[SafeNav] Fallback pop also failed: $e2');
       }

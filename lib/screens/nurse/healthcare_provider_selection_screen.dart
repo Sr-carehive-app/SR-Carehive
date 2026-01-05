@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'nurse_login_screen.dart';
 import 'healthcare_provider_registration_screen.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class HealthcareProviderSelectionScreen extends StatelessWidget {
   const HealthcareProviderSelectionScreen({Key? key}) : super(key: key);
@@ -10,7 +11,10 @@ class HealthcareProviderSelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: const BackButton(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_selection_back'),
+        ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),

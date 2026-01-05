@@ -14,6 +14,7 @@ import 'package:care12/widgets/google_logo_widget.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:care12/utils/safe_navigation.dart';
 
 class PatientSignUpScreen extends StatefulWidget {
   final Map<String, String>? prefillData;
@@ -1125,7 +1126,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               );
             } else {
               // For regular users, normal back navigation
-              Navigator.pop(context);
+              SafeNavigation.pop(context, debugLabel: 'patient_signup_back');
             }
           },
         ),

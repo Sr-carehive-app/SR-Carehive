@@ -508,6 +508,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
       return;
     }
+    
+    // Validate email format if provided
+    if (emailController.text.trim().isNotEmpty) {
+      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+      if (!emailRegex.hasMatch(emailController.text.trim())) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid email address'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
 
     setState(() {
       isUpdating = true;
@@ -536,6 +550,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               'middle_name': middleNameController.text.trim(),
               'last_name': lastNameController.text.trim(),
               'name': fullName, // Keep legacy field
+              
+              // Email (CRITICAL: Allow phone-only users to add email later)
+              'email': emailController.text.trim().isNotEmpty 
+                  ? emailController.text.trim().toLowerCase() 
+                  : null,
               
               // Phone fields
               'country_code': selectedCountryCode,

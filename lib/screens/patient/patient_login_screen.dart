@@ -13,6 +13,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
 import 'package:intl/intl.dart';
+import 'package:care12/utils/safe_navigation.dart';
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({Key? key}) : super(key: key);
@@ -464,7 +465,10 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> with SingleTick
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => SafeNavigation.pop(context, debugLabel: 'patient_login_back'),
+        ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
       ),
