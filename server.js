@@ -5023,19 +5023,77 @@ app.post('/reset-password-with-otp', async (req, res) => {
     
     console.log(`[PASSWORD-RESET] Reset attempt for: ${normalizedIdentifier}`);
 
-    const otpData = await getPasswordResetOTP(normalizedIdentifier);
+    // CRITICAL FIX: Try multiple storage keys (same logic as verify endpoint)
+    let otpData = null;
+    let storageKey = null;
+    let patient = null;
+    
+    if (supabase) {
+      try {
+        // Fetch patient record to get both email and phone
+        if (isPhoneNumber) {
+          const { data } = await supabase
+            .from('patients')
+            .select('email, aadhar_linked_phone')
+            .eq('aadhar_linked_phone', normalizedIdentifier)
+            .maybeSingle();
+          patient = data;
+        } else {
+          const { data } = await supabase
+            .from('patients')
+            .select('email, aadhar_linked_phone')
+            .eq('email', normalizedIdentifier)
+            .maybeSingle();
+          patient = data;
+        }
+        
+        // Try to retrieve OTP with multiple possible keys
+        if (isPhoneNumber) {
+          // User sent phone - try phone key first
+          storageKey = normalizedIdentifier;
+          otpData = await getPasswordResetOTP(storageKey);
+          console.log(`[PASSWORD-RESET] Tried phone key: ${storageKey} - ${otpData ? 'Found' : 'Not found'}`);
+        } else {
+          // User sent email - try email key first, then phone key as fallback
+          storageKey = patient?.email?.toLowerCase() || normalizedIdentifier;
+          otpData = await getPasswordResetOTP(storageKey);
+          console.log(`[PASSWORD-RESET] Tried email key: ${storageKey} - ${otpData ? 'Found' : 'Not found'}`);
+          
+          // If not found with email and patient has phone, try phone key
+          if (!otpData && patient?.aadhar_linked_phone) {
+            const phoneKey = patient.aadhar_linked_phone;
+            otpData = await getPasswordResetOTP(phoneKey);
+            console.log(`[PASSWORD-RESET] Tried phone key as fallback: ${phoneKey} - ${otpData ? 'Found' : 'Not found'}`);
+            if (otpData) {
+              storageKey = phoneKey; // Update storage key for later operations
+            }
+          }
+        }
+      } catch (dbError) {
+        console.error(`[PASSWORD-RESET] DB lookup failed:`, dbError.message);
+        // Fallback to direct lookup
+        otpData = await getPasswordResetOTP(normalizedIdentifier);
+        storageKey = normalizedIdentifier;
+      }
+    } else {
+      // No database connection - use identifier directly
+      otpData = await getPasswordResetOTP(normalizedIdentifier);
+      storageKey = normalizedIdentifier;
+    }
 
     if (!otpData || !otpData.verified) {
-      console.log(`[PASSWORD-RESET] OTP not verified for: ${normalizedIdentifier}`);
+      console.log(`[PASSWORD-RESET] ❌ OTP not verified for identifier: ${normalizedIdentifier}`);
       return res.status(400).json({ 
         error: 'OTP not verified. Please verify OTP first.' 
       });
     }
+    
+    console.log(`[PASSWORD-RESET] ✅ OTP verified with storage key: ${storageKey}`);
 
     // Check if OTP is still valid
     if (Date.now() > otpData.expiresAt) {
-      console.log(`[PASSWORD-RESET] OTP expired for: ${normalizedIdentifier}`);
-      await deletePasswordResetOTP(normalizedIdentifier);
+      console.log(`[PASSWORD-RESET] OTP expired for: ${storageKey}`);
+      await deletePasswordResetOTP(storageKey);
       return res.status(400).json({ 
         error: 'OTP has expired. Please request a new one.' 
       });
@@ -5053,34 +5111,45 @@ app.post('/reset-password-with-otp', async (req, res) => {
       return res.status(500).json({ error: 'Database connection not available' });
     }
 
-    // Check if this is a phone-only user or email user
-    // Query by email or phone (stored in otpData)
-    let patient = null;
-    let patientError = null;
-    
-    if (otpData.phone) {
-      // Phone-only user
-      const { data, error } = await supabase
-        .from('patients')
-        .select('email, password_hash, user_id, aadhar_linked_phone')
-        .eq('aadhar_linked_phone', otpData.phone)
-        .maybeSingle();
-      patient = data;
-      patientError = error;
-    } else if (otpData.email) {
-      // Email user
-      const { data, error } = await supabase
-        .from('patients')
-        .select('email, password_hash, user_id, aadhar_linked_phone')
-        .eq('email', otpData.email)
-        .maybeSingle();
-      patient = data;
-      patientError = error;
-    }
+    // Reuse patient data if already fetched, otherwise query again
+    if (!patient) {
+      // Check if this is a phone-only user or email user
+      // Query by email or phone (stored in otpData)
+      let patientError = null;
+      
+      if (otpData.phone) {
+        // Phone-only user
+        const { data, error } = await supabase
+          .from('patients')
+          .select('email, password_hash, user_id, aadhar_linked_phone')
+          .eq('aadhar_linked_phone', otpData.phone)
+          .maybeSingle();
+        patient = data;
+        patientError = error;
+      } else if (otpData.email) {
+        // Email user
+        const { data, error } = await supabase
+          .from('patients')
+          .select('email, password_hash, user_id, aadhar_linked_phone')
+          .eq('email', otpData.email)
+          .maybeSingle();
+        patient = data;
+        patientError = error;
+      }
 
-    if (patientError || !patient) {
-      console.error('[ERROR] Patient not found:', patientError?.message);
-      return res.status(404).json({ error: 'User not found' });
+      if (patientError || !patient) {
+        console.error('[ERROR] Patient not found:', patientError?.message);
+        return res.status(404).json({ error: 'User not found' });
+      }
+    } else {
+      // Patient already fetched, just get additional fields if needed
+      const fullPatientQuery = isPhoneNumber 
+        ? await supabase.from('patients').select('email, password_hash, user_id, aadhar_linked_phone').eq('aadhar_linked_phone', patient.aadhar_linked_phone).maybeSingle()
+        : await supabase.from('patients').select('email, password_hash, user_id, aadhar_linked_phone').eq('email', patient.email).maybeSingle();
+      
+      if (fullPatientQuery.data) {
+        patient = fullPatientQuery.data;
+      }
     }
 
     // Determine if phone-only user (no email, has password_hash)
@@ -5125,7 +5194,7 @@ app.post('/reset-password-with-otp', async (req, res) => {
     }
 
     // Delete OTP after successful password reset
-    await deletePasswordResetOTP(normalizedIdentifier);
+    await deletePasswordResetOTP(storageKey);
 
     res.json({ 
       success: true, 

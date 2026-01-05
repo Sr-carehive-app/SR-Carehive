@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 59,
-  "timestamp": "2026-01-06T00:15:00Z",
-  "lastUpdated": "Build 59: Fixed password reset OTP verification with fallback key lookup for cross-identifier requests"
+  "buildNumber": 60,
+  "timestamp": "2026-01-06T00:30:00Z",
+  "lastUpdated": "Build 60: Fixed password reset endpoint to use same fallback key lookup as verify endpoint"
 }
