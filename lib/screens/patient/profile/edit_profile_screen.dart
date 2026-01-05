@@ -181,9 +181,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       
-      // CRITICAL FIX: Handle phone-only users who don't have Supabase Auth session
+      // PRIORITY 1: Check Auth session FIRST (active login has priority)
       if (user != null) {
-        // Email/OAuth users with Supabase Auth
+        print('[EDIT_PROFILE] Auth user detected: ${user.id}');
         isOAuthUser = user.appMetadata['provider'] != null && user.appMetadata['provider'] != 'email';
         
         final patient = await supabase
@@ -197,16 +197,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           isLoading = false;
         });
       } else {
-        // Phone-only users without Supabase Auth - use SharedPreferences
-        print('[PROFILE] No Auth user - checking for phone-only user');
+        // PRIORITY 2: Fallback to phone session only if NO Auth session
         final prefs = await SharedPreferences.getInstance();
         final phone = prefs.getString('phone');
         final loginType = prefs.getString('loginType');
         
         if (phone != null && loginType == 'phone') {
-          print('[PROFILE] Phone-only user detected: $phone');
+          print('[EDIT_PROFILE] Phone-only user detected: $phone');
           
-          // Query by phone number instead of user_id
           final patient = await supabase
               .from('patients')
               .select()
@@ -220,7 +218,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           });
         } else {
           // No valid session found
-          print('[PROFILE] ERROR: No valid user session found');
+          print('[EDIT_PROFILE] ERROR: No valid user session found');
           setState(() {
             isLoading = false;
           });

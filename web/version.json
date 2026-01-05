@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 63,
-  "timestamp": "2026-01-06T01:30:00Z",
-  "lastUpdated": "Build 63: Fixed phone session priority - check SharedPreferences BEFORE Auth to prevent override"
+  "buildNumber": 64,
+  "timestamp": "2026-01-06T01:38:00Z",
+  "lastUpdated": "Build 64: Fixed profile/edit_profile session priority - phone FIRST, Auth SECOND (NO IMPACT on email/OAuth users)"
 }

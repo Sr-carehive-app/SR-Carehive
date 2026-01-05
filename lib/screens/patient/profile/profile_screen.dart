@@ -46,26 +46,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
       Map<String, dynamic>? patient;
       
+      // PRIORITY 1: Check Auth session FIRST (active login has priority)
       if (user != null) {
-        // Auth users (email/OAuth) - query by user_id
+        print('[PROFILE] Auth user detected: ${user.id}');
         patient = await supabase
             .from('patients')
             .select()
             .eq('user_id', user.id)
             .single();
       } else {
-        // Phone-only users - query by phone
-        print('[PROFILE] No Auth user - checking for phone-only user');
+        // PRIORITY 2: Fallback to phone session only if NO Auth session
         final prefs = await SharedPreferences.getInstance();
         final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
         
-        if (phone != null) {
-          print('[PROFILE] Phone-only user: $phone');
+        if (phone != null && loginType == 'phone') {
+          print('[PROFILE] Phone-only user detected: $phone');
           patient = await supabase
               .from('patients')
               .select()
               .eq('aadhar_linked_phone', phone)
-              .maybeSingle(); // Use maybeSingle to handle 0 or 1 rows gracefully
+              .maybeSingle();
         }
       }
       
