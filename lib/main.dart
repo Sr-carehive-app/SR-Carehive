@@ -284,7 +284,7 @@ class _MyAppState extends State<MyApp> {
           await supabase.auth.signOut();
           
           setState(() {
-            _homeWidget = const PatientLoginScreen();
+            _homeWidget = PatientLoginScreen();
           });
           return; // Exit - user needs to complete registration
         }

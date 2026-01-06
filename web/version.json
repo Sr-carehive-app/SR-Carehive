@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 75,
-  "timestamp": "2026-01-07T01:00:00Z",
-  "lastUpdated": "Build 75: Fixed oauth auto enable issue and resend otp logic in register"
+  "buildNumber": 76,
+  "timestamp": "2026-01-07T01:10:00Z",
+  "lastUpdated": "Build 76: Fixed syntax errors in main.dart"
 }
