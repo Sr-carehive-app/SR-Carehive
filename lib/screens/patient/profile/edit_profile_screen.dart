@@ -890,12 +890,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               );
               return;
             }
-          } else if (hasUserId && oldEmail != null && oldEmail != newEmail) {
-            // ========== SCENARIO 2: Phone user UPDATING email (Auth account already exists) ==========
-            print('[PROFILE-UPDATE] 📧 Phone user with Auth account updating email: $oldEmail → $newEmail');
+          } else if (hasUserId) {
+            // ========== SCENARIO 2: Phone user with Auth account (updating email or keeping same) ==========
+            // Always sync Auth email with database email, even if same
+            print('[PROFILE-UPDATE] 📧 Phone user with Auth account - syncing email: $oldEmail → $newEmail');
             
             try {
-              // Update Auth email via backend Admin API
+              // Update Auth email via backend Admin API (always sync)
               final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
               final response = await http.post(
                 Uri.parse('$apiBase/api/admin/update-user-email'),
@@ -911,9 +912,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 throw Exception(errorData['error'] ?? 'Failed to update email in Auth');
               }
               
-              print('[PROFILE-UPDATE] ✅ Auth email updated successfully: $oldEmail → $newEmail');
+              print('[PROFILE-UPDATE] ✅ Auth email synced successfully: $newEmail');
             } catch (emailUpdateError) {
-              print('[PROFILE-UPDATE] ❌ Failed to update Auth email: $emailUpdateError');
+              print('[PROFILE-UPDATE] ❌ Failed to sync Auth email: $emailUpdateError');
               if (!mounted) return;
               setState(() {
                 isUpdating = false;
@@ -924,7 +925,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   backgroundColor: Colors.red,
                 ),
               );
-              return;
+              return; // ✅ CRITICAL: Don't update database if Auth update fails
             }
           }
         }
