@@ -62,6 +62,7 @@ class OTPService {
     String? phone,
     String? alternativePhone,
     String? name,
+    bool isResend = false, // ✅ NEW: Track if this is a resend request
   }) async {
     try {
       // Validate: at least one contact method required
@@ -85,6 +86,7 @@ class OTPService {
         requestBody['alternativePhone'] = alternativePhone;
       }
       if (name != null && name.isNotEmpty) requestBody['name'] = name;
+      if (isResend) requestBody['resend'] = true; // ✅ NEW: Include resend flag
 
       print('[OTP-SERVICE] 📤 Sending signup OTP request...');
       print('[OTP-SERVICE] 📧 Email: ${email ?? "Not provided"}');
@@ -108,6 +110,15 @@ class OTPService {
           'message': data['message'] ?? 'OTP sent successfully',
           'deliveryChannels': List<String>.from(data['deliveryChannels'] ?? []),
           'expiresIn': data['expiresIn'] ?? 120,
+        };
+      } else if (response.statusCode == 429) {
+        // ✅ Handle rate limiting (resend too soon)
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorData['error'] ?? 'Please wait before requesting a new OTP',
+          'deliveryChannels': <String>[],
+          'canResendAfter': errorData['canResendAfter'],
         };
       } else {
         final errorData = jsonDecode(response.body);

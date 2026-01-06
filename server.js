@@ -3103,7 +3103,7 @@ async function deleteSignupOTP(identifier) {
 // Send Signup OTP (NEW - Multi-Channel with Redis)
 app.post('/api/send-signup-otp', async (req, res) => {
   try {
-    let { email, aadharLinkedPhone, alternativePhone, name } = req.body;
+    let { email, aadharLinkedPhone, alternativePhone, name, resend = false } = req.body;
     
     // Clean phone numbers - remove country code if present
     if (aadharLinkedPhone) {
@@ -3124,6 +3124,29 @@ app.post('/api/send-signup-otp', async (req, res) => {
       return res.status(400).json({ 
         error: 'At least one contact method (email, phone, or alternative phone) is required' 
       });
+    }
+
+    // Use aadhar_linked_phone as primary identifier, fallback to email (same as later in code)
+    const identifier = aadharLinkedPhone || alternativePhone || email;
+
+    // ✅ FIX: Check for resend cooldown (prevent spam but allow legitimate resends)
+    if (resend) {
+      const existingOTP = await getSignupOTP(identifier);
+      if (existingOTP && existingOTP.lastSentAt) {
+        const now = Date.now();
+        const cooldownPeriod = 30 * 1000; // 30 seconds cooldown for resends
+        const timeSinceLastSent = now - existingOTP.lastSentAt;
+        
+        if (timeSinceLastSent < cooldownPeriod) {
+          const waitSeconds = Math.ceil((cooldownPeriod - timeSinceLastSent) / 1000);
+          console.log(`[SIGNUP-OTP] ⏱️ Resend too soon, wait ${waitSeconds}s`);
+          return res.status(429).json({
+            error: `Please wait ${waitSeconds} seconds before requesting a new OTP.`,
+            canResendAfter: waitSeconds
+          });
+        }
+        console.log(`[SIGNUP-OTP] ✅ Resend allowed (${Math.floor(timeSinceLastSent/1000)}s since last)`);
+      }
     }
 
     // ✅ Check for duplicate phone number or email in database
@@ -3185,9 +3208,6 @@ app.post('/api/send-signup-otp', async (req, res) => {
     const otp = generateOTP();
     const now = Date.now();
     const expiresAt = now + (2 * 60 * 1000); // 2 minutes
-    
-    // Use aadhar_linked_phone as primary identifier, fallback to email
-    const identifier = aadharLinkedPhone || alternativePhone || email;
     
     // Store OTP in Redis
     await storeSignupOTP(identifier, {

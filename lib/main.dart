@@ -258,7 +258,7 @@ class _MyAppState extends State<MyApp> {
     print('🔍 Checking auth state for user: ${user?.email}');
     
     if (user != null) {
-      // Auth users (Email/OAuth) - already logged in
+      // Auth users (Email/OAuth) - check if registration is complete
       try {
         final patient = await supabase
             .from('patients')
@@ -269,13 +269,24 @@ class _MyAppState extends State<MyApp> {
         print('Patient record found: ${patient != null}');
         
         if (patient != null) {
+          // ✅ Registration complete - go to dashboard
           print('🔄 Setting home widget to dashboard (Auth user)');
           setState(() {
             _homeWidget = PatientDashboardScreen(userName: patient['name'] ?? '');
           });
           return; // Early exit - Auth session loaded successfully
         } else {
-          print('📝 No patient record found for Auth user');
+          // ⚠️ Auth session exists but NO patient record = incomplete registration
+          print('📝 No patient record found for Auth user - registration incomplete');
+          print('🔄 Redirecting to login screen to complete registration');
+          
+          // Sign out the incomplete auth session to prevent confusion
+          await supabase.auth.signOut();
+          
+          setState(() {
+            _homeWidget = const PatientLoginScreen();
+          });
+          return; // Exit - user needs to complete registration
         }
       } catch (e) {
         print('❌ Error checking Auth user record: $e');

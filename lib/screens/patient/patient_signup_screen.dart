@@ -368,6 +368,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
                           phone: phoneWithCode,
                           alternativePhone: altPhone,
                           name: fullName,
+                          isResend: true, // ✅ Mark this as a resend request
                         );
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

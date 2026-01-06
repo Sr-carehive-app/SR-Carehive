@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 74,
-  "timestamp": "2026-01-06T04:55:00Z",
-  "lastUpdated": "Build 74: Fixed ui redirection and auth check"
+  "buildNumber": 75,
+  "timestamp": "2026-01-07T01:00:00Z",
+  "lastUpdated": "Build 75: Fixed oauth auto enable issue and resend otp logic in register"
 }
