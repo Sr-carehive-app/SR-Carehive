@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:care12/utils/web_utils.dart';
+import 'package:care12/utils/url_cleaner_stub.dart' if (dart.library.html) 'package:care12/utils/url_cleaner_web.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userName;
@@ -538,7 +540,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         print('[DELETE-ACCOUNT] Signing out to clear local session');
         await supabase.auth.signOut();
         
-        // Wait for signOut to clear browser storage completely
+        // Forcefully clear browser storage (web only)
+        if (kIsWeb) {
+          clearAuthStorage();
+        }
+        
+        // Wait for storage clearing to complete
         await Future.delayed(const Duration(milliseconds: 500));
       } else if (phone != null) {
         // Phone-only users - delete by aadhar_linked_phone
@@ -552,6 +559,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       
      
       Navigator.of(context).pop();
+      
+      // ✅ CRITICAL: Clean OAuth callback URL from browser before navigation
+      if (kIsWeb) {
+        final currentUrl = Uri.base;
+        if (currentUrl.path.contains('/auth/v1/callback') || currentUrl.queryParameters.containsKey('code')) {
+          print('[DELETE-ACCOUNT] Cleaning OAuth callback URL from browser');
+          final cleanUrl = Uri.base.origin;
+          cleanOAuthCallbackUrl(cleanUrl);
+        }
+      }
       
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(

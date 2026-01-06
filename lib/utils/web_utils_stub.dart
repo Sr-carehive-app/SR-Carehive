@@ -7,3 +7,9 @@ void logLocalStorageKeys() {
   // No-op on mobile platforms
   print('LocalStorage not available on mobile platforms');
 }
+
+/// Clears auth storage (no-op on mobile)
+void clearAuthStorage() {
+  // No-op on mobile platforms
+  print('Browser storage clearing not needed on mobile platforms');
+}
