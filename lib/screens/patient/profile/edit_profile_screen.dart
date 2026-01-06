@@ -858,9 +858,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 // Update updateData to include new user_id
                 updateData['user_id'] = newUserId;
                 
-                // Sign out the auth session (we'll keep using phone session for now)
-                await supabase.auth.signOut();
-                print('[PROFILE-UPDATE] ✅ Auth session signed out, phone session continues');
+                // ✅ DON'T sign out - it causes white screen and breaks UI
+                // User will continue with phone session, can login with email anytime
+                print('[PROFILE-UPDATE] ✅ user_id added, phone session continues');
                 
               } catch (signUpError) {
                 print('[PROFILE-UPDATE] ❌ Auth signUp error: $signUpError');
