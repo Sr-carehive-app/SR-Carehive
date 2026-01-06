@@ -16,6 +16,7 @@ import 'config/api_config.dart';
 import 'utils/web_utils.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'utils/url_cleaner_stub.dart' if (dart.library.html) 'utils/url_cleaner_web.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String error;
@@ -476,6 +477,14 @@ class _MyAppState extends State<MyApp> {
               .maybeSingle();
           
           print('Patient record: ${patient != null ? "Found" : "Not found"}');
+          
+          // ✅ CRITICAL FIX: Clean OAuth callback URL to prevent re-processing on reload
+          if (kIsWeb) {
+            print('🧹 Cleaning OAuth callback URL from browser history');
+            final cleanUrl = '${Uri.base.origin}${Uri.base.path.split('/auth/v1/callback').first}';
+            print('🔄 Redirecting to clean URL: $cleanUrl');
+            cleanOAuthCallbackUrl(cleanUrl);
+          }
           
           if (patient != null) {
             // Existing user - go to dashboard
