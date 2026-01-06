@@ -469,6 +469,17 @@ class _MyAppState extends State<MyApp> {
         print('Session exists: ${session != null}');
         
         if (user != null) {
+          // ✅ CRITICAL: Clean OAuth callback URL IMMEDIATELY to prevent re-processing
+          // Must happen BEFORE navigation so reload doesn't reprocess the code
+          if (kIsWeb) {
+            print('🧹 Cleaning OAuth callback URL from browser history');
+            final cleanUrl = '${Uri.base.origin}${Uri.base.path.split('/auth/v1/callback').first}';
+            print('🔄 Redirecting to clean URL: $cleanUrl');
+            cleanOAuthCallbackUrl(cleanUrl);
+            // Small delay to ensure URL update completes
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          
           // Check if patient record exists
           final patient = await supabase
               .from('patients')
@@ -477,14 +488,6 @@ class _MyAppState extends State<MyApp> {
               .maybeSingle();
           
           print('Patient record: ${patient != null ? "Found" : "Not found"}');
-          
-          // ✅ CRITICAL FIX: Clean OAuth callback URL to prevent re-processing on reload
-          if (kIsWeb) {
-            print('🧹 Cleaning OAuth callback URL from browser history');
-            final cleanUrl = '${Uri.base.origin}${Uri.base.path.split('/auth/v1/callback').first}';
-            print('🔄 Redirecting to clean URL: $cleanUrl');
-            cleanOAuthCallbackUrl(cleanUrl);
-          }
           
           if (patient != null) {
             // Existing user - go to dashboard

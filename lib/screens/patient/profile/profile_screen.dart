@@ -560,16 +560,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
      
       Navigator.of(context).pop();
       
-      // ✅ CRITICAL: Clean OAuth callback URL from browser before navigation
-      if (kIsWeb) {
-        final currentUrl = Uri.base;
-        if (currentUrl.path.contains('/auth/v1/callback') || currentUrl.queryParameters.containsKey('code')) {
-          print('[DELETE-ACCOUNT] Cleaning OAuth callback URL from browser');
-          final cleanUrl = Uri.base.origin;
-          cleanOAuthCallbackUrl(cleanUrl);
-        }
-      }
-      
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
