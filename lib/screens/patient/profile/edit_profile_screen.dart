@@ -758,10 +758,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       
       // Determine how to update: by user_id (Auth users) or phone (phone-only users)
       if (user != null) {
-        // Auth users - update by user_id
+        // ========== AUTH USERS (Email/OAuth) ==========
+        // Update database using user_id
         print('[PROFILE-UPDATE] 📧 Updating Auth user profile: ${user.id}');
         await supabase.from('patients').update(updateData).eq('user_id', user.id);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated successfully!')),
+        );
       } else {
+        // ========== PHONE-ONLY USERS ==========
         // Phone-only user - update by phone number
         final prefs = await SharedPreferences.getInstance();
         final phone = prefs.getString('phone');
@@ -781,91 +788,151 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final oldEmail = existingPatient['email'];
         final passwordHash = existingPatient['password_hash'];
         
-        // If adding email for first time AND no user_id exists
-        if (newEmail != null && newEmail.isNotEmpty && !hasUserId && oldEmail == null) {
-          print('[PROFILE-UPDATE] 🔑 Phone-only user adding email for first time - creating Supabase Auth account');
-          
-          // Check if password_hash exists (it should for phone-only users)
-          if (passwordHash == null || passwordHash.isEmpty) {
-            throw Exception('Cannot create auth account: No password set. Please set a password first.');
-          }
-          
-          // We need the original password to create Auth account, but we only have password_hash
-          // Solution: Ask user to set/confirm password when adding email
-          if (!mounted) return;
-          
-          // Show dialog to get password
-          final password = await _showPasswordConfirmationDialog();
-          
-          if (password == null || password.isEmpty) {
-            if (!mounted) return;
-            setState(() {
-              isUpdating = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Password required to add email. Please try again.'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-            return;
-          }
-          
-          // Verify password against password_hash
-          try {
-            final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
-            final verifyResponse = await http.post(
-              Uri.parse('$apiBase/api/verify-password-hash'),
-              headers: {'Content-Type': 'application/json'},
-              body: json.encode({
-                'phone': phone,
-                'password': password,
-              }),
-            );
+        // ⚠️ CRITICAL: Handle email updates for phone users with/without Auth account
+        if (newEmail != null && newEmail.isNotEmpty) {
+          if (!hasUserId) {
+            // ========== SCENARIO 1: Phone user adding email for FIRST TIME (no Auth account yet) ==========
+            print('[PROFILE-UPDATE] 🔑 Phone-only user (no user_id) adding email - creating Supabase Auth account');
             
-            if (verifyResponse.statusCode != 200) {
-              throw Exception('Incorrect password');
+            // Check if password_hash exists (it should for phone-only users)
+            if (passwordHash == null || passwordHash.isEmpty) {
+              throw Exception('Cannot create auth account: No password set. Please set a password first.');
             }
             
-            // Password verified - create Supabase Auth account
-            print('[PROFILE-UPDATE] ✅ Password verified, creating Auth account...');
+            // We need the original password to create Auth account, but we only have password_hash
+            // Solution: Ask user to set/confirm password when adding email
+            if (!mounted) return;
             
-            final authResponse = await supabase.auth.signUp(
-              email: newEmail,
-              password: password,
-            );
+            // Show dialog to get password
+            final password = await _showPasswordConfirmationDialog();
             
-            if (authResponse.user == null) {
-              throw Exception('Failed to create auth account');
+            if (password == null || password.isEmpty) {
+              if (!mounted) return;
+              setState(() {
+                isUpdating = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Password required to add email. Please try again.'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+              return;
             }
             
-            final newUserId = authResponse.user!.id;
-            print('[PROFILE-UPDATE] ✅ Auth account created: $newUserId');
+            // Verify password against password_hash
+            try {
+              final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+              final verifyResponse = await http.post(
+                Uri.parse('$apiBase/api/verify-password-hash'),
+                headers: {'Content-Type': 'application/json'},
+                body: json.encode({
+                  'phone': phone,
+                  'password': password,
+                }),
+              );
+              
+              if (verifyResponse.statusCode != 200) {
+                throw Exception('Incorrect password');
+              }
+              
+              // Password verified - create Supabase Auth account
+              print('[PROFILE-UPDATE] ✅ Password verified, creating Auth account...');
+              
+              // Check if email already exists in Auth
+              try {
+                final authResponse = await supabase.auth.signUp(
+                  email: newEmail,
+                  password: password,
+                );
+                
+                if (authResponse.user == null) {
+                  throw Exception('Failed to create auth account - no user returned');
+                }
+                
+                final newUserId = authResponse.user!.id;
+                print('[PROFILE-UPDATE] ✅ Auth account created successfully!');
+                print('[PROFILE-UPDATE] 📧 Email: $newEmail');
+                print('[PROFILE-UPDATE] 🆔 New user_id: $newUserId');
+                
+                // Update updateData to include new user_id
+                updateData['user_id'] = newUserId;
+                
+                // Sign out the auth session (we'll keep using phone session for now)
+                await supabase.auth.signOut();
+                print('[PROFILE-UPDATE] ✅ Auth session signed out, phone session continues');
+                
+              } catch (signUpError) {
+                print('[PROFILE-UPDATE] ❌ Auth signUp error: $signUpError');
+                // If email already exists, it might be because of duplicate attempt
+                if (signUpError.toString().toLowerCase().contains('already registered') ||
+                    signUpError.toString().toLowerCase().contains('duplicate')) {
+                  print('[PROFILE-UPDATE] ⚠️ Email already exists in Auth - this is OK if retrying');
+                  // Don't throw error, continue with database update
+                  // The email might be registered but user_id not linked yet
+                } else {
+                  throw signUpError;
+                }
+              }
+              
+            } catch (authError) {
+              print('[PROFILE-UPDATE] ❌ Failed to create Auth account: $authError');
+              if (!mounted) return;
+              setState(() {
+                isUpdating = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to add email: ${authError.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
+          } else if (hasUserId && oldEmail != null && oldEmail != newEmail) {
+            // ========== SCENARIO 2: Phone user UPDATING email (Auth account already exists) ==========
+            print('[PROFILE-UPDATE] 📧 Phone user with Auth account updating email: $oldEmail → $newEmail');
             
-            // Update updateData to include new user_id
-            updateData['user_id'] = newUserId;
-            
-            // Sign out the auth session (we'll keep using phone session for now)
-            await supabase.auth.signOut();
-            
-          } catch (authError) {
-            print('[PROFILE-UPDATE] ❌ Failed to create Auth account: $authError');
-            if (!mounted) return;
-            setState(() {
-              isUpdating = false;
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to add email: ${authError.toString()}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
+            try {
+              // Update Auth email via backend Admin API
+              final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+              final response = await http.post(
+                Uri.parse('$apiBase/api/admin/update-user-email'),
+                headers: {'Content-Type': 'application/json'},
+                body: json.encode({
+                  'user_id': existingPatient['user_id'],
+                  'new_email': newEmail,
+                }),
+              );
+              
+              if (response.statusCode != 200) {
+                final errorData = json.decode(response.body);
+                throw Exception(errorData['error'] ?? 'Failed to update email in Auth');
+              }
+              
+              print('[PROFILE-UPDATE] ✅ Auth email updated successfully: $oldEmail → $newEmail');
+            } catch (emailUpdateError) {
+              print('[PROFILE-UPDATE] ❌ Failed to update Auth email: $emailUpdateError');
+              if (!mounted) return;
+              setState(() {
+                isUpdating = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to update email: ${emailUpdateError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              return;
+            }
           }
         }
         
         // Update patients table
         await supabase.from('patients').update(updateData).eq('aadhar_linked_phone', phone);
+        
+        // Check if we just created an Auth account
+        final authAccountCreated = updateData.containsKey('user_id') && updateData['user_id'] != null;
         
         // ✅ CRITICAL FIX: Update SharedPreferences if phone number changed
         final newPhone = aadharLinkedPhoneController.text.trim();
@@ -873,12 +940,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           await prefs.setString('phone', newPhone);
           print('[PROFILE-UPDATE] ✅ Updated phone in SharedPreferences: $phone → $newPhone');
         }
+        
+        if (!mounted) return;
+        
+        // Show success message
+        if (authAccountCreated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Profile updated! You can now login with email & password.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully!')),
+          );
+        }
       }
       
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
-      );
       Navigator.pop(context, true); // Return true to indicate profile was updated
     } catch (e) {
       if (!mounted) return;
