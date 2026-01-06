@@ -279,14 +279,35 @@ class _MyAppState extends State<MyApp> {
         } else {
           // ⚠️ Auth session exists but NO patient record = incomplete registration
           print('📝 No patient record found for Auth user - registration incomplete');
-          print('🔄 Redirecting to login screen to complete registration');
           
-          // Sign out the incomplete auth session to prevent confusion
-          await supabase.auth.signOut();
+          // Check if this is an OAuth user (Google) vs plain email signup
+          final hasGoogleIdentity = user.identities != null && 
+                                     user.identities!.any((identity) => identity.provider == 'google');
           
-          setState(() {
-            _homeWidget = PatientLoginScreen();
-          });
+          if (hasGoogleIdentity) {
+            // OAuth user without patient record - redirect to signup with prefilled data
+            print('🔵 OAuth (Google) user - redirecting to signup with prefilled data');
+            final prefillData = <String, String>{
+              'name': user.userMetadata?['full_name'] ?? '',
+              'email': user.email ?? '',
+              'google_avatar_url': user.userMetadata?['picture'] ?? '',
+            };
+            
+            setState(() {
+              _homeWidget = PatientSignUpScreen(
+                prefillData: prefillData,
+                showRegistrationMessage: true,
+              );
+            });
+          } else {
+            // Plain email signup incomplete - sign out and redirect to login
+            print('📧 Plain email signup incomplete - signing out and redirecting to login');
+            await supabase.auth.signOut();
+            
+            setState(() {
+              _homeWidget = PatientLoginScreen();
+            });
+          }
           return; // Exit - user needs to complete registration
         }
       } catch (e) {
