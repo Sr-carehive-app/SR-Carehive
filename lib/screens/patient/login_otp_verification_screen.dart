@@ -152,8 +152,8 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
       if (response.statusCode == 200 && data['success'] == true) {
         print('✅ OTP verified! Checking user type...');
         
-        final userId = data['userId'];
-        final actualEmail = data['email']; // NULL for phone-only users
+        final userId = data['userId']; // NULL for phone-only users
+        final actualEmail = data['email']; // NULL OR populated for phone-only users who added email
         final phone = data['phone']; // Phone number for phone-only users
         final loginType = data['loginType']; // 'email' or 'phone'
         
@@ -164,10 +164,11 @@ class _LoginOTPVerificationScreenState extends State<LoginOTPVerificationScreen>
         
         final supabase = Supabase.instance.client;
         
-        // Check if this is a phone-only user
-        if (loginType == 'phone' || (actualEmail == null && phone != null)) {
-          // ========== PHONE-ONLY USER ==========
-          print('📱 Phone-only user detected, querying by phone number');
+        // ⚠️ CRITICAL: Check user_id instead of email presence
+        // Phone-registered users have NO user_id even if they add email later
+        if (userId == null || userId == 'null' || loginType == 'phone') {
+          // ========== PHONE-ONLY USER (NO SUPABASE AUTH ACCOUNT) ==========
+          print('📱 Phone-only user detected (no user_id), querying by phone number');
           
           // Fetch patient data using phone number (since user_id is NULL)
           final result = await supabase

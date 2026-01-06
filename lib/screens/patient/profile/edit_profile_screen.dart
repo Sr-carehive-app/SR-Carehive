@@ -517,6 +517,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // Date picker removed - we collect numeric Age only in the UI.
 
+  Future<String?> _showPasswordConfirmationDialog() async {
+    final passwordController = TextEditingController();
+    bool obscurePassword = true;
+    
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Confirm Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'To add email to your account, please enter your current password:',
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        obscurePassword = !obscurePassword;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, null);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context, passwordController.text.trim());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2260FF),
+              ),
+              child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _updateProfile() async {
     // Validate required fields
     if (firstNameController.text.trim().isEmpty) {
@@ -707,6 +768,103 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (phone == null) throw Exception('Phone session not found');
         
         print('[PROFILE-UPDATE] 📱 Updating phone-only user profile: $phone');
+        
+        // ⚠️ CRITICAL: If phone-only user is adding email for first time, create Supabase Auth account
+        // Check if this user already has user_id (shouldn't happen, but safety check)
+        final existingPatient = await supabase
+            .from('patients')
+            .select('user_id, password_hash, email')
+            .eq('aadhar_linked_phone', phone)
+            .single();
+        
+        final hasUserId = existingPatient['user_id'] != null;
+        final oldEmail = existingPatient['email'];
+        final passwordHash = existingPatient['password_hash'];
+        
+        // If adding email for first time AND no user_id exists
+        if (newEmail != null && newEmail.isNotEmpty && !hasUserId && oldEmail == null) {
+          print('[PROFILE-UPDATE] 🔑 Phone-only user adding email for first time - creating Supabase Auth account');
+          
+          // Check if password_hash exists (it should for phone-only users)
+          if (passwordHash == null || passwordHash.isEmpty) {
+            throw Exception('Cannot create auth account: No password set. Please set a password first.');
+          }
+          
+          // We need the original password to create Auth account, but we only have password_hash
+          // Solution: Ask user to set/confirm password when adding email
+          if (!mounted) return;
+          
+          // Show dialog to get password
+          final password = await _showPasswordConfirmationDialog();
+          
+          if (password == null || password.isEmpty) {
+            if (!mounted) return;
+            setState(() {
+              isUpdating = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Password required to add email. Please try again.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+            return;
+          }
+          
+          // Verify password against password_hash
+          try {
+            final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+            final verifyResponse = await http.post(
+              Uri.parse('$apiBase/api/verify-password-hash'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode({
+                'phone': phone,
+                'password': password,
+              }),
+            );
+            
+            if (verifyResponse.statusCode != 200) {
+              throw Exception('Incorrect password');
+            }
+            
+            // Password verified - create Supabase Auth account
+            print('[PROFILE-UPDATE] ✅ Password verified, creating Auth account...');
+            
+            final authResponse = await supabase.auth.signUp(
+              email: newEmail,
+              password: password,
+            );
+            
+            if (authResponse.user == null) {
+              throw Exception('Failed to create auth account');
+            }
+            
+            final newUserId = authResponse.user!.id;
+            print('[PROFILE-UPDATE] ✅ Auth account created: $newUserId');
+            
+            // Update updateData to include new user_id
+            updateData['user_id'] = newUserId;
+            
+            // Sign out the auth session (we'll keep using phone session for now)
+            await supabase.auth.signOut();
+            
+          } catch (authError) {
+            print('[PROFILE-UPDATE] ❌ Failed to create Auth account: $authError');
+            if (!mounted) return;
+            setState(() {
+              isUpdating = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to add email: ${authError.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+        
+        // Update patients table
         await supabase.from('patients').update(updateData).eq('aadhar_linked_phone', phone);
         
         // ✅ CRITICAL FIX: Update SharedPreferences if phone number changed

@@ -675,7 +675,7 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
                         children: [
                           TextSpan(
                             text: ' *',
-                            style: TextStyle(color: Colors.red, fontSize: 15),
+                            style: TextStyle(color: Color(0xFF333333), fontSize: 15),
                           ),
                         ],
                       ),

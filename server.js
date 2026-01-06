@@ -5152,12 +5152,13 @@ app.post('/reset-password-with-otp', async (req, res) => {
       }
     }
 
-    // Determine if phone-only user (no email, has password_hash)
-    const isPhoneOnlyUser = !patient.email && patient.password_hash;
+    // Determine if phone-only user (no Supabase Auth account)
+    // ⚠️ CRITICAL: Check user_id NOT email - phone users can add email later
+    const isPhoneOnlyUser = !patient.user_id || patient.user_id === null;
 
     if (isPhoneOnlyUser) {
       // Phone-only user - update password_hash field
-      console.log(`[PASSWORD-RESET] Phone-only user detected, updating password_hash`);
+      console.log(`[PASSWORD-RESET] Phone-only user detected (no user_id), updating password_hash`);
       const passwordHash = await bcrypt.hash(newPassword, 10);
 
       const { error: updateError } = await supabase
@@ -5228,6 +5229,57 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+// ============================================================================
+// PASSWORD VERIFICATION ENDPOINT (for phone-only users adding email)
+// ============================================================================
+app.post('/api/verify-password-hash', async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+    
+    if (!phone || !password) {
+      return res.status(400).json({ error: 'Phone and password are required' });
+    }
+    
+    console.log(`[VERIFY-PASSWORD] Request for phone: ${phone}`);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database connection not available' });
+    }
+    
+    // Get patient by phone
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('password_hash, aadhar_linked_phone')
+      .eq('aadhar_linked_phone', phone.trim())
+      .maybeSingle();
+    
+    if (patientError || !patient) {
+      console.log(`[VERIFY-PASSWORD] Patient not found`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!patient.password_hash) {
+      console.log(`[VERIFY-PASSWORD] No password_hash found`);
+      return res.status(400).json({ error: 'No password set for this account' });
+    }
+    
+    // Verify password
+    const isValid = await bcrypt.compare(password.trim(), patient.password_hash);
+    
+    if (!isValid) {
+      console.log(`[VERIFY-PASSWORD] ❌ Password verification failed`);
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+    
+    console.log(`[VERIFY-PASSWORD] ✅ Password verified successfully`);
+    res.json({ success: true, message: 'Password verified' });
+    
+  } catch (e) {
+    console.error('[VERIFY-PASSWORD] ❌ Error:', e);
+    res.status(500).json({ error: 'Failed to verify password', details: e.message });
+  }
+});
 
 // ============================================================================
 // PASSWORD CHANGE ENDPOINT (Dashboard)
