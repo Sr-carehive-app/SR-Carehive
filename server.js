@@ -5176,8 +5176,10 @@ app.post('/reset-password-with-otp', async (req, res) => {
 
       console.log(`[SUCCESS] ✅ Password_hash updated for phone-only user`);
     } else {
-      // Email user - update Supabase Auth password
-      console.log(`[PASSWORD-RESET] Email user detected, updating Supabase auth`);
+      // Email/Auth user - update BOTH Supabase Auth AND password_hash
+      console.log(`[PASSWORD-RESET] Auth user detected (user_id: ${otpData.userId}), updating BOTH passwords`);
+      
+      // Step 1: Update Supabase Auth password
       const { data, error } = await supabase.auth.admin.updateUserById(
         otpData.userId,
         { password: newPassword }
@@ -5191,7 +5193,21 @@ app.post('/reset-password-with-otp', async (req, res) => {
         });
       }
 
-      console.log(`[SUCCESS] ✅ Supabase auth password updated for email user`);
+      console.log(`[SUCCESS] ✅ Supabase auth password updated`);
+      
+      // Step 2: ALSO update password_hash in patients table (critical for phone users who added email)
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ password_hash: passwordHash })
+        .eq('user_id', otpData.userId);
+
+      if (updateError) {
+        console.error('[WARNING] Failed to update password_hash in patients table:', updateError.message);
+        // Don't fail the request - Auth password is already updated
+      } else {
+        console.log(`[SUCCESS] ✅ password_hash also updated in patients table`);
+      }
     }
 
     // Delete OTP after successful password reset
@@ -5421,6 +5437,22 @@ app.post('/api/change-password', async (req, res) => {
           error: 'Failed to change password', 
           details: error.message 
         });
+      }
+
+      console.log(`[PASSWORD-CHANGE] ✅ Supabase auth password updated`);
+      
+      // ALSO update password_hash in patients table (for phone users who added email)
+      const newPasswordHash = await bcrypt.hash(newPassword, 10);
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ password_hash: newPasswordHash })
+        .eq('user_id', patient.user_id);
+
+      if (updateError) {
+        console.error('[WARNING] Failed to update password_hash:', updateError.message);
+        // Don't fail - Auth password is already updated
+      } else {
+        console.log(`[PASSWORD-CHANGE] ✅ password_hash also updated in patients table`);
       }
 
       console.log(`[PASSWORD-CHANGE] ✅ Password changed successfully for email user`);

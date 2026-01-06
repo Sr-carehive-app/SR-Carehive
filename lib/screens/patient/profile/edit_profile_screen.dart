@@ -855,12 +855,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 print('[PROFILE-UPDATE] 📧 Email: $newEmail');
                 print('[PROFILE-UPDATE] 🆔 New user_id: $newUserId');
                 
+                // ✅ CRITICAL: Sign out IMMEDIATELY to prevent auth listener redirect
+                // Must do this BEFORE any other async operations
+                await supabase.auth.signOut();
+                print('[PROFILE-UPDATE] ✅ Auth signed out immediately to prevent redirect');
+                
                 // Update updateData to include new user_id
                 updateData['user_id'] = newUserId;
-                
-                // ✅ DON'T sign out - it causes white screen and breaks UI
-                // User will continue with phone session, can login with email anytime
-                print('[PROFILE-UPDATE] ✅ user_id added, phone session continues');
                 
               } catch (signUpError) {
                 print('[PROFILE-UPDATE] ❌ Auth signUp error: $signUpError');
