@@ -134,7 +134,7 @@ class _MyAppState extends State<MyApp> {
 
   void _listenToAuthChanges() {
     final supabase = Supabase.instance.client;
-    supabase.auth.onAuthStateChange.listen((data) {
+    supabase.auth.onAuthStateChange.listen((data) async {
       final AuthChangeEvent event = data.event;
       final Session? session = data.session;
       
@@ -146,6 +146,18 @@ class _MyAppState extends State<MyApp> {
           _homeWidget = const SplashScreen();
         });
       } else if (event == AuthChangeEvent.signedIn && session?.user != null) {
+        // ✅ CRITICAL: Check if this is a phone user adding email (shouldn't redirect)
+        final prefs = await SharedPreferences.getInstance();
+        final phoneSession = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
+        
+        // If phone session exists, user is already logged in via phone
+        // Don't redirect for Auth events (they're just adding email to profile)
+        if (phoneSession != null && loginType == 'phone') {
+          print('📱 Phone session active - ignoring Auth signedIn event');
+          return;
+        }
+        
         print('✅ User signed in: ${session?.user.email}');
         _handlePostAuthRedirect(session!.user);
       }
