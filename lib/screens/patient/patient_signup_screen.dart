@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/services/otp_service.dart';
 import 'package:care12/widgets/google_logo_widget.dart';
+import 'package:care12/data/indian_cities.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -69,6 +70,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
   bool _aadharTouched = false;
   bool _phoneVerified = false;
   String? _verifiedPhoneNumber; // Track which phone was verified via OTP
+  bool _isStateAutoFilled = false; // Track if state was auto-filled from city dropdown
 
   // Salutation options
   final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
@@ -1279,7 +1281,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             const SizedBox(height: 20),
             if (!_isGoogleUser) ...[
               buildTextField(
-                label: 'Password (Should be atleast 6 characters)',
+                label: 'Password (Should be atleast 6 characters) *',
                 hint: '******',
                 controller: passwordController,
                 obscure: _obscureText,
@@ -1559,16 +1561,96 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               controller: townController,
             ),
             const SizedBox(height: 20),
-            buildTextField(
-              label: 'City *',
-              hint: '',
-              controller: cityController,
+            // City field with autocomplete dropdown
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('City *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
+                Autocomplete<String>(
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return const Iterable<String>.empty();
+                    }
+                    return IndianCities.searchCities(textEditingValue.text);
+                  },
+                  onSelected: (String selection) {
+                    final parsed = IndianCities.parseCityState(selection);
+                    setState(() {
+                      cityController.text = parsed['city']!;
+                      stateController.text = parsed['state']!;
+                      _isStateAutoFilled = true; // Mark state as auto-filled
+                    });
+                  },
+                  fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                    // Sync with cityController
+                    controller.text = cityController.text;
+                    controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                    
+                    return TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      onChanged: (value) {
+                        cityController.text = value;
+                        // If user is typing custom city, allow manual state entry
+                        if (_isStateAutoFilled) {
+                          setState(() {
+                            _isStateAutoFilled = false;
+                          });
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search city...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        suffixIcon: const Icon(Icons.search),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          width: MediaQuery.of(context).size.width - 48,
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (context, index) {
+                              final option = options.elementAt(index);
+                              final parsed = IndianCities.parseCityState(option);
+                              return ListTile(
+                                title: Text(
+                                  parsed['city']!,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  parsed['state']!,
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                ),
+                                onTap: () {
+                                  onSelected(option);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             buildTextField(
               label: 'State *',
-              hint: '',
+              hint: _isStateAutoFilled ? 'Auto-filled from city' : 'Enter state manually',
               controller: stateController,
+              readOnly: _isStateAutoFilled, // Editable when custom city entered
             ),
             const SizedBox(height: 20),
             buildTextField(

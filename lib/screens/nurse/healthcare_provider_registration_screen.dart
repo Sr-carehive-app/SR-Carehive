@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:care12/services/provider_email_service.dart';
 import 'package:care12/screens/nurse/provider_application_status_screen.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:care12/data/indian_cities.dart';
 
 class HealthcareProviderRegistrationScreen extends StatefulWidget {
   const HealthcareProviderRegistrationScreen({Key? key}) : super(key: key);
@@ -656,11 +657,121 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
                 },
               ),
               
-              _buildTextField(
-                controller: cityController,
-                label: 'Current City *',
-                hint: 'Enter your city',
-                validator: (val) => val == null || val.isEmpty ? 'City is required' : null,
+              // City field with autocomplete
+              Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RichText(
+                      text: const TextSpan(
+                        text: 'Current City',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF333333),
+                          letterSpacing: 0.2,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: ' *',
+                            style: TextStyle(color: Colors.red, fontSize: 15),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<String>.empty();
+                        }
+                        return IndianCities.searchCities(textEditingValue.text);
+                      },
+                      onSelected: (String selection) {
+                        setState(() {
+                          cityController.text = selection; // Store full "City - State" format
+                        });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                        controller.text = cityController.text;
+                        controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                        
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          onChanged: (value) {
+                            cityController.text = value; // Allow custom city entry
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search or enter your city',
+                            hintStyle: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!, width: 1.5),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.grey[300]!, width: 1.5),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            suffixIcon: const Icon(Icons.search, color: Color(0xFF2260FF)),
+                          ),
+                          validator: (val) => val == null || val.isEmpty ? 'City is required' : null,
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              constraints: const BoxConstraints(maxHeight: 200),
+                              width: MediaQuery.of(context).size.width - 48,
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (context, index) {
+                                  final option = options.elementAt(index);
+                                  final parsed = IndianCities.parseCityState(option);
+                                  return ListTile(
+                                    title: Text(
+                                      parsed['city']!,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    subtitle: Text(
+                                      parsed['state']!,
+                                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                    ),
+                                    onTap: () {
+                                      onSelected(option);
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
               
               _buildPasswordField(

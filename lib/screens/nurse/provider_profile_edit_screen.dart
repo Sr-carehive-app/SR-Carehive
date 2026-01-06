@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:care12/data/indian_cities.dart';
 
 class ProviderProfileEditScreen extends StatefulWidget {
   final Map<String, dynamic> providerData;
@@ -451,16 +452,116 @@ class _ProviderProfileEditScreenState extends State<ProviderProfileEditScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              _buildTextField(
-                controller: cityController,
-                label: 'City',
-                icon: Icons.location_city_outlined,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter your city';
-                  }
-                  return null;
-                },
+              
+              // City field with autocomplete
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.location_city_outlined, color: primaryColor, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'City',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Autocomplete<String>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<String>.empty();
+                      }
+                      return IndianCities.searchCities(textEditingValue.text);
+                    },
+                    onSelected: (String selection) {
+                      setState(() {
+                        cityController.text = selection;
+                      });
+                    },
+                    fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                      controller.text = cityController.text;
+                      controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                      
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        onChanged: (value) {
+                          cityController.text = value;
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Search or enter your city',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: primaryColor, width: 2),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.red),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          suffixIcon: Icon(Icons.search, color: primaryColor),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your city';
+                          }
+                          return null;
+                        },
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            width: MediaQuery.of(context).size.width - 48,
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
+                                final parsed = IndianCities.parseCityState(option);
+                                return ListTile(
+                                  title: Text(
+                                    parsed['city']!,
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                  subtitle: Text(
+                                    parsed['state']!,
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                  ),
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 

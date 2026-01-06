@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:care12/data/indian_cities.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -54,6 +55,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _aadharValid = false;
   bool _aadharTouched = false;
   bool isOAuthUser = false; // Track if user signed in via OAuth
+  bool _isStateAutoFilled = false; // Track if state was auto-filled from city dropdown
   
   // Profile image
   String? profileImageUrl;
@@ -1074,8 +1076,100 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 12),
           buildTextField('House/Flat Number (Optional)', 'Enter house/flat number', houseNumberController),
           buildTextField('Town/Village/Locality (Optional)', 'Enter town/village/locality', townController),
-          buildTextField('City', 'Enter city', cityController),
-          buildTextField('State', 'Enter state', stateController),
+          
+          // City field with autocomplete
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text('City', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              ),
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  return IndianCities.searchCities(textEditingValue.text);
+                },
+                onSelected: (String selection) {
+                  final parsed = IndianCities.parseCityState(selection);
+                  setState(() {
+                    cityController.text = parsed['city']!;
+                    stateController.text = parsed['state']!;
+                    _isStateAutoFilled = true; // Mark state as auto-filled
+                  });
+                },
+                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  controller.text = cityController.text;
+                  controller.selection = TextSelection.collapsed(offset: controller.text.length);
+                  
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    onChanged: (value) {
+                      cityController.text = value;
+                      // If user is typing custom city, allow manual state entry
+                      if (_isStateAutoFilled) {
+                        setState(() {
+                          _isStateAutoFilled = false;
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search city...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      suffixIcon: const Icon(Icons.search),
+                    ),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        width: MediaQuery.of(context).size.width - 48,
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            final parsed = IndianCities.parseCityState(option);
+                            return ListTile(
+                              title: Text(
+                                parsed['city']!,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                parsed['state']!,
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                              onTap: () {
+                                onSelected(option);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+          
+          buildTextField(
+            'State', 
+            _isStateAutoFilled ? 'Auto-filled from city' : 'Enter state manually', 
+            stateController, 
+            readOnly: _isStateAutoFilled
+          ),
           buildTextField('Pincode', 'Enter pincode', pincodeController, keyboardType: TextInputType.number),
           
           const SizedBox(height: 8),

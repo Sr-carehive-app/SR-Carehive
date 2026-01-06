@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'schedule_nurse_screen.dart';
 import 'appointments_screen.dart';
 import 'package:care12/screens/patient/profile/profile_screen.dart';
@@ -37,12 +38,35 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
+      
+      // CRITICAL FIX: Support both Auth users AND phone-only users
+      Map<String, dynamic>? patient;
+      
+      // PRIORITY 1: Check Auth session FIRST (active login has priority)
       if (user != null) {
-        final patient = await supabase
+        print('[DASHBOARD] Auth user detected: ${user.id}');
+        patient = await supabase
             .from('patients')
             .select()
             .eq('user_id', user.id)
             .single();
+      } else {
+        // PRIORITY 2: Fallback to phone session only if NO Auth session
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
+        
+        if (phone != null && loginType == 'phone') {
+          print('[DASHBOARD] Phone-only user detected: $phone');
+          patient = await supabase
+              .from('patients')
+              .select()
+              .eq('aadhar_linked_phone', phone)
+              .single();
+        }
+      }
+      
+      if (patient != null) {
         setState(() {
           profileImageUrl = patient['profile_image_url'];
           // Include salutation with name if available
