@@ -612,180 +612,114 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ? emailController.text.trim().toLowerCase() 
           : null;
       
-      // Handle Auth users (Email/OAuth)
-      if (user != null) {
+      // CRITICAL FIX: Handle email updates for ALL user types
+      // SCENARIOS:
+      // 1. Phone-only user (user == null) adding email → Just update patients table
+      // 2. Email user (user != null) changing email → Update Auth email + patients table
+      // 3. OAuth users → Skip Auth email update (email managed by provider)
+      
+      if (!isOAuthUser && newEmail != null && user != null) {
+        // SCENARIO 2: Email user changing existing email
+        final currentAuthEmail = user.email;
         
-        // CRITICAL FIX: Handle email updates for ALL user types
-        // SCENARIOS:
-        // 1. Phone-only user (user == null) adding email → Create Auth user
-        // 2. Email user (user != null) changing email → Update Auth email
-        // 3. OAuth users → Skip (email managed by provider)
-        
-        if (!isOAuthUser && newEmail != null) {
-          if (user != null) {
-            // SCENARIO 2: Email user changing existing email
-            final currentAuthEmail = user.email;
+        if (currentAuthEmail != null && currentAuthEmail != newEmail) {
+          try {
+            // Use backend Admin API to update email without confirmation
+            final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+            final response = await http.post(
+              Uri.parse('$apiBase/api/admin/update-user-email'),
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode({
+                'user_id': user.id,
+                'new_email': newEmail,
+              }),
+            );
             
-            if (currentAuthEmail != null && currentAuthEmail != newEmail) {
-              try {
-                // Use backend Admin API to update email without confirmation
-                final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
-                final response = await http.post(
-                  Uri.parse('$apiBase/api/admin/update-user-email'),
-                  headers: {'Content-Type': 'application/json'},
-                  body: json.encode({
-                    'user_id': user.id,
-                    'new_email': newEmail,
-                  }),
-                );
-                
-                if (response.statusCode != 200) {
-                  final errorData = json.decode(response.body);
-                  throw Exception(errorData['error'] ?? 'Failed to update email');
-                }
-                
-                print('[PROFILE-UPDATE] ✅ Email user - Auth email updated: $currentAuthEmail → $newEmail');
-              } catch (authError) {
-                print('[PROFILE-UPDATE] ⚠️ Failed to update Auth email: $authError');
-                if (!mounted) return;
-                setState(() {
-                  isUpdating = false;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
+            if (response.statusCode != 200) {
+              final errorData = json.decode(response.body);
+              throw Exception(errorData['error'] ?? 'Failed to update email');
             }
-          } else {
-            // SCENARIO 1: Phone-only user adding email for first time
-            // Check if this phone user already has email in patients table
-            final prefs = await SharedPreferences.getInstance();
-            final phone = prefs.getString('phone');
             
-            if (phone != null) {
-              try {
-                // Check current email in patients table
-                final patientData = await supabase
-                    .from('patients')
-                    .select('email, user_id')
-                    .eq('aadhar_linked_phone', phone)
-                    .maybeSingle();
-                
-                final currentEmail = patientData?['email'];
-                
-                // Only create/update Auth if email is new or changed
-                if (currentEmail != newEmail) {
-                  print('[PROFILE-UPDATE] 📱 Phone user adding/changing email: ${currentEmail ?? 'null'} → $newEmail');
-                  
-                  // For phone users, we just update patients table
-                  // Auth user creation happens during first login with email
-                  // This is intentional - phone users remain phone-only until they login with email
-                  print('[PROFILE-UPDATE] ℹ️ Email will be added to patients table. Auth user will be created when user logs in with this email.');
-                }
-              } catch (e) {
-                print('[PROFILE-UPDATE] ⚠️ Error checking phone user email: $e');
-              }
-            }
+            print('[PROFILE-UPDATE] ✅ Email user - Auth email updated: $currentAuthEmail → $newEmail');
+          } catch (authError) {
+            print('[PROFILE-UPDATE] ⚠️ Failed to update Auth email: $authError');
+            if (!mounted) return;
+            setState(() {
+              isUpdating = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to update email: ${authError.toString().contains('duplicate') ? 'This email is already in use' : 'Please try again'}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
           }
         }
+      }
+      
+      // Build update data (same for both Auth and phone-only users)
+      final updateData = {
+        // Salutation
+        'salutation': selectedSalutation,
         
-        // Determine how to update: by user_id (Auth users) or phone (phone-only users)
-        final updateQuery = user != null 
-            ? supabase.from('patients').update({
-                // Salutation
-                'salutation': selectedSalutation,
-                
-                // Split name fields
-                'first_name': firstNameController.text.trim(),
-                'middle_name': middleNameController.text.trim(),
-                'last_name': lastNameController.text.trim(),
-                'name': fullName, // Keep legacy field
-                
-                // Email (CRITICAL: Allow phone-only users to add email later)
-                'email': newEmail,
-                
-                // Phone fields
-                'country_code': selectedCountryCode,
-                'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
-                'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
-                    ? alternativePhoneController.text.trim() 
-                    : null,
-                
-                // Address fields
-                'house_number': houseNumberController.text.trim(),
-                // 'street' removed from form by design; keep column unchanged if present
-                'town': townController.text.trim(),
-                'city': cityController.text.trim(),
-                'state': stateController.text.trim(),
-                'pincode': pincodeController.text.trim(),
-                
-                // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
-                'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
-                'aadhar_number': aadharController.text.trim(),
-                'gender': selectedGender,
-              }).eq('user_id', user.id)
-            : () async {
-                // Phone-only user - update by phone number
-                final prefs = await SharedPreferences.getInstance();
-                final phone = prefs.getString('phone');
-                if (phone == null) throw Exception('Phone session not found');
-                
-                return supabase.from('patients').update({
-                  // Salutation
-                  'salutation': selectedSalutation,
-                  
-                  // Split name fields
-                  'first_name': firstNameController.text.trim(),
-                  'middle_name': middleNameController.text.trim(),
-                  'last_name': lastNameController.text.trim(),
-                  'name': fullName, // Keep legacy field
-                  
-                  // Email (CRITICAL: Allow phone-only users to add email later)
-                  'email': newEmail,
-                  
-                  // Phone fields
-                  'country_code': selectedCountryCode,
-                  'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
-                  'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
-                      ? alternativePhoneController.text.trim() 
-                      : null,
-                  
-                  // Address fields
-                  'house_number': houseNumberController.text.trim(),
-                  // 'street' removed from form by design; keep column unchanged if present
-                  'town': townController.text.trim(),
-                  'city': cityController.text.trim(),
-                  'state': stateController.text.trim(),
-                  'pincode': pincodeController.text.trim(),
-                  
-                  // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
-                  'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
-                  'aadhar_number': aadharController.text.trim(),
-                  'gender': selectedGender,
-                }).eq('aadhar_linked_phone', phone);
-              }();
+        // Split name fields
+        'first_name': firstNameController.text.trim(),
+        'middle_name': middleNameController.text.trim(),
+        'last_name': lastNameController.text.trim(),
+        'name': fullName, // Keep legacy field
         
-        await updateQuery;
+        // Email (CRITICAL: Allow phone-only users to add email later)
+        'email': newEmail,
+        
+        // Phone fields
+        'country_code': selectedCountryCode,
+        'aadhar_linked_phone': aadharLinkedPhoneController.text.trim(),
+        'alternative_phone': alternativePhoneController.text.trim().isNotEmpty 
+            ? alternativePhoneController.text.trim() 
+            : null,
+        
+        // Address fields
+        'house_number': houseNumberController.text.trim(),
+        // 'street' removed from form by design; keep column unchanged if present
+        'town': townController.text.trim(),
+        'city': cityController.text.trim(),
+        'state': stateController.text.trim(),
+        'pincode': pincodeController.text.trim(),
+        
+        // Other fields - prefer storing age (new). Do not write legacy 'dob' column (it may have been dropped).
+        'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text.trim()) : null,
+        'aadhar_number': aadharController.text.trim(),
+        'gender': selectedGender,
+      };
+      
+      // Determine how to update: by user_id (Auth users) or phone (phone-only users)
+      if (user != null) {
+        // Auth users - update by user_id
+        print('[PROFILE-UPDATE] 📧 Updating Auth user profile: ${user.id}');
+        await supabase.from('patients').update(updateData).eq('user_id', user.id);
+      } else {
+        // Phone-only user - update by phone number
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        if (phone == null) throw Exception('Phone session not found');
+        
+        print('[PROFILE-UPDATE] 📱 Updating phone-only user profile: $phone');
+        await supabase.from('patients').update(updateData).eq('aadhar_linked_phone', phone);
         
         // ✅ CRITICAL FIX: Update SharedPreferences if phone number changed
-        if (user == null) {
-          // Phone-only user - update phone in SharedPreferences
-          final prefs = await SharedPreferences.getInstance();
-          final newPhone = aadharLinkedPhoneController.text.trim();
+        final newPhone = aadharLinkedPhoneController.text.trim();
+        if (phone != newPhone) {
           await prefs.setString('phone', newPhone);
-          print('[PROFILE-UPDATE] ✅ Updated phone in SharedPreferences: $newPhone');
+          print('[PROFILE-UPDATE] ✅ Updated phone in SharedPreferences: $phone → $newPhone');
         }
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!')),
-        );
-        Navigator.pop(context, true); // Return true to indicate profile was updated
       }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully!')),
+      );
+      Navigator.pop(context, true); // Return true to indicate profile was updated
     } catch (e) {
       if (!mounted) return;
       

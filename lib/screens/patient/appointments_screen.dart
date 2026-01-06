@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:care12/utils/safe_navigation.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   final VoidCallback? onBackToHome;
@@ -41,20 +42,40 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
       
-      if (user == null) {
-        setState(() {
-          errorMessage = 'User not logged in';
-          isLoading = false;
-        });
-        return;
+      // CRITICAL FIX: Support both Auth users AND phone-only users
+      Map<String, dynamic>? patient;
+      
+      // PRIORITY 1: Check Auth session FIRST (active login has priority)
+      if (user != null) {
+        print('[APPOINTMENTS] Auth user detected: ${user.id}');
+        patient = await supabase
+            .from('patients')
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+      } else {
+        // PRIORITY 2: Fallback to phone session only if NO Auth session
+        final prefs = await SharedPreferences.getInstance();
+        final phone = prefs.getString('phone');
+        final loginType = prefs.getString('loginType');
+        
+        if (phone != null && loginType == 'phone') {
+          print('[APPOINTMENTS] Phone-only user detected: $phone');
+          patient = await supabase
+              .from('patients')
+              .select('id')
+              .eq('aadhar_linked_phone', phone)
+              .maybeSingle();
+        } else {
+          // No valid session found
+          print('[APPOINTMENTS] ERROR: No valid user session found');
+          setState(() {
+            errorMessage = 'User not logged in';
+            isLoading = false;
+          });
+          return;
+        }
       }
-
-      // Get patient_id first
-      final patient = await supabase
-          .from('patients')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
 
       if (patient == null) {
         setState(() {

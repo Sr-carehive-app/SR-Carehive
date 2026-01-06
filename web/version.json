@@ -1,6 +1,6 @@
 {
   "version": "1.0.9",
-  "buildNumber": 65,
-  "timestamp": "2026-01-06T01:48:00Z",
-  "lastUpdated": "Build 65: Fixed profile/edit_profile session priority"
+  "buildNumber": 66,
+  "timestamp": "2026-01-06T03:48:00Z",
+  "lastUpdated": "Build 66: Fixed profile for phone users"
 }
