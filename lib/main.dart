@@ -5,6 +5,7 @@ import 'screens/splash_screen.dart';
 import 'screens/patient/reset_password_screen.dart';
 import 'screens/patient/patient_dashboard_screen.dart';
 import 'screens/patient/patient_signup_screen.dart';
+import 'screens/patient/patient_login_screen.dart';
 import 'screens/patient/appointments_screen.dart' as patient_pages;
 import 'screens/patient/schedule_nurse_screen.dart';
 import 'screens/patient/profile/profile_screen.dart';
