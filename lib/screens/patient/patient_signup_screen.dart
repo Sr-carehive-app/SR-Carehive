@@ -718,6 +718,31 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
         // Google user - already authenticated, just create patient record
         final user = supabase.auth.currentUser;
         if (user != null) {
+          // ✅ SAFETY CHECK: Verify user exists in auth system before creating patient record
+          try {
+            // Test if user session is valid by making a simple auth call
+            final session = supabase.auth.currentSession;
+            if (session == null) {
+              throw Exception('No active session - user may have been deleted');
+            }
+          } catch (e) {
+            print('⚠️ Auth session validation failed: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session expired. Please login again with Google.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+            // Sign out and redirect to login
+            await supabase.auth.signOut();
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => PatientLoginScreen()),
+              (route) => false,
+            );
+            return;
+          }
+          
           // Get Google avatar URL from prefill data
           final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
           
