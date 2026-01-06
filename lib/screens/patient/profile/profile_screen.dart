@@ -568,7 +568,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
       
-      // Navigate to splash screen
+      // ✅ ROBUST FIX: Force complete page reload to base URL (web only)
+      // This ensures no OAuth callback params are processed again
+      if (kIsWeb) {
+        await Future.delayed(const Duration(milliseconds: 800)); // Show success message
+        // Force browser to load base URL - clears all state
+        final baseUrl = Uri.base.origin;
+        forceRedirectToBaseUrl(baseUrl);
+        return; // Exit - browser will reload
+      }
+      
+      // Navigate to splash screen (mobile only)
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const SplashScreen()),

@@ -8,3 +8,12 @@ void cleanOAuthCallbackUrl(String cleanUrl) {
     print('⚠️ Could not clean URL: $e');
   }
 }
+
+void forceRedirectToBaseUrl(String baseUrl) {
+  try {
+    print('🔄 Force redirecting browser to: $baseUrl');
+    html.window.location.href = baseUrl;
+  } catch (e) {
+    print('⚠️ Could not force redirect: $e');
+  }
+}
