@@ -1168,7 +1168,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             'State', 
             _isStateAutoFilled ? 'Auto-filled from city' : 'Enter state manually', 
             stateController, 
-            readOnly: _isStateAutoFilled
+            isReadOnly: _isStateAutoFilled
           ),
           buildTextField('Pincode', 'Enter pincode', pincodeController, keyboardType: TextInputType.number),
           

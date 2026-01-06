@@ -1067,6 +1067,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     bool obscure = false,
     Widget? suffixIcon,
     bool enabled = true,
+    bool readOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1079,6 +1080,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           enabled: enabled,
+          readOnly: readOnly,
           enableInteractiveSelection: true,
           autocorrect: false,
           enableSuggestions: false,
