@@ -533,6 +533,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (response.statusCode != 200) {
           throw Exception('Failed to delete user from auth: ${response.body}');
         }
+        
+        // ✅ CRITICAL FIX: Clear local session for OAuth/Email users
+        print('[DELETE-ACCOUNT] Signing out to clear local session');
+        await supabase.auth.signOut();
       } else if (phone != null) {
         // Phone-only users - delete by aadhar_linked_phone
         print('[DELETE-ACCOUNT] Deleting phone-only user: $phone');
