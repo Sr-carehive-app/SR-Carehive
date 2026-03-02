@@ -53,9 +53,18 @@ class NurseApiService {
   static String get _base => dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
   static String? _token; // in-memory bearer token
   static const String _tokenKey = 'nurse_auth_token';
+  static const String _superAdminFlagKey = 'nurse_is_super_admin';
+  static bool _isSuperAdmin = false; // in-memory only, mirrors token ownership
 
   // Initialize and load token from storage
+  // NOTE: If token is already in memory (e.g. super admin session), do NOT overwrite it.
+  // Super admin tokens are memory-only (not in SharedPreferences), so calling init()
+  // again from a new screen would null out the valid in-memory token.
   static Future<void> init() async {
+    if (_token != null) {
+      // Token already in memory - do not overwrite (preserves super admin in-memory session)
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString(_tokenKey);
     if (_token != null) {
@@ -63,24 +72,51 @@ class NurseApiService {
     }
   }
 
-  // Save token to storage
-  static Future<void> _saveToken(String token) async {
+  // Check if stored session is for super admin
+  static Future<bool> isSuperAdminSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_superAdminFlagKey) ?? false;
+  }
+
+  // Save token to storage (with super admin flag if applicable)
+  static Future<void> _saveToken(String token, {bool isSuperAdmin = false}) async {
     _token = token;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    print('💾 Nurse token saved to storage');
+    
+    // For regular providers: Save token (session preserved)
+    // For super admin: DON'T save token (session not preserved)
+    _isSuperAdmin = isSuperAdmin; // track in memory
+    if (!isSuperAdmin) {
+      await prefs.setString(_tokenKey, token);
+      await prefs.setBool(_superAdminFlagKey, false);
+      print('💾 Provider token saved to storage (session preserved)');
+    } else {
+      // Super admin: Store in memory only, not in persistent storage
+      // This ensures session is cleared when app closes
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_superAdminFlagKey);
+      print('🔐 Super Admin token stored in memory only (session NOT preserved)');
+    }
   }
 
   // Clear token from storage
   static Future<void> logout() async {
     _token = null;
+    _isSuperAdmin = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    await prefs.remove(_superAdminFlagKey);
     print('🔒 Nurse token cleared from storage');
   }
 
   // Check if user is authenticated
   static bool get isAuthenticated => _token != null;
+
+  // Check if the currently authenticated user is the super admin (in-memory only)
+  static bool get isCurrentUserSuperAdmin => _isSuperAdmin;
+
+  // Expose token for admin API calls (e.g. fetching providers via backend)
+  static String? get token => _token;
 
   /// Login method that checks application_status
   /// Returns: 
@@ -130,13 +166,15 @@ class NurseApiService {
           final isSuperAdmin = json['isSuperAdmin'] == true;
           
           if (token != null) {
-            // Save token for both regular providers and super admin
-            await _saveToken(token);
+            // Save token with super admin flag
+            // For super admin: Token NOT saved to persistent storage (session not preserved)
+            // For regular providers: Token saved to persistent storage (session preserved)
+            await _saveToken(token, isSuperAdmin: isSuperAdmin);
             
             if (isSuperAdmin) {
-              print('✅ Super Admin login successful - Token saved');
+              print('✅ Super Admin login successful - Session NOT preserved');
             } else {
-              print('✅ Login successful - Token saved (Approved Provider)');
+              print('✅ Login successful - Session preserved (Approved Provider)');
             }
             
             return {
@@ -177,6 +215,12 @@ class NurseApiService {
         final errorMsg = json['error'] as String? ?? 'Server error. Please try again later.';
         print('❌ Server error: $errorMsg');
         return {'success': false, 'error': errorMsg};
+      } else if (resp.statusCode == 503) {
+        // Service unavailable (e.g. backend can't reach database)
+        final json = resp.body.isNotEmpty ? jsonDecode(resp.body) as Map<String, dynamic> : {};
+        final errorMsg = json['error'] as String? ?? 'Service temporarily unavailable. Please try again in a moment.';
+        print('❌ Service unavailable: $errorMsg');
+        return {'success': false, 'error': errorMsg};
       } else {
         // Other errors
         print('❌ Unexpected status code: ${resp.statusCode}');
@@ -202,6 +246,20 @@ class NurseApiService {
       final json = jsonDecode(resp.body) as Map<String, dynamic>;
       final items = (json['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
       return items;
+    }
+    if (resp.statusCode == 401 || resp.statusCode == 403) {
+      throw Exception('401: Unauthorized');
+    }
+    if (resp.statusCode == 503) {
+      throw Exception('Database is temporarily unavailable. Please try again later.');
+    }
+    if (resp.statusCode == 500) {
+      final body = resp.body.isNotEmpty ? (jsonDecode(resp.body) as Map<String, dynamic>) : <String, dynamic>{};
+      final errMsg = (body['error'] ?? '').toString();
+      if (errMsg.contains('fetch failed') || errMsg.contains('unavailable') || errMsg.contains('TypeError')) {
+        throw Exception('Database is temporarily unavailable. Please try again later.');
+      }
+      throw Exception('Server error. Please try again later.');
     }
     throw Exception('Failed to load appointments: ${resp.statusCode} ${resp.body}');
   }

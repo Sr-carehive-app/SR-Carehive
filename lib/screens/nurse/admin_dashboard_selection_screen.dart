@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
 import 'package:care12/screens/nurse/healthcare_provider_applications_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
+import 'package:care12/config/api_config.dart';
 import 'healthcare_provider_selection_screen.dart';
 
 class AdminDashboardSelectionScreen extends StatefulWidget {
@@ -25,39 +27,60 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
 
   Future<void> _loadStatistics() async {
     try {
-      final supabase = Supabase.instance.client;
-      
       print('🔍 Loading provider statistics...');
-      
-      // Get total providers count
-      final totalResponse = await supabase
-          .from('healthcare_providers')
-          .select('*');
-      
-      print('✅ Total providers loaded: ${totalResponse.length}');
-      
-      // Get pending providers count
-      final pendingResponse = await supabase
-          .from('healthcare_providers')
-          .select('*')
-          .eq('application_status', 'pending');
-      
-      print('✅ Pending providers loaded: ${pendingResponse.length}');
-      
-      if (mounted) {
-        setState(() {
-          _totalProvidersCount = totalResponse.length;
-          _pendingProvidersCount = pendingResponse.length;
-          _isLoadingStats = false;
-        });
-        print('✅ Statistics updated');
+
+      final authToken = NurseApiService.token;
+      if (authToken == null) {
+        print('❌ No auth token available for stats');
+        if (mounted) setState(() => _isLoadingStats = false);
+        return;
       }
-    } catch (e, stackTrace) {
-      print('❌ Error loading statistics');
+
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/admin/providers/stats'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Statistics loaded: total=${data['total']}, pending=${data['pending']}');
+        if (mounted) {
+          setState(() {
+            _totalProvidersCount = (data['total'] as num).toInt();
+            _pendingProvidersCount = (data['pending'] as num).toInt();
+            _isLoadingStats = false;
+          });
+        }
+      } else {
+        final serverMsg = (data['error'] ?? '').toString();
+        print('❌ Error loading statistics: $serverMsg');
+        if (mounted) {
+          setState(() {
+            _isLoadingStats = false;
+            _totalProvidersCount = 0;
+            _pendingProvidersCount = 0;
+          });
+          // Show snackbar only for DB-unavailable errors (503) so admin knows the cause
+          if (response.statusCode == 503 || serverMsg.toLowerCase().contains('unavailable')) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Database is temporarily unavailable. Please restore your Supabase project and try again.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 6),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading statistics: $e');
       if (mounted) {
         setState(() {
           _isLoadingStats = false;
-          // Set to 0 on error so cards still show
           _totalProvidersCount = 0;
           _pendingProvidersCount = 0;
         });

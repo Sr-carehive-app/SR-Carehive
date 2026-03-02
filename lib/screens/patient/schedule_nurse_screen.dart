@@ -61,6 +61,8 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
   
   bool isLoading = false;
   bool isSubmitting = false;
+  bool isGoogleUser = false; // Track if user logged in via Google OAuth
+  String originalUserEmail = ''; // Store original user email for toggleButton restore
 
   @override
   void initState() {
@@ -112,6 +114,9 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       
       // PRIORITY 1: Check Auth user FIRST
       if (user != null) {
+        // Check if user is Google OAuth user
+        isGoogleUser = user.appMetadata['provider'] == 'google';
+        
         patient = await supabase
             .from('patients')
             .select('salutation, name, aadhar_linked_phone, permanent_address, aadhar_number, email, age, country_code')
@@ -119,6 +124,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             .maybeSingle();
       } else {
         // PRIORITY 2: Check phone user (fallback)
+        isGoogleUser = false; // Phone-only users are not Google users
         final prefs = await SharedPreferences.getInstance();
         final phone = prefs.getString('phone');
         final loginType = prefs.getString('loginType');
@@ -141,7 +147,11 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           phoneController.text = patient!['aadhar_linked_phone'] ?? '';
           addressController.text = patient!['permanent_address'] ?? '';
           aadharController.text = patient!['aadhar_number'] ?? '';
-          patientEmailController.text = (patient!['email'] ?? user?.email ?? '').toString();
+          
+          // Load email from database or auth, and store for toggle restore
+          originalUserEmail = (patient!['email'] ?? user?.email ?? '').toString();
+          patientEmailController.text = originalUserEmail;
+          
           ageController.text = patient!['age'] != null ? patient!['age'].toString() : ageController.text;
         });
       }
@@ -206,20 +216,15 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       _showErrorSnackBar('Age must be between 1 and 100');
       return false;
     }
-    // Email required and valid
-    if (patientEmailController.text.trim().isEmpty) {
-      final emailContext = selectedPatient == 'Another Person' 
-        ? 'Please enter the healthcare seeker\'s email' 
-        : 'Please enter your email';
-      _showErrorSnackBar(emailContext);
-      return false;
-    }
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(patientEmailController.text.trim())) {
-      final emailContext = selectedPatient == 'Another Person' 
-        ? 'Please enter a valid email for the healthcare seeker' 
-        : 'Please enter a valid email';
-      _showErrorSnackBar(emailContext);
-      return false;
+    // Email optional - validate format only if provided
+    if (patientEmailController.text.trim().isNotEmpty) {
+      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(patientEmailController.text.trim())) {
+        final emailContext = selectedPatient == 'Another Person' 
+          ? 'Please enter a valid email for the healthcare seeker' 
+          : 'Please enter a valid email';
+        _showErrorSnackBar(emailContext);
+        return false;
+      }
     }
     if (phoneController.text.trim().isEmpty) {
       _showErrorSnackBar('Please enter phone number');
@@ -784,40 +789,44 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
           const SizedBox(height: 16),
           buildTextField('Age', controller: ageController, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)]),
           const SizedBox(height: 16),
-          // Patient Email - read-only for "Yourself", editable for "Another Person"
+          // Patient Email - locked for Google users ("Yourself"), editable for email/phone users, always optional
           TextField(
             controller: patientEmailController,
-            readOnly: selectedPatient == 'Yourself',
+            readOnly: selectedPatient == 'Yourself' && isGoogleUser,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
-              labelText: 'Email',
-              suffixIcon: selectedPatient == 'Another Person' 
-                ? const Icon(Icons.edit, size: 20, color: Colors.grey) 
-                : const Icon(Icons.lock, size: 18, color: Colors.grey),
+              labelText: 'Email (Optional)',
+              suffixIcon: (selectedPatient == 'Yourself' && isGoogleUser)
+                ? const Icon(Icons.lock, size: 18, color: Colors.grey)
+                : const Icon(Icons.email_outlined, size: 20, color: Colors.grey),
               filled: true,
-              fillColor: selectedPatient == 'Yourself' 
-                ? const Color(0xFFF5F5F5) 
+              fillColor: (selectedPatient == 'Yourself' && isGoogleUser)
+                ? const Color(0xFFF5F5F5)
                 : Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12), 
-                borderSide: selectedPatient == 'Another Person' 
-                  ? const BorderSide(color: Color(0xFF2260FF), width: 1.5) 
-                  : BorderSide.none
+                borderSide: (selectedPatient == 'Yourself' && isGoogleUser)
+                  ? BorderSide.none
+                  : const BorderSide(color: Color(0xFF2260FF), width: 1.5)
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12), 
-                borderSide: selectedPatient == 'Another Person' 
-                  ? const BorderSide(color: Color(0xFF2260FF), width: 1.5) 
-                  : BorderSide.none
+                borderSide: (selectedPatient == 'Yourself' && isGoogleUser)
+                  ? BorderSide.none
+                  : const BorderSide(color: Color(0xFFE0E0E0), width: 1)
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12), 
+                borderSide: const BorderSide(color: Color(0xFF2260FF), width: 1.5)
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               helperText: selectedPatient == 'Another Person' 
-                ? 'Enter the healthcare seeker\'s email address' 
-                : 'Your email (read-only)',
+                ? 'Optional - for appointment notifications' 
+                : (isGoogleUser 
+                  ? 'Google account email (locked)'
+                  : 'Optional - editable if needed'),
               helperStyle: TextStyle(
-                color: selectedPatient == 'Another Person' 
-                  ? const Color(0xFF2260FF) 
-                  : Colors.grey,
+                color: (selectedPatient == 'Yourself' && isGoogleUser) ? Colors.grey : const Color(0xFF2260FF),
                 fontSize: 12,
               ),
             ),
@@ -927,13 +936,12 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         setState(() {
           selectedPatient = text;
           // When switching to "Another Person", clear email to force user to enter it
-          // When switching back to "Yourself", restore logged-in user's email
+          // When switching back to "Yourself", restore original user's email from database
           if (text == 'Another Person') {
             patientEmailController.text = ''; // Clear for other person
           } else {
-            // Restore user's email
-            final user = Supabase.instance.client.auth.currentUser;
-            patientEmailController.text = user?.email ?? '';
+            // Restore user's email from originally loaded data (database or auth)
+            patientEmailController.text = originalUserEmail;
           }
         });
       },
@@ -983,7 +991,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
       children: [
         Row(
           children: [
-            const Text('Aadhar Number', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            const Text('Aadhar Number (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             const SizedBox(width: 8),
             if (aadharController.text.isNotEmpty)
               Icon(

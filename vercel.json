@@ -16,5 +16,5 @@
   "env": {
     "NODE_ENV": "production"
   },
-  "regions": ["bom1"]
+  "regions": ["sin1"]
 }

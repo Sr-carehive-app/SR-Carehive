@@ -64,7 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   
   // Salutation options
-  final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
+  final List<String> salutationOptions = ['Mr.', 'Ms.', 'Dr.', 'Prof.'];
   
   // Country codes with phone number lengths
   final List<Map<String, dynamic>> countryCodes = [
@@ -654,6 +654,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
         return;
       }
+    }
+    
+    // Validate pincode
+    if (pincodeController.text.trim().isNotEmpty && pincodeController.text.trim().length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('PIN code must be exactly 6 digits'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
     setState(() {
@@ -1410,7 +1421,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             stateController, 
             isReadOnly: _isStateAutoFilled
           ),
-          buildTextField('Pincode', 'Enter pincode', pincodeController, keyboardType: TextInputType.number),
+          buildTextField(
+            'Pincode', 
+            'Enter pincode', 
+            pincodeController, 
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+          ),
           
           const SizedBox(height: 8),
           buildGenderField(),
@@ -1437,7 +1457,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget buildTextField(String label, String hint, TextEditingController controller, {bool isRequired = false, bool isReadOnly = false, TextInputType? keyboardType}) {
+  Widget buildTextField(String label, String hint, TextEditingController controller, {bool isRequired = false, bool isReadOnly = false, TextInputType? keyboardType, List<TextInputFormatter>? inputFormatters}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1452,6 +1472,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           controller: controller,
           readOnly: isReadOnly,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           autocorrect: false,
           enableSuggestions: false,
           enableInteractiveSelection: true,

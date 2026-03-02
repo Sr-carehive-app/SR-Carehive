@@ -20,11 +20,26 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
   bool _isProcessing = false;
   final TextEditingController _reasonController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
+  
+  // New state variables for two-stage approval
+  bool _documentsRequested = false;
+  bool _documentsVerificationChecked = false;
+  final TextEditingController _documentRequestCommentsController = TextEditingController();
+  final TextEditingController _finalApprovalCommentsController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize from application data
+    _documentsRequested = widget.applicationData['documents_requested'] ?? false;
+  }
 
   @override
   void dispose() {
     _reasonController.dispose();
     _commentsController.dispose();
+    _documentRequestCommentsController.dispose();
+    _finalApprovalCommentsController.dispose();
     super.dispose();
   }
 
@@ -272,6 +287,287 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
     );
   }
 
+  // New method: Show request documents dialog
+  void _showRequestDocumentsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.mail_outline, color: Colors.orange, size: 28),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Request Additional Documents',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This will send an email with a Google Form link to the provider. Their application status will remain "Pending" until you give final approval.',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Admin Comments (Optional):',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _documentRequestCommentsController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Add any instructions or notes for the provider...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _documentRequestCommentsController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final comments = _documentRequestCommentsController.text.trim();
+              Navigator.pop(context);
+              _requestDocuments(comments);
+              _documentRequestCommentsController.clear();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Send Request', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // New method: Request documents logic
+  Future<void> _requestDocuments(String? comments) async {
+    setState(() => _isProcessing = true);
+
+    try {
+      final updateData = {
+        'documents_requested': true,
+        'documents_requested_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (comments != null && comments.isNotEmpty) {
+        updateData['documents_request_comments'] = comments;
+      }
+
+      await supabase
+          .from('healthcare_providers')
+          .update(updateData)
+          .eq('id', widget.applicationData['id']);
+
+      // Send email notification
+      final userEmail = widget.applicationData['email'] ?? '';
+      final userName = widget.applicationData['full_name'] ?? 'User';
+      final professionalRole = widget.applicationData['professional_role'] ?? 'Healthcare Provider';
+
+      if (userEmail.isNotEmpty) {
+        ProviderEmailService.sendDocumentRequestEmail(
+          userEmail: userEmail,
+          userName: userName,
+          professionalRole: professionalRole,
+          adminComments: comments,
+        ).catchError((e) => false);
+      }
+
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _documentsRequested = true;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Document request sent successfully'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error requesting documents: $e');
+      setState(() => _isProcessing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to send document request. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // New method: Show final approval dialog
+  void _showFinalApprovalDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 28),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'Final Approval',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Are you sure you want to approve this healthcare provider? They will be able to login and access the appointments dashboard.',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Admin Comments (Optional):',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2260FF),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _finalApprovalCommentsController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Add any welcome message or comments...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _finalApprovalCommentsController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final comments = _finalApprovalCommentsController.text.trim();
+              Navigator.pop(context);
+              _finalApprove(comments);
+              _finalApprovalCommentsController.clear();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Approve', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // New method: Final approval logic
+  Future<void> _finalApprove(String? comments) async {
+    setState(() => _isProcessing = true);
+
+    try {
+      final updateData = {
+        'application_status': 'approved',
+        'approved_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (comments != null && comments.isNotEmpty) {
+        updateData['final_approval_comments'] = comments;
+      }
+
+      await supabase
+          .from('healthcare_providers')
+          .update(updateData)
+          .eq('id', widget.applicationData['id']);
+
+      // Send final approval email (existing template)
+      final userEmail = widget.applicationData['email'] ?? '';
+      final userName = widget.applicationData['full_name'] ?? 'User';
+      final professionalRole = widget.applicationData['professional_role'] ?? 'Healthcare Provider';
+
+      if (userEmail.isNotEmpty) {
+        ProviderEmailService.sendApprovalEmail(
+          userEmail: userEmail,
+          userName: userName,
+          professionalRole: professionalRole,
+          adminComments: comments,
+        ).catchError((e) => false);
+      }
+
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Provider approved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error approving provider: $e');
+      setState(() => _isProcessing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to approve provider. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = widget.applicationData['application_status'] ?? 'pending';
@@ -510,62 +806,278 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
 
             const SizedBox(height: 32),
 
-            // Action Buttons - Always show both, disable based on status
+            // Display Document Request Comments (if exists)
+            if (widget.applicationData['documents_request_comments'] != null &&
+                widget.applicationData['documents_request_comments'].toString().isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Document Request Comments',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.applicationData['documents_request_comments'].toString(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                        height: 1.5,
+                      ),
+                    ),
+                    if (widget.applicationData['documents_requested_at'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Sent: ${_formatDate(widget.applicationData['documents_requested_at'])}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+            // Display Final Approval Comments (if exists)
+            if (widget.applicationData['final_approval_comments'] != null &&
+                widget.applicationData['final_approval_comments'].toString().isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Final Approval Comments',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.applicationData['final_approval_comments'].toString(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Action Buttons - Two-stage approval process
             if (!_isProcessing)
               Column(
                 children: [
-                  // Approve Button
-                  Opacity(
-                    opacity: isApproved ? 0.5 : 1.0,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: isApproved ? null : _showApproveDialog,
-                        icon: Icon(
-                          isApproved ? Icons.check_circle : Icons.check_circle_outline,
-                        ),
-                        label: Text(isApproved ? 'Already Approved' : 'Approve Application'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.green.withOpacity(0.6),
-                          disabledForegroundColor: Colors.white.withOpacity(0.7),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                  // BUTTON 1: Request Additional Documents
+                  // Visible if: NOT approved AND NOT rejected
+                  // Disabled if: documents already requested
+                  if (!isApproved && !isRejected)
+                    Opacity(
+                      opacity: _documentsRequested ? 0.5 : 1.0,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _documentsRequested ? null : _showRequestDocumentsDialog,
+                          icon: Icon(
+                            _documentsRequested ? Icons.mark_email_read : Icons.mail_outline,
                           ),
-                          elevation: isApproved ? 0 : 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Reject Button
-                  Opacity(
-                    opacity: isRejected ? 0.5 : 1.0,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: isRejected ? null : _showRejectDialog,
-                        icon: Icon(
-                          isRejected ? Icons.cancel : Icons.cancel_outlined,
-                        ),
-                        label: Text(isRejected ? 'Already Rejected' : 'Reject Application'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          disabledForegroundColor: Colors.red.withOpacity(0.5),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          label: Text(
+                            _documentsRequested 
+                              ? 'Documents Already Requested' 
+                              : 'Request Additional Documents'
                           ),
-                          side: BorderSide(
-                            color: isRejected ? Colors.red.withOpacity(0.3) : Colors.red,
-                            width: 2,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.orange.withOpacity(0.6),
+                            disabledForegroundColor: Colors.white.withOpacity(0.7),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: _documentsRequested ? 0 : 2,
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  
+                  if (!isApproved && !isRejected)
+                    const SizedBox(height: 16),
+                  
+                  // Verification Checkbox - Only visible if documents requested
+                  if (_documentsRequested && !isApproved && !isRejected)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: CheckboxListTile(
+                        title: const Text(
+                          "I have verified all documents and necessary information",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        value: _documentsVerificationChecked,
+                        onChanged: (value) {
+                          setState(() => _documentsVerificationChecked = value ?? false);
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        activeColor: Colors.green,
+                      ),
+                    ),
+                  
+                  // BUTTON 2: Final Approval
+                  // Visible if: documents requested AND NOT approved AND NOT rejected
+                  // Enabled if: checkbox is checked
+                  if (_documentsRequested && !isApproved && !isRejected)
+                    Opacity(
+                      opacity: _documentsVerificationChecked ? 1.0 : 0.5,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _documentsVerificationChecked 
+                            ? _showFinalApprovalDialog 
+                            : null,
+                          icon: const Icon(Icons.check_circle),
+                          label: const Text('Final Approval'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.green.withOpacity(0.5),
+                            disabledForegroundColor: Colors.white.withOpacity(0.6),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: _documentsVerificationChecked ? 2 : 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  
+                  if (_documentsRequested && !isApproved && !isRejected)
+                    const SizedBox(height: 12),
+                  
+                  // BUTTON 3: Reject Application
+                  // Visible always (if not rejected)
+                  // Enabled UNTIL final approval (can reject after document request)
+                  if (!isRejected)
+                    Opacity(
+                      opacity: isApproved ? 0.5 : 1.0,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: isApproved ? null : _showRejectDialog,
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Reject Application'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            disabledForegroundColor: Colors.red.withOpacity(0.5),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            side: BorderSide(
+                              color: isApproved ? Colors.red.withOpacity(0.3) : Colors.red,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  
+                  // Show status messages
+                  if (isApproved)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Application Already Approved',
+                              style: TextStyle(
+                                color: Colors.green.shade900,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  
+                  if (isRejected)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.cancel, color: Colors.red, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Application Already Rejected',
+                              style: TextStyle(
+                                color: Colors.red.shade900,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
 

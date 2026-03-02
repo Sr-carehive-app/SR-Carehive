@@ -526,6 +526,7 @@ class _MyAppState extends State<MyApp> {
                     }
                   })(),
                 'gender': user.userMetadata?['gender'] ?? '',
+                'google_avatar_url': user.userMetadata?['picture'] ?? '', // Store Google avatar URL
               };
               
               setState(() {

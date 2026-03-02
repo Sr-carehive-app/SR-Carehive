@@ -32,32 +32,54 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   }
 
   Future<void> _checkExistingAuth() async {
-    // Load token from storage
+    // Load token from storage (only loads from SharedPreferences if not already in memory)
     await NurseApiService.init();
     
-    // If already authenticated, validate token with backend
-    if (NurseApiService.isAuthenticated) {
-      print('✅ Existing nurse session found, validating token...');
+    if (!NurseApiService.isAuthenticated) return; // No session at all - show login form
+    
+    // Super admin token is in memory (within-session: user navigated back to login screen)
+    // Super admin sessions are NEVER stored to disk, so this can only happen within the same session.
+    // Redirect them straight back to Admin Dashboard - no need to re-validate.
+    if (NurseApiService.isCurrentUserSuperAdmin) {
+      print('🔐 Super Admin session active in memory - redirecting to Admin Dashboard');
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
+      );
+      return;
+    }
+    
+    // Regular provider token found - validate with backend before auto-login
+    print('✅ Existing provider session found, validating token...');
+    try {
+      // Try to fetch appointments - this validates the token
+      await NurseApiService.listAppointments();
       
-      try {
-        // Try to fetch appointments - this validates the token
-        final appointments = await NurseApiService.listAppointments();
-        
-        // Token is valid - auto-login to appointments page
-        print('✅ Token valid - Auto-login successful');
-        if (!mounted) return;
-        
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const NurseAppointmentsManageScreen(isSuperAdmin: false),
-          ),
-        );
-      } catch (e) {
-        // Token invalid or expired - clear it and show login screen
-        print('❌ Token validation failed: $e');
+      // Token is valid - auto-login to appointments page
+      print('✅ Token valid - Auto-login successful (Provider)');
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const NurseAppointmentsManageScreen(isSuperAdmin: false),
+        ),
+      );
+    } catch (e) {
+      final errStr = e.toString();
+      // Only clear token if it's a real auth failure (401/403 Unauthorized)
+      // Do NOT clear for 503/network/DB errors — token is still valid, just DB is temporarily down
+      final isAuthError = errStr.contains('401') || errStr.contains('403') ||
+          errStr.contains('Unauthorized') || errStr.contains('unauthorized');
+      if (isAuthError) {
+        print('❌ Token invalid/expired (auth error): $e');
         await NurseApiService.logout();
         print('🔄 Cleared invalid token - Please login again');
+      } else {
+        // DB/network error: token is fine, just can't reach backend right now
+        // Keep token in memory and show login screen — user can retry
+        print('⚠️ Token validation skipped (DB/network error): $e');
+        print('🔄 Keeping valid token - backend temporarily unavailable');
       }
     }
   }

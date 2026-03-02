@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:care12/screens/nurse/healthcare_provider_detail_screen.dart';
+import 'package:care12/services/nurse_api_service.dart';
+import 'package:care12/config/api_config.dart';
 import 'package:care12/utils/safe_navigation.dart';
 
 class HealthcareProviderApplicationsScreen extends StatefulWidget {
@@ -11,7 +14,6 @@ class HealthcareProviderApplicationsScreen extends StatefulWidget {
 }
 
 class _HealthcareProviderApplicationsScreenState extends State<HealthcareProviderApplicationsScreen> {
-  final supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _applications = [];
   bool _isLoading = true;
   String _selectedFilter = 'all'; // all, pending, approved, rejected
@@ -27,41 +29,64 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
 
     try {
       print('🔍 Loading applications...');
-      
-      PostgrestFilterBuilder query = supabase
-          .from('healthcare_providers')
-          .select();
 
-      if (_selectedFilter != 'all') {
-        query = query.eq('application_status', _selectedFilter);
+      final authToken = NurseApiService.token;
+      if (authToken == null) {
+        print('❌ No auth token available');
+        if (mounted) setState(() => _isLoading = false);
+        return;
       }
 
-      final response = await query.order('created_at', ascending: false);
-      
-      print('✅ Applications loaded: ${response.length}');
-      
-      setState(() {
-        _applications = List<Map<String, dynamic>>.from(response);
-        _isLoading = false;
-      });
-      
-      print('✅ Applications updated');
-    } catch (e, stackTrace) {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/api/admin/providers').replace(
+        queryParameters: _selectedFilter != 'all' ? {'status': _selectedFilter} : null,
+      );
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final providers = data['providers'] as List<dynamic>;
+        print('✅ Applications loaded: ${providers.length}');
+        if (mounted) {
+          setState(() {
+            _applications = List<Map<String, dynamic>>.from(providers);
+            _isLoading = false;
+          });
+        }
+      } else {
+        final serverMsg = (data['error'] ?? 'Failed to load applications. Please try again.').toString();
+        print('❌ Error loading applications: $serverMsg');
+        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          final userMsg = (response.statusCode == 503 || serverMsg.toLowerCase().contains('unavailable'))
+              ? 'Database is temporarily unavailable. Please try again later.'
+              : serverMsg;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(userMsg),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
       print('❌ Error loading applications: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
-        // Convert technical errors to user-friendly messages
         String userMessage = 'Failed to load applications. Please try again.';
         final errorStr = e.toString().toLowerCase();
-        
         if (errorStr.contains('network') || errorStr.contains('connection')) {
           userMessage = 'Network error. Please check your internet connection.';
         } else if (errorStr.contains('timeout')) {
           userMessage = 'Request timed out. Please try again.';
-        } else if (errorStr.contains('unauthorized') || errorStr.contains('401')) {
-          userMessage = 'Session expired. Please login again.';
         }
-        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userMessage),

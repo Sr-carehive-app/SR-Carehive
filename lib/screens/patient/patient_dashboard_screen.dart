@@ -201,15 +201,6 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                 ),
                 GestureDetector(
                   onTap: () {
-                    setState(() {
-                      _currentIndex = 1; // Navigate to Appointments tab
-                    });
-                  },
-                  child: Icon(Icons.notifications, color: primaryColor),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const SettingsScreen()),

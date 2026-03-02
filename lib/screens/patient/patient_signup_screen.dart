@@ -73,7 +73,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
   bool _isStateAutoFilled = false; // Track if state was auto-filled from city dropdown
 
   // Salutation options
-  final List<String> salutationOptions = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Master', 'Miss'];
+  final List<String> salutationOptions = ['Mr.', 'Ms.', 'Dr.', 'Prof.'];
   
   // Country codes list with phone number lengths
   final List<Map<String, dynamic>> countryCodes = [
@@ -590,6 +590,13 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
       return;
     }
     
+    if (pincodeController.text.trim().length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PIN code must be exactly 6 digits')),
+      );
+      return;
+    }
+    
     if (selectedGender == null || selectedGender!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select your gender')),
@@ -743,8 +750,14 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             return;
           }
           
-          // Get Google avatar URL from prefill data
+          // Get Google avatar URL from prefill data and download/upload to our storage
           final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
+          String? uploadedAvatarUrl;
+          
+          if (googleAvatarUrl.isNotEmpty) {
+            print('🔄 Processing Google avatar...');
+            uploadedAvatarUrl = await _downloadAndUploadGoogleAvatar(googleAvatarUrl, user.id);
+          }
           
           await supabase.from('patients').insert({
             'user_id': user.id,
@@ -768,7 +781,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             'pincode': pincodeController.text.trim(),
             'gender': selectedGender,
             'phone_verified': true, // OAuth users are pre-verified
-            'profile_image_url': googleAvatarUrl.isNotEmpty ? googleAvatarUrl : null, // Store Google avatar
+            'profile_image_url': uploadedAvatarUrl, // Store our uploaded copy of Google avatar
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1066,6 +1079,71 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  // Download Google avatar and upload to Supabase Storage
+  Future<String?> _downloadAndUploadGoogleAvatar(String googleAvatarUrl, String userId) async {
+    if (googleAvatarUrl.isEmpty) return null;
+    
+    try {
+      print('📥 Downloading Google avatar via backend proxy: $googleAvatarUrl');
+      
+      // Use backend proxy to download image (avoids CORS and rate limiting)
+      final proxyResponse = await http.post(
+        Uri.parse('${dotenv.env['API_BASE_URL']}/api/proxy-google-avatar'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'imageUrl': googleAvatarUrl}),
+      );
+      
+      if (proxyResponse.statusCode != 200) {
+        print('❌ Proxy failed with status: ${proxyResponse.statusCode}');
+        print('❌ Response: ${proxyResponse.body}');
+        return null;
+      }
+      
+      final proxyData = jsonDecode(proxyResponse.body);
+      if (proxyData['success'] != true || proxyData['imageData'] == null) {
+        print('❌ Invalid proxy response');
+        return null;
+      }
+      
+      // Decode base64 image data
+      final imageBytes = base64Decode(proxyData['imageData']);
+      print('✅ Downloaded ${imageBytes.length} bytes via proxy');
+      
+      // Generate filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final cleanUserId = userId.replaceAll('-', '').substring(0, 12);
+      final fileName = 'avatar_google_${cleanUserId}_$timestamp.jpg';
+      
+      print('📤 Uploading avatar to Supabase Storage: $fileName');
+      
+      // Upload to Supabase Storage
+      final supabase = Supabase.instance.client;
+      await supabase.storage
+          .from('profile-images')
+          .uploadBinary(
+            fileName,
+            imageBytes,
+            fileOptions: FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+              contentType: 'image/jpeg',
+            ),
+          );
+      
+      // Get public URL
+      final imageUrl = supabase.storage
+          .from('profile-images')
+          .getPublicUrl(fileName);
+      
+      print('✅ Google avatar uploaded successfully: $imageUrl');
+      return imageUrl;
+      
+    } catch (e) {
+      print('❌ Error downloading/uploading Google avatar: $e');
+      return null; // Return null on error, signup will continue without avatar
     }
   }
 
@@ -1686,6 +1764,10 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               hint: 'XXXXXX',
               controller: pincodeController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
             ),
             const SizedBox(height: 20),
             const Text('Gender', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),

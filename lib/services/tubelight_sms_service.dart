@@ -17,7 +17,7 @@ class TubelightSMSService {
 
   // Template IDs for different message types
   static String get _otpTemplateId => 
-      dotenv.env['TUBELIGHT_OTP_TEMPLATE_ID'] ?? '';
+      dotenv.env['TUBELIGHT_LOGIN_OTP_TEMPLATE_ID'] ?? '';
 
   /// Send OTP SMS using approved Jio TrueConnect template
   /// 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'notification_settings_screen.dart';
+// import 'notification_settings_screen.dart';
 import 'password_manager_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -15,7 +15,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
-          buildSettingsOption(context, Icons.notifications, 'Notification Setting', const NotificationSettingsScreen()),
+          // buildSettingsOption(context, Icons.notifications, 'Notification Setting', const NotificationSettingsScreen()),
           buildSettingsOption(context, Icons.lock, 'Password Manager', const PasswordManagerScreen()),
 
         ],

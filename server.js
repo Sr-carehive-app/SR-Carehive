@@ -308,14 +308,25 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_SECURE = (process.env.SMTP_SECURE || '').toLowerCase() === 'true';
-const SENDER_EMAIL = (process.env.SENDER_EMAIL || 'srcarehive@gmail.com').trim();
-const SENDER_NAME = (process.env.SENDER_NAME || 'SR CareHive').trim();
+const SENDER_EMAIL = (process.env.SENDER_EMAIL || '').trim();
+const SENDER_NAME = (process.env.SENDER_NAME || '').trim();
 
 // Admin/healthcare provider emails that receive all notifications
 const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
 
 // Frontend URL for email links (used when users don't have app installed)
 const FRONTEND_URL = (process.env.FRONTEND_URL || '${FRONTEND_URL}').trim();
+
+// HTML escape function to prevent XSS in email templates
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Twilio SMS Configuration (SECURE - Never expose to frontend!)
 const TWILIO_ACCOUNT_SID = (process.env.TWILIO_ACCOUNT_SID || '').trim();
@@ -857,7 +868,7 @@ async function sendApprovalEmail(appointment) {
         <hr>
         <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹10 to confirm your booking.</p>
         <p>You can pay and view your appointment in the app by clicking the button below:</p>
-  <a href="${(process.env.WEB_FRONTEND_URL || `carehive://appointments?aid=${appointment.id}`)}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
+  <a href="${(process.env.FRONTEND_URL || `carehive://appointments?aid=${appointment.id}`)}" style="display:inline-block;padding:10px 20px;background:#2260FF;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">View & Pay in App</a>
         <p>— Serechi</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment is approved', html, attachments });
@@ -1281,10 +1292,17 @@ app.post('/api/nurse/login', async (req, res) => {
     const isPhoneNumber = /^\d{10}$/.test(identifier.replace(/[^\d]/g, ''));
     
     // Check if super admin credentials (only for email)
-    if (!isPhoneNumber && NURSE_EMAIL && NURSE_PASSWORD && normalizedEmail === NURSE_EMAIL && password === NURSE_PASSWORD) {
-      const token = await createSession(normalizedEmail, true);
-      console.log('✅ Super Admin Login Successful');
-      return res.json({ success: true, token, isSuperAdmin: true });
+    // If email matches admin email, handle password check HERE without hitting the database.
+    // This prevents confusing "database error" messages when wrong password is entered for admin.
+    if (!isPhoneNumber && NURSE_EMAIL && normalizedEmail === NURSE_EMAIL) {
+      if (NURSE_PASSWORD && password === NURSE_PASSWORD) {
+        const token = await createSession(normalizedEmail, true);
+        console.log('✅ Super Admin Login Successful');
+        return res.json({ success: true, token, isSuperAdmin: true });
+      } else {
+        console.log('❌ Super Admin: incorrect password');
+        return res.status(401).json({ success: false, error: 'Invalid email or password. Please check your credentials and try again.' });
+      }
     }
     
     // Check healthcare_providers table for regular providers
@@ -1309,7 +1327,18 @@ app.post('/api/nurse/login', async (req, res) => {
     
     if (error) {
       console.error('❌ Error fetching provider:', error.message);
-      return res.status(500).json({ success: false, error: 'Database error' });
+      // Distinguish network failures from actual DB errors
+      const isNetworkError = error.message && (
+        error.message.includes('fetch failed') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('network') ||
+        error.message.includes('connect')
+      );
+      if (isNetworkError) {
+        return res.status(503).json({ success: false, error: 'Service temporarily unavailable. Please try again in a moment.' });
+      }
+      return res.status(500).json({ success: false, error: 'Unable to verify credentials. Please try again.' });
     }
     
     if (!provider) {
@@ -1399,6 +1428,104 @@ app.post('/api/nurse/login', async (req, res) => {
   }
 });
 
+// GET /api/admin/providers/stats - Get provider statistics (super admin only)
+app.get('/api/admin/providers/stats', async (req, res) => {
+  try {
+    const h = req.headers['authorization'] || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const session = await getSession(token);
+    if (!session || !session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Super admin access required' });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    const { data: allProviders, error: statsError } = await supabase
+      .from('healthcare_providers')
+      .select('id, application_status');
+
+    if (statsError) {
+      console.error('❌ [ADMIN] Error fetching stats:', statsError.message);
+      const isNetworkErr = statsError.message && (
+        statsError.message.includes('fetch failed') ||
+        statsError.message.includes('ECONNREFUSED') ||
+        statsError.message.includes('ENOTFOUND') ||
+        statsError.message.includes('network')
+      );
+      if (isNetworkErr) {
+        return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again later.' });
+      }
+      return res.status(500).json({ error: 'Failed to fetch statistics' });
+    }
+
+    const total = allProviders?.length || 0;
+    const pending = allProviders?.filter(p => p.application_status === 'pending').length || 0;
+
+    return res.json({ success: true, total, pending });
+  } catch (e) {
+    console.error('❌ [ADMIN] stats error:', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/admin/providers - Get all healthcare providers (super admin only)
+app.get('/api/admin/providers', async (req, res) => {
+  try {
+    const h = req.headers['authorization'] || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const session = await getSession(token);
+    if (!session || !session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Super admin access required' });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    const { status } = req.query;
+
+    let query = supabase
+      .from('healthcare_providers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (status && status !== 'all') {
+      query = query.eq('application_status', status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('❌ [ADMIN] Error fetching providers:', error.message);
+      const isNetworkErr = error.message && (
+        error.message.includes('fetch failed') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('network')
+      );
+      if (isNetworkErr) {
+        return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again later.' });
+      }
+      return res.status(500).json({ error: 'Failed to fetch providers' });
+    }
+
+    return res.json({ success: true, providers: data || [] });
+  } catch (e) {
+    console.error('❌ [ADMIN] providers error:', e.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Send approval email to provider
 app.post('/api/provider/send-approval-email', async (req, res) => {
   try {
@@ -1410,7 +1537,7 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
     const commentsSection = adminComments 
       ? `<div style="background: #e7f3ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
            <h3 style="margin-top: 0; color: #2260FF;">Message from Hiring Team:</h3>
-           <p style="margin: 0; color: #333; line-height: 1.6;">${adminComments}</p>
+           <p style="margin: 0; color: #333; line-height: 1.6;">${escapeHtml(adminComments)}</p>
          </div>`
       : '';
 
@@ -1420,17 +1547,17 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
           <h1 style="color: white; margin: 0; font-size: 28px;">🎉 Congratulations!</h1>
         </div>
         <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${userName}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${escapeHtml(userName)}</strong>,</p>
           
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
-            We are pleased to inform you that your application for <strong>${professionalRole}</strong> has been <span style="color: #28a745; font-weight: bold;">APPROVED</span>! 
+            We are pleased to inform you that your application for <strong>${escapeHtml(professionalRole)}</strong> has been <span style="color: #28a745; font-weight: bold;">APPROVED</span>! 
           </p>
           
           ${commentsSection}
           
           <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #2260FF;">Your Login Credentials:</h3>
-            <p style="margin: 5px 0;"><strong>Email:</strong> ${userEmail}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(userEmail)}</p>
             <p style="margin: 5px 0;"><strong>Password:</strong> Use the password you set during registration</p>
           </div>
 
@@ -1479,7 +1606,7 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
     const reasonSection = rejectionReason 
       ? `<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
            <h3 style="margin-top: 0; color: #856404;">Reason for Rejection:</h3>
-           <p style="margin: 0; color: #856404;">${rejectionReason}</p>
+           <p style="margin: 0; color: #856404;">${escapeHtml(rejectionReason)}</p>
          </div>`
       : '';
 
@@ -1489,7 +1616,7 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
           <h1 style="color: white; margin: 0; font-size: 28px;">Application Status Update</h1>
         </div>
         <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
-          <p style="font-size: 16px; color: #333;">Dear <strong>${userName}</strong>,</p>
+          <p style="font-size: 16px; color: #333;">Dear <strong>${escapeHtml(userName)}</strong>,</p>
           
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
             Thank you for your interest in joining SR CareHive. After careful review of your application, we regret to inform you that we are unable to approve your application at this time.
@@ -1520,6 +1647,87 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
   } catch (e) {
     console.error('Error sending rejection email:', e);
     res.status(500).json({ error: 'Failed to send rejection email' });
+  }
+});
+
+// Send document request email to provider with Google Form link
+app.post('/api/provider/send-document-request-email', async (req, res) => {
+  try {
+    const { userEmail, userName, professionalRole, adminComments } = req.body || {};
+    if (!userEmail || !userName) {
+      return res.status(400).json({ error: 'userEmail and userName required' });
+    }
+
+    const commentsSection = adminComments 
+      ? `<div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0;">
+           <h3 style="margin-top: 0; color: #e65100;">Message from Admin:</h3>
+           <p style="margin: 0; color: #333; line-height: 1.6;">${escapeHtml(adminComments)}</p>
+         </div>`
+      : '';
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">📋 Additional Documentation Required</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${escapeHtml(userName)}</strong>,</p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Thank you for your application to join SR CareHive as a <strong>${escapeHtml(professionalRole)}</strong>.
+          </p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            To proceed with your application, we need some additional information and documents from you. Please fill out the form linked below with the required details.
+          </p>
+          
+          ${commentsSection}
+          
+          <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #2260FF;">📝 Next Steps:</h3>
+            <p style="margin: 5px 0; color: #333; line-height: 1.6;">
+              1. Click the button below to access the form<br>
+              2. Fill in all required information carefully<br>
+              3. Submit the form<br>
+              4. Our team will review your submission and contact you with the final decision
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLScZ2B8aPX8MkkU9N2cc0nkLkB_C12QjXn5qmHffU3I7xUG6kg/viewform?usp=sharing&ouid=103854382276673108378" 
+               style="background: #ff9800; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">
+              📋 Fill Additional Information Form
+            </a>
+          </div>
+
+          <div style="background: #fff9c4; border: 1px solid #fbc02d; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; color: #f57f17; font-weight: bold;">⏳ Application Status: Under Review</p>
+            <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Your application will remain pending until we receive and verify your additional information.</p>
+          </div>
+
+          <p style="font-size: 14px; color: #666; line-height: 1.6;">
+            If you have any questions or need assistance, please don't hesitate to contact our support team.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="font-size: 13px; color: #999;">
+            For any questions or support, contact us at <a href="mailto:contact@srcarehive.com" style="color: #ff9800;">contact@srcarehive.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: userEmail,
+      subject: 'SR CareHive - Additional Documentation Required',
+      html: emailHtml
+    });
+
+    res.json({ success: true, message: 'Document request email sent' });
+  } catch (e) {
+    console.error('Error sending document request email:', e);
+    res.status(500).json({ error: 'Failed to send document request email' });
   }
 });
 
@@ -1700,6 +1908,134 @@ app.post('/api/provider/send-user-confirmation', async (req, res) => {
   }
 });
 
+// Request additional documents from provider (first approval stage)
+app.post('/api/provider/request-documents', async (req, res) => {
+  try {
+    const { providerId, adminComments } = req.body || {};
+    
+    if (!providerId) {
+      return res.status(400).json({ error: 'providerId is required' });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Update database - set documents_requested flag
+    const updateData = {
+      documents_requested: true,
+      documents_requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (adminComments && adminComments.trim()) {
+      updateData.documents_request_comments = adminComments.trim();
+    }
+
+    const { data: updatedProvider, error: updateError } = await supabase
+      .from('healthcare_providers')
+      .update(updateData)
+      .eq('id', providerId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Error updating provider:', updateError);
+      return res.status(500).json({ error: 'Failed to update provider record' });
+    }
+
+    if (!updatedProvider) {
+      return res.status(404).json({ error: 'Provider not found' });
+    }
+
+    console.log('✅ Documents requested for provider:', updatedProvider.full_name);
+    
+    res.json({ 
+      success: true, 
+      message: 'Document request recorded successfully',
+      provider: {
+        id: updatedProvider.id,
+        full_name: updatedProvider.full_name,
+        documents_requested: updatedProvider.documents_requested
+      }
+    });
+  } catch (e) {
+    console.error('Error requesting documents:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Final approval of provider (second approval stage)
+app.post('/api/provider/final-approval', async (req, res) => {
+  try {
+    const { providerId, adminComments } = req.body || {};
+    
+    if (!providerId) {
+      return res.status(400).json({ error: 'providerId is required' });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // First, check if documents were requested
+    const { data: provider, error: fetchError } = await supabase
+      .from('healthcare_providers')
+      .select('*')
+      .eq('id', providerId)
+      .single();
+
+    if (fetchError || !provider) {
+      console.error('Error fetching provider:', fetchError);
+      return res.status(404).json({ error: 'Provider not found' });
+    }
+
+    // Validate that documents were requested (optional check, can be removed if not required)
+    if (!provider.documents_requested) {
+      console.warn('⚠️ Warning: Final approval without document request for provider:', provider.full_name);
+    }
+
+    // Update database - set to approved status
+    const updateData = {
+      application_status: 'approved',
+      approved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (adminComments && adminComments.trim()) {
+      updateData.final_approval_comments = adminComments.trim();
+    }
+
+    const { data: approvedProvider, error: updateError } = await supabase
+      .from('healthcare_providers')
+      .update(updateData)
+      .eq('id', providerId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('Error approving provider:', updateError);
+      return res.status(500).json({ error: 'Failed to approve provider' });
+    }
+
+    console.log('✅ Provider approved:', approvedProvider.full_name);
+    
+    res.json({ 
+      success: true, 
+      message: 'Provider approved successfully',
+      provider: {
+        id: approvedProvider.id,
+        full_name: approvedProvider.full_name,
+        application_status: approvedProvider.application_status,
+        approved_at: approvedProvider.approved_at
+      }
+    });
+  } catch (e) {
+    console.error('Error in final approval:', e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // List all appointments (admin view). Protected.
 // Only returns appointments where nurse_visible is not explicitly false (includes null for backward compatibility)
 app.get('/api/nurse/appointments', async (req, res) => {
@@ -1713,7 +2049,17 @@ app.get('/api/nurse/appointments', async (req, res) => {
       .select('*')
       .order('created_at', { ascending: false });
     
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      const isNetworkErr = error.message && (
+        error.message.includes('fetch failed') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ENOTFOUND')
+      );
+      if (isNetworkErr) {
+        return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again later.' });
+      }
+      return res.status(500).json({ error: error.message });
+    }
     
     // Filter in JavaScript: include null and true, exclude false
     const data = (allData || []).filter(item => item.nurse_visible !== false);
@@ -6896,6 +7242,73 @@ async function deleteLoginOTP(email) {
   console.log(`[MEMORY] ✅ Login OTP deleted (fallback) for: ${email}`);
   return true;
 }
+
+// ============================================================================
+// GOOGLE AVATAR PROXY - Download Google profile pictures server-side
+// ============================================================================
+app.post('/api/proxy-google-avatar', async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    
+    if (!imageUrl || !imageUrl.startsWith('https://lh3.googleusercontent.com/')) {
+      return res.status(400).json({ error: 'Invalid Google image URL' });
+    }
+    
+    console.log('📥 Proxying Google avatar:', imageUrl);
+    
+    // Download image from Google using native https module (already imported at top)
+    const imageUrlObj = new URL(imageUrl);
+    const options = {
+      hostname: imageUrlObj.hostname,
+      path: imageUrlObj.pathname + imageUrlObj.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://accounts.google.com/',
+      },
+      timeout: 10000,
+    };
+    
+    https.get(options, (imageResponse) => {
+      if (imageResponse.statusCode !== 200) {
+        console.error('❌ Failed to download Google avatar:', imageResponse.statusCode);
+        return res.status(imageResponse.statusCode).json({ 
+          error: 'Failed to download image from Google' 
+        });
+      }
+      
+      const chunks = [];
+      imageResponse.on('data', (chunk) => chunks.push(chunk));
+      imageResponse.on('end', () => {
+        const imageBuffer = Buffer.concat(chunks);
+        console.log('✅ Successfully downloaded Google avatar:', imageBuffer.length, 'bytes');
+        
+        // Return image bytes as base64
+        const base64Image = imageBuffer.toString('base64');
+        res.json({ 
+          success: true,
+          imageData: base64Image,
+          contentType: imageResponse.headers['content-type'] || 'image/jpeg'
+        });
+      });
+    }).on('error', (error) => {
+      console.error('❌ HTTPS request error:', error.message);
+      res.status(500).json({ 
+        error: 'Failed to download image',
+        details: error.message 
+      });
+    });
+    
+  } catch (error) {
+    console.error('❌ Error proxying Google avatar:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to download image',
+      details: error.message 
+    });
+  }
+});
 
 // ============================================================================
 // START SERVER

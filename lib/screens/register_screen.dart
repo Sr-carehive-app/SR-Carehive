@@ -28,7 +28,7 @@ class RegisterScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'By SR CareHive Pvt. Ltd.',
+                  'By SR CareHive',
                   style: TextStyle(
                     color: Color(0xFF2260FF),
                     fontSize: 16,

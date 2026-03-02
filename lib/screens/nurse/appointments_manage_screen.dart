@@ -55,7 +55,20 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
       // Backend already filters out nurse_visible=false appointments
       _items = await NurseApiService.listAppointments();
     } catch (e) { 
-      _error = e.toString();
+      final rawError = e.toString();
+      
+      // Convert raw errors to user-friendly messages
+      if (rawError.contains('401') || rawError.contains('Unauthorized')) {
+        _error = rawError; // handled below
+      } else if (rawError.contains('temporarily unavailable') || rawError.contains('fetch failed') || rawError.contains('503')) {
+        _error = 'Database is temporarily unavailable. Please try again later.';
+      } else if (rawError.contains('500') || rawError.contains('Server error')) {
+        _error = 'Server error. Please try again.';
+      } else if (rawError.contains('Connection refused') || rawError.contains('SocketException') || rawError.contains('connection')) {
+        _error = 'Cannot connect to server. Please check your network.';
+      } else {
+        _error = rawError;
+      }
       
       // Handle 401 Unauthorized - token expired or invalid
       if (_error!.contains('401') || _error!.contains('Unauthorized')) {

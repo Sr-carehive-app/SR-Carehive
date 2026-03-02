@@ -67,6 +67,41 @@ class ProviderEmailService {
     }
   }
 
+  /// Sends document request email with Google Form link to the provider
+  static Future<bool> sendDocumentRequestEmail({
+    required String userEmail,
+    required String userName,
+    required String professionalRole,
+    String? adminComments,
+  }) async {
+    try {
+      final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+      
+      final response = await http.post(
+        Uri.parse('$apiBase/api/provider/send-document-request-email'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userEmail': userEmail,
+          'userName': userName,
+          'professionalRole': professionalRole,
+          'adminComments': adminComments,
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ Document request email sent to provider successfully');
+        return true;
+      } else {
+        print('❌ Failed to send document request email: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error sending document request email: $e');
+      return false;
+    }
+  }
+
   /// Sends approval email to the provider
   static Future<bool> sendApprovalEmail({
     required String userEmail,
