@@ -26,6 +26,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
   bool _documentsVerificationChecked = false;
   final TextEditingController _documentRequestCommentsController = TextEditingController();
   final TextEditingController _finalApprovalCommentsController = TextEditingController();
+  final TextEditingController _revokeReasonController = TextEditingController();
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
     _commentsController.dispose();
     _documentRequestCommentsController.dispose();
     _finalApprovalCommentsController.dispose();
+    _revokeReasonController.dispose();
     super.dispose();
   }
 
@@ -285,6 +287,124 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         ],
       ),
     );
+  }
+
+  // Revoke: Show confirmation dialog with optional reason
+  void _showRevokeDialog() {
+    _revokeReasonController.clear();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.block_rounded, color: Colors.deepOrange, size: 28),
+            const SizedBox(width: 12),
+            const Flexible(
+              child: Text(
+                'Revoke Healthcare Provider Access',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This will revoke the healthcare provider\'s access. They will no longer be able to login and will see a rejection notice. This action can be reviewed later.',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Reason (Optional):',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _revokeReasonController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'e.g. Resigned, contract ended, policy violation...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _revokeReasonController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final reason = _revokeReasonController.text.trim();
+              Navigator.pop(context);
+              _revokeProvider(reason.isNotEmpty ? reason : null);
+              _revokeReasonController.clear();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Revoke Access', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Revoke: Set status back to rejected
+  Future<void> _revokeProvider(String? reason) async {
+    setState(() => _isProcessing = true);
+    try {
+      final updateData = <String, dynamic>{
+        'application_status': 'rejected',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (reason != null && reason.isNotEmpty) {
+        updateData['rejection_reason'] = reason;
+      }
+      await supabase
+          .from('healthcare_providers')
+          .update(updateData)
+          .eq('id', widget.applicationData['id']);
+
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Healthcare provider access revoked successfully'),
+            backgroundColor: Colors.deepOrange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error revoking healthcare provider: \$e');
+      setState(() => _isProcessing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to revoke access. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // New method: Show request documents dialog
@@ -1001,58 +1121,69 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                     const SizedBox(height: 12),
                   
                   // BUTTON 3: Reject Application
-                  // Visible always (if not rejected)
-                  // Enabled UNTIL final approval (can reject after document request)
-                  if (!isRejected)
-                    Opacity(
-                      opacity: isApproved ? 0.5 : 1.0,
-                      child: SizedBox(
+                  // Only visible when NOT yet approved and NOT rejected
+                  if (!isApproved && !isRejected)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _showRejectDialog,
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: const Text('Reject Application'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: const BorderSide(color: Colors.red, width: 2),
+                        ),
+                      ),
+                    ),
+
+                  // BUTTON 4: Revoke Access — only visible when already approved
+                  if (isApproved) ...
+                    [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.green, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Application Already Approved',
+                                style: TextStyle(
+                                  color: Colors.green.shade900,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: isApproved ? null : _showRejectDialog,
-                          icon: const Icon(Icons.cancel_outlined),
-                          label: const Text('Reject Application'),
+                          onPressed: _showRevokeDialog,
+                          icon: const Icon(Icons.block_rounded),
+                          label: const Text('Revoke Provider Access'),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            disabledForegroundColor: Colors.red.withOpacity(0.5),
+                            foregroundColor: Colors.deepOrange,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            side: BorderSide(
-                              color: isApproved ? Colors.red.withOpacity(0.3) : Colors.red,
-                              width: 2,
-                            ),
+                            side: const BorderSide(color: Colors.deepOrange, width: 2),
                           ),
                         ),
                       ),
-                    ),
-                  
-                  // Show status messages
-                  if (isApproved)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle, color: Colors.green, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Application Already Approved',
-                              style: TextStyle(
-                                color: Colors.green.shade900,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    ],
                   
                   if (isRejected)
                     Padding(

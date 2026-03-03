@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "buildNumber": 12,
-  "timestamp": "2026-03-03T13:00:00Z",
-  "lastUpdated": "Build 12: Fix provider applicant status screen messages"
+  "buildNumber": 13,
+  "timestamp": "2026-03-03T14:00:00Z",
+  "lastUpdated": "Build 13: Implement provider applicant revoke button after final approval"
 }
