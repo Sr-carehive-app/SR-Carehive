@@ -378,34 +378,79 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      'Email: ${widget.providerData['email'] ?? 'N/A'}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Password: Use your registration password',
-                      style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.amber[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.info_outline, size: 16, color: Colors.amber),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Login only after approval',
-                              style: TextStyle(fontSize: 12),
+                    Builder(
+                      builder: (context) {
+                        final String? email = (widget.providerData['email']?.toString().trim().isNotEmpty ?? false)
+                            ? widget.providerData['email'].toString().trim()
+                            : null;
+                        final String? phone = (widget.providerData['mobile_number']?.toString().trim().isNotEmpty ?? false)
+                            ? widget.providerData['mobile_number'].toString().trim()
+                            : null;
+                        final bool hasEmail = email != null;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (hasEmail) ...[
+                              Text(
+                                'Email: $email',
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(child: Divider(color: Colors.grey[400], thickness: 1)),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    child: Text(
+                                      'OR',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(child: Divider(color: Colors.grey[400], thickness: 1)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            if (phone != null)
+                              Text(
+                                'Phone: $phone',
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Password: Use your registration password',
+                              style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.amber[50],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      hasEmail
+                                          ? 'Login only after approval — use email or phone with your password'
+                                          : 'Login only after approval — use your phone number with password',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
