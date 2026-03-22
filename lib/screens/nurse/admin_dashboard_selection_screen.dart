@@ -254,7 +254,7 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
               // Card 2: Healthcare Provider Applications
               _buildManagementCard(
                 context: context,
-                icon: Icons.badge,
+                icon: Icons.badge_outlined,
                 iconColor: const Color(0xFF10B981),
                 title: 'Healthcare Provider Applications',
                 description: 'Review and manage healthcare worker registration requests',

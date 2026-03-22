@@ -301,7 +301,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.block, color: Colors.deepOrange, size: 28),
+            const Icon(Icons.block_rounded, color: Colors.deepOrange, size: 28),
             const SizedBox(width: 12),
             const Flexible(
               child: Text(
@@ -742,7 +742,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                 minimumSize: const Size(40, 36),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.file_download, size: 16, color: Colors.white),
+              icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
               label: const Text(
                 'Export',
                 style: TextStyle(fontSize: 12, color: Colors.white),
@@ -1165,7 +1165,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _showRejectDialog,
-                        icon: const Icon(Icons.cancel),
+                        icon: const Icon(Icons.cancel_outlined),
                         label: const Text('Reject Application'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
@@ -1209,7 +1209,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: _showRevokeDialog,
-                          icon: const Icon(Icons.block),
+                          icon: const Icon(Icons.block_rounded),
                           label: const Text('Revoke Healthcare Provider Access'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.deepOrange,

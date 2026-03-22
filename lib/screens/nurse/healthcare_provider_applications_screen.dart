@@ -243,7 +243,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                   minimumSize: const Size(40, 36),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.file_download, size: 16, color: Colors.white),
+                icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
                 label: Text(
                   _isSelectionMode
                       ? 'Export (${_selectedIds.length})'
@@ -374,7 +374,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.inbox,
+                              Icons.inbox_outlined,
                               size: 80,
                               color: Colors.grey[400],
                             ),
@@ -577,13 +577,13 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                     children: [
                       _buildInfoRow(Icons.fingerprint, 'ID: ${application['id'] ?? 'N/A'}'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.email, application['email'] ?? 'N/A'),
+                      _buildInfoRow(Icons.email_outlined, application['email'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.phone, application['mobile_number'] ?? 'N/A'),
+                      _buildInfoRow(Icons.phone_outlined, application['mobile_number'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.location_city, application['city'] ?? 'N/A'),
+                      _buildInfoRow(Icons.location_city_outlined, application['city'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.calendar_today, formattedDate),
+                      _buildInfoRow(Icons.calendar_today_outlined, formattedDate),
                     ],
                   ),
                 ),
