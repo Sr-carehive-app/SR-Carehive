@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
@@ -254,7 +255,7 @@ class _AdminDashboardSelectionScreenState extends State<AdminDashboardSelectionS
               // Card 2: Healthcare Provider Applications
               _buildManagementCard(
                 context: context,
-                icon: Icons.badge_outlined,
+                icon: FontAwesomeIcons.idBadge,
                 iconColor: const Color(0xFF10B981),
                 title: 'Healthcare Provider Applications',
                 description: 'Review and manage healthcare worker registration requests',

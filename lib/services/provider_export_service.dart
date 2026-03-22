@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
@@ -1392,7 +1393,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _ExportOptionTile(
-              icon: Icons.picture_as_pdf_rounded,
+              icon: FontAwesomeIcons.filePdf,
               iconColor: const Color(0xFFE53935),
               label: 'Export as PDF',
               subtitle: 'Best for viewing & printing',
@@ -1400,7 +1401,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ExportOptionTile(
-              icon: Icons.description_rounded,
+              icon: FontAwesomeIcons.fileWord,
               iconColor: const Color(0xFF1565C0),
               label: 'Export as Word (.docx)',
               subtitle: 'Opens in Microsoft Word & Google Docs',
@@ -1408,7 +1409,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ExportOptionTile(
-              icon: Icons.table_chart_rounded,
+              icon: FontAwesomeIcons.fileExcel,
               iconColor: const Color(0xFF2E7D32),
               label: 'Export as Excel (.xlsx)',
               subtitle: 'Spreadsheet with all fields',
@@ -1454,7 +1455,7 @@ class _ExportOptionTile extends StatelessWidget {
                   color: iconColor.withAlpha(30),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor, size: 26),
+                child: FaIcon(icon, color: iconColor, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1477,7 +1478,7 @@ class _ExportOptionTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
+              FaIcon(FontAwesomeIcons.chevronRight, color: Colors.grey[400], size: 16),
             ],
           ),
         ),

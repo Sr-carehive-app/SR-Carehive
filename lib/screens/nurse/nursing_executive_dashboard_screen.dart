@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:care12/screens/nurse/appointments_manage_screen.dart';
@@ -122,7 +123,7 @@ class _NursingExecutiveDashboardScreenState
 
               // ── Card 1: Patient Appointments ────────────────────────────
               _buildCard(
-                icon: Icons.people_alt_outlined,
+                icon: FontAwesomeIcons.userGroup,
                 iconColor: _primary,
                 gradientColors: [const Color(0xFF0F766E), const Color(0xFF0D5E57)],
                 title: 'Healthcare Seeker Management',
@@ -147,7 +148,7 @@ class _NursingExecutiveDashboardScreenState
 
               // ── Card 2: Provider Applications ───────────────────────────
               _buildCard(
-                icon: Icons.assignment_ind_outlined,
+                icon: FontAwesomeIcons.addressCard,
                 iconColor: _accent,
                 gradientColors: [const Color(0xFF6D28D9), const Color(0xFF5B21B6)],
                 title: 'Healthcare Provider Applications',
@@ -179,7 +180,7 @@ class _NursingExecutiveDashboardScreenState
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: Colors.teal[700], size: 22),
+                    FaIcon(FontAwesomeIcons.shieldHalved, color: Colors.teal[700], size: 18),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -236,7 +237,7 @@ class _NursingExecutiveDashboardScreenState
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(Icons.logout, color: Colors.white, size: 18),
+                    FaIcon(FontAwesomeIcons.rightFromBracket, color: Colors.white, size: 16),
                     SizedBox(width: 6),
                     Text(
                       'Logout',
@@ -306,10 +307,10 @@ class _NursingExecutiveDashboardScreenState
                   color: Colors.white.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.local_hospital_outlined,
+                child: const FaIcon(
+                  FontAwesomeIcons.hospital,
                   color: Colors.white,
-                  size: 28,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 14),
@@ -340,7 +341,7 @@ class _NursingExecutiveDashboardScreenState
   }
 
   Widget _buildCard({
-    required IconData icon,
+    required IconData icon, // accepts both IconData and FontAwesomeIcons
     required Color iconColor,
     required List<Color> gradientColors,
     required String title,
@@ -384,7 +385,7 @@ class _NursingExecutiveDashboardScreenState
                         color: iconColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(icon, color: iconColor, size: 32),
+                      child: FaIcon(icon, color: iconColor, size: 28),
                     ),
                     if (badgeCount != null && totalCount != null)
                       isLoadingStats
@@ -481,7 +482,7 @@ class _NursingExecutiveDashboardScreenState
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.arrow_forward, size: 18),
+                          const FaIcon(FontAwesomeIcons.arrowRight, size: 15),
                         ],
                       ),
                     ),

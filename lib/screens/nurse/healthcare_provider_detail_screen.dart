@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/provider_email_service.dart';
 import 'package:care12/utils/safe_navigation.dart';
@@ -301,7 +302,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.block_rounded, color: Colors.deepOrange, size: 28),
+            const FaIcon(FontAwesomeIcons.ban, color: Colors.deepOrange, size: 24),
             const SizedBox(width: 12),
             const Flexible(
               child: Text(
@@ -742,7 +743,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                 minimumSize: const Size(40, 36),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
+              icon: const FaIcon(FontAwesomeIcons.download, size: 14, color: Colors.white),
               label: const Text(
                 'Export',
                 style: TextStyle(fontSize: 12, color: Colors.white),
@@ -1165,7 +1166,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: _showRejectDialog,
-                        icon: const Icon(Icons.cancel_outlined),
+                        icon: const FaIcon(FontAwesomeIcons.circleXmark),
                         label: const Text('Reject Application'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.red,
@@ -1209,7 +1210,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: _showRevokeDialog,
-                          icon: const Icon(Icons.block_rounded),
+                          icon: const FaIcon(FontAwesomeIcons.ban),
                           label: const Text('Revoke Healthcare Provider Access'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.deepOrange,

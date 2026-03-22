@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "buildNumber": 19,
-  "timestamp": "2026-03-22T17:45:00Z",
-  "lastUpdated": "Build 19: Bundle MaterialIcons font locally - definitive icon fix"
+  "buildNumber": 20,
+  "timestamp": "2026-03-22T18:00:00Z",
+  "lastUpdated": "Build 20: Migrate to FontAwesome icons - guaranteed render"
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:care12/screens/nurse/healthcare_provider_detail_screen.dart';
@@ -179,7 +180,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const FaIcon(FontAwesomeIcons.arrowLeft, color: Colors.white, size: 16),
           onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_applications_back'),
         ),
         title: const Text(
@@ -243,7 +244,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                   minimumSize: const Size(40, 36),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
+                icon: const FaIcon(FontAwesomeIcons.download, size: 14, color: Colors.white),
                 label: Text(
                   _isSelectionMode
                       ? 'Export (${_selectedIds.length})'
@@ -270,7 +271,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                       height: 16,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                  : const Icon(Icons.refresh, size: 20, color: Colors.white),
+                  : const FaIcon(FontAwesomeIcons.arrowsRotate, size: 17, color: Colors.white),
             ),
           ),
         ],
@@ -373,9 +374,9 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.inbox_outlined,
-                              size: 80,
+                            FaIcon(
+                              FontAwesomeIcons.inbox,
+                              size: 72,
                               color: Colors.grey[400],
                             ),
                             const SizedBox(height: 16),
@@ -515,10 +516,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                             : const Color(0xFF2260FF).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.person_outline,
+                      child: const FaIcon(
+                        FontAwesomeIcons.user,
                         color: Color(0xFF2260FF),
-                        size: 24,
+                        size: 22,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -575,15 +576,15 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                   ),
                   child: Column(
                     children: [
-                      _buildInfoRow(Icons.fingerprint, 'ID: ${application['id'] ?? 'N/A'}'),
+                      _buildInfoRow(FontAwesomeIcons.fingerprint, 'ID: ${application['id'] ?? 'N/A'}'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.email_outlined, application['email'] ?? 'N/A'),
+                      _buildInfoRow(FontAwesomeIcons.envelope, application['email'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.phone_outlined, application['mobile_number'] ?? 'N/A'),
+                      _buildInfoRow(FontAwesomeIcons.phone, application['mobile_number'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.location_city_outlined, application['city'] ?? 'N/A'),
+                      _buildInfoRow(FontAwesomeIcons.locationDot, application['city'] ?? 'N/A'),
                       const SizedBox(height: 8),
-                      _buildInfoRow(Icons.calendar_today_outlined, formattedDate),
+                      _buildInfoRow(FontAwesomeIcons.calendarDays, formattedDate),
                     ],
                   ),
                 ),
@@ -611,10 +612,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: Colors.grey[600],
+                      const FaIcon(
+                        FontAwesomeIcons.chevronRight,
+                        size: 11,
+                        color: Colors.grey,
                       ),
                     ],
                   ],
@@ -630,7 +631,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
+        FaIcon(icon, size: 13, color: Colors.grey[600]),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
