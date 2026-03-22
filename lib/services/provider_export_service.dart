@@ -1392,7 +1392,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _ExportOptionTile(
-              icon: Icons.picture_as_pdf_rounded,
+              icon: Icons.picture_as_pdf,
               iconColor: const Color(0xFFE53935),
               label: 'Export as PDF',
               subtitle: 'Best for viewing & printing',
@@ -1400,7 +1400,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ExportOptionTile(
-              icon: Icons.description_rounded,
+              icon: Icons.description,
               iconColor: const Color(0xFF1565C0),
               label: 'Export as Word (.docx)',
               subtitle: 'Opens in Microsoft Word & Google Docs',
@@ -1408,7 +1408,7 @@ class _ExportBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _ExportOptionTile(
-              icon: Icons.table_chart_rounded,
+              icon: Icons.table_chart,
               iconColor: const Color(0xFF2E7D32),
               label: 'Export as Excel (.xlsx)',
               subtitle: 'Spreadsheet with all fields',

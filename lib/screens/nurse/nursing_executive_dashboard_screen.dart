@@ -122,7 +122,7 @@ class _NursingExecutiveDashboardScreenState
 
               // ── Card 1: Patient Appointments ────────────────────────────
               _buildCard(
-                icon: Icons.people_alt_outlined,
+                icon: Icons.people_outline,
                 iconColor: _primary,
                 gradientColors: [const Color(0xFF0F766E), const Color(0xFF0D5E57)],
                 title: 'Healthcare Seeker Management',
@@ -147,7 +147,7 @@ class _NursingExecutiveDashboardScreenState
 
               // ── Card 2: Provider Applications ───────────────────────────
               _buildCard(
-                icon: Icons.assignment_ind_outlined,
+                icon: Icons.assignment_ind,
                 iconColor: _accent,
                 gradientColors: [const Color(0xFF6D28D9), const Color(0xFF5B21B6)],
                 title: 'Healthcare Provider Applications',
@@ -179,7 +179,7 @@ class _NursingExecutiveDashboardScreenState
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: Colors.teal[700], size: 22),
+                    Icon(Icons.shield, color: Colors.teal[700], size: 22),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -307,7 +307,7 @@ class _NursingExecutiveDashboardScreenState
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
-                  Icons.local_hospital_outlined,
+                  Icons.local_hospital,
                   color: Colors.white,
                   size: 28,
                 ),
