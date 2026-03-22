@@ -131,14 +131,28 @@
   </script>
 </head>
 <body>
-  <!-- CRITICAL: Cache busting with timestamp for flutter_bootstrap.js -->
-  <!-- The timestamp parameter forces browsers to fetch latest bootstrap -->
+  <!-- CRITICAL FIX: Force HTML renderer so Material Icons font (loaded via Google Fonts CDN)
+       is correctly used. CanvasKit (old default) fetches Noto fallback from fonts.gstatic.com
+       at runtime — this fails in production with ERR_CONNECTION_CLOSED, causing blank icons.
+       HTML renderer uses CSS/DOM fonts which correctly resolve the icon glyphs. -->
   <script>
     var cacheBustVersion = Date.now();
-    var script = document.createElement('script');
-    script.src = 'flutter_bootstrap.js?v=' + cacheBustVersion;
-    script.async = true;
-    document.body.appendChild(script);
+    var bootstrapScript = document.createElement('script');
+    bootstrapScript.src = 'flutter_bootstrap.js?v=' + cacheBustVersion;
+    bootstrapScript.async = true;
+    bootstrapScript.addEventListener('load', function () {
+      _flutter.loader.load({
+        serviceWorker: { serviceWorkerVersion: cacheBustVersion },
+        onEntrypointLoaded: async function (engineInitializer) {
+          const appRunner = await engineInitializer.initializeEngine({
+            renderer: 'html',
+            useColorEmoji: true,
+          });
+          await appRunner.runApp();
+        }
+      });
+    });
+    document.body.appendChild(bootstrapScript);
   </script>
 </body>
     <!-- Razorpay Checkout for Flutter Web -->
