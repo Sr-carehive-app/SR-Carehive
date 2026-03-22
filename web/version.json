@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "buildNumber": 18,
-  "timestamp": "2026-03-22T17:30:00Z",
-  "lastUpdated": "Build 18: HTML renderer via flutter_bootstrap.js - icon fix"
+  "buildNumber": 19,
+  "timestamp": "2026-03-22T17:45:00Z",
+  "lastUpdated": "Build 19: Bundle MaterialIcons font locally - definitive icon fix"
 }
