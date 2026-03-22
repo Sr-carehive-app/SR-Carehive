@@ -90,7 +90,6 @@ flutter:
     - assets/images/logo.png
     - assets/images/nurse.png
     - assets/images/user.png
-    - assets/fonts/MaterialIcons-Regular.otf
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -107,9 +106,5 @@ flutter:
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
 
-  # Bundle Material Icons font locally so Icons.* always render
-  # without any network requests (no gstatic.com / Noto fallback needed).
-  fonts:
-    - family: MaterialIcons
-      fonts:
-        - asset: assets/fonts/MaterialIcons-Regular.otf
+  # FontAwesome is used for reliable icon rendering in Flutter Web.
+  # Its fonts are bundled as package assets by font_awesome_flutter.

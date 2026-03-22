@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "buildNumber": 21,
-  "timestamp": "2026-03-22T18:30:00Z",
-  "lastUpdated": "Build 21: ROOT FIX - override CanvasKit to HTML renderer in bootstrap"
+  "buildNumber": 22,
+  "timestamp": "2026-03-23T00:15:00Z",
+  "lastUpdated": "Build 22: Fix crash, remove duplicate MaterialIcons font, FontAwesome icons"
 }
