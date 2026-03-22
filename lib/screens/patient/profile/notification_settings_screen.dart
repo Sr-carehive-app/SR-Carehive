@@ -48,37 +48,44 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       setState(() => isLoading = false);
       return;
     }
-    // Get user name and email from patients table
-    final patient = await supabase
-        .from('patients')
-        .select('name, email')
-        .eq('user_id', user.id)
-        .maybeSingle();
-    final name = patient?['name'] ?? '';
-    final email = patient?['email'] ?? user.email ?? '';
-    // Try to fetch notification settings
-    final record = await supabase
-        .from('notification_settings')
-        .select()
-        .eq('user_id', user.id)
-        .maybeSingle();
-    if (record != null) {
-      setState(() {
-        for (final entry in fieldMap.entries) {
-          settings[entry.key] = record[entry.value] ?? settings[entry.key]!;
+    try {
+      // Get user name and email from patients table
+      final patient = await supabase
+          .from('patients')
+          .select('name, email')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      final name = patient?['name'] ?? '';
+      final email = patient?['email'] ?? user.email ?? '';
+      // Try to fetch notification settings
+      final record = await supabase
+          .from('notification_settings')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (record != null) {
+        if (mounted) {
+          setState(() {
+            for (final entry in fieldMap.entries) {
+              settings[entry.key] = record[entry.value] ?? settings[entry.key]!;
+            }
+            isLoading = false;
+          });
         }
-        isLoading = false;
-      });
-    } else {
-      // Insert default settings for this user
-      final insertData = {
-        'user_id': user.id,
-        'name': name,
-        'email': email,
-        ...fieldMap.map((k, v) => MapEntry(v, settings[k])),
-      };
-      await supabase.from('notification_settings').insert(insertData);
-      setState(() => isLoading = false);
+      } else {
+        // Insert default settings for this user
+        final insertData = {
+          'user_id': user.id,
+          'name': name,
+          'email': email,
+          ...fieldMap.map((k, v) => MapEntry(v, settings[k])),
+        };
+        await supabase.from('notification_settings').insert(insertData);
+        if (mounted) setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print('Error loading notification settings: $e');
+      if (mounted) setState(() => isLoading = false);
     }
   }
 

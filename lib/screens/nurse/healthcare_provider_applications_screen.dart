@@ -5,6 +5,7 @@ import 'package:care12/screens/nurse/healthcare_provider_detail_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:care12/config/api_config.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:care12/services/provider_export_service.dart';
 
 class HealthcareProviderApplicationsScreen extends StatefulWidget {
   const HealthcareProviderApplicationsScreen({Key? key}) : super(key: key);
@@ -17,6 +18,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
   List<Map<String, dynamic>> _applications = [];
   bool _isLoading = true;
   String _selectedFilter = 'all'; // all, pending, approved, rejected
+
+  // Selection state
+  final Set<String> _selectedIds = {};
+  bool _isSelectionMode = false;
 
   @override
   void initState() {
@@ -58,6 +63,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
           setState(() {
             _applications = List<Map<String, dynamic>>.from(providers);
             _isLoading = false;
+            // Clear selection whenever data is replaced — selected IDs from the
+            // previous data set are no longer guaranteed to exist in the new set.
+            _selectedIds.clear();
+            _isSelectionMode = false;
           });
         }
       } else {
@@ -95,6 +104,39 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
         );
       }
     }
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+      _isSelectionMode = _selectedIds.isNotEmpty;
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selectedIds.clear();
+      for (final app in _applications) {
+        final id = app['id']?.toString();
+        if (id != null) _selectedIds.add(id);
+      }
+      _isSelectionMode = _selectedIds.isNotEmpty;
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedIds.clear();
+      _isSelectionMode = false;
+    });
+  }
+
+  List<Map<String, dynamic>> get _selectedApplications {
+    return _applications.where((a) => _selectedIds.contains(a['id']?.toString())).toList();
   }
 
   Color _getStatusColor(String status) {
@@ -141,7 +183,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
           onPressed: () => SafeNavigation.pop(context, debugLabel: 'provider_applications_back'),
         ),
         title: const Text(
-          'Provider Applications',
+          'Healthcare Provider Applications',
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
@@ -150,6 +192,88 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
         ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
+        actions: [
+          // Select All / Deselect All
+          if (!_isLoading && _applications.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
+              child: _isSelectionMode
+                  ? TextButton(
+                      onPressed: _deselectAll,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text(
+                        'Deselect',
+                        style: TextStyle(fontSize: 12, color: Colors.white),
+                      ),
+                    )
+                  : TextButton(
+                      onPressed: _selectAll,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text(
+                        'Select All',
+                        style: TextStyle(fontSize: 12, color: Colors.white),
+                      ),
+                    ),
+            ),
+          // Export button
+          if (!_isLoading && _applications.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 6, top: 8, bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final toExport = _isSelectionMode ? _selectedApplications : _applications;
+                  if (toExport.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No applications selected to export')),
+                    );
+                    return;
+                  }
+                  ProviderExportService.showBulkExportDialog(context, toExport);
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white70, width: 1.5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(40, 36),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
+                label: Text(
+                  _isSelectionMode
+                      ? 'Export (${_selectedIds.length})'
+                      : 'Export',
+                  style: const TextStyle(fontSize: 12, color: Colors.white),
+                ),
+              ),
+            ),
+          // Refresh button
+          Padding(
+            padding: const EdgeInsets.only(left: 6, right: 12, top: 8, bottom: 8),
+            child: OutlinedButton(
+              onPressed: _isLoading ? null : _loadApplications,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.white70, width: 1.5),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(40, 36),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 20, color: Colors.white),
+            ),
+          ),
+        ],
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -181,6 +305,64 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
               ),
             ),
           ),
+
+          // Selection info bar
+          if (_isSelectionMode)
+            Container(
+              color: const Color(0xFF2260FF).withOpacity(0.08),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Checkbox(
+                    tristate: true,
+                    value: _selectedIds.length == _applications.length
+                        ? true
+                        : _selectedIds.isEmpty
+                            ? false
+                            : null,
+                    onChanged: (_) {
+                      if (_selectedIds.length == _applications.length) {
+                        _deselectAll();
+                      } else {
+                        _selectAll();
+                      }
+                    },
+                    activeColor: const Color(0xFF2260FF),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '${_selectedIds.length} of ${_applications.length} selected',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2260FF),
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _selectedIds.length == _applications.length
+                        ? _deselectAll
+                        : _selectAll,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    child: Text(
+                      _selectedIds.length == _applications.length
+                          ? 'Deselect All'
+                          : 'Select All',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF2260FF),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Applications List
           Expanded(
@@ -233,6 +415,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
       onSelected: (selected) {
         setState(() {
           _selectedFilter = value;
+          // Clear selection when filter changes — stale IDs from the previous
+          // filter must not bleed into the new result set.
+          _selectedIds.clear();
+          _isSelectionMode = false;
         });
         _loadApplications();
       },
@@ -249,17 +435,26 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
 
   Widget _buildApplicationCard(Map<String, dynamic> application) {
     final status = application['application_status'] ?? 'pending';
-    final createdAt = DateTime.parse(application['created_at']);
-    final formattedDate = '${createdAt.day}/${createdAt.month}/${createdAt.year}';
+    final createdAt = DateTime.tryParse(application['created_at']?.toString() ?? '');
+    final formattedDate = createdAt != null
+        ? '${createdAt.day}/${createdAt.month}/${createdAt.year}'
+        : 'N/A';
+    final id = application['id']?.toString() ?? '';
+    final isSelected = _selectedIds.contains(id);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: isSelected
+            ? Border.all(color: const Color(0xFF2260FF), width: 2)
+            : null,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: isSelected
+                ? const Color(0xFF2260FF).withOpacity(0.15)
+                : Colors.black.withOpacity(0.06),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -269,6 +464,10 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
         color: Colors.transparent,
         child: InkWell(
           onTap: () async {
+            if (_isSelectionMode) {
+              _toggleSelection(id);
+              return;
+            }
             final result = await Navigator.push(
               context,
               MaterialPageRoute(
@@ -278,11 +477,12 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
               ),
             );
             
-            // Reload if application was updated
-            if (result == true) {
+            // Reload if application was updated (guard against disposed widget)
+            if (result == true && mounted) {
               _loadApplications();
             }
           },
+          onLongPress: () => _toggleSelection(id),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -291,10 +491,28 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
               children: [
                 Row(
                   children: [
+                    // Always-visible checkbox — tapping it enters selection mode
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: isSelected,
+                          onChanged: (_) => _toggleSelection(id),
+                          activeColor: const Color(0xFF2260FF),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    ),
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2260FF).withOpacity(0.1),
+                        color: isSelected
+                            ? const Color(0xFF2260FF).withOpacity(0.2)
+                            : const Color(0xFF2260FF).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -327,6 +545,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                         ],
                       ),
                     ),
+                    // Status badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
@@ -372,20 +591,32 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(
-                      'Tap to view details',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
+                    if (_isSelectionMode)
+                      Text(
+                        isSelected ? 'Selected' : 'Tap to select',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isSelected ? const Color(0xFF2260FF) : Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      )
+                    else ...[
+                      Text(
+                        'Tap to view details',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 12,
-                      color: Colors.grey[600],
-                    ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ],
                   ],
                 ),
               ],

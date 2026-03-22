@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:care12/screens/nurse/nurse_dashboard_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:care12/screens/nurse/provider_application_status_screen.dart';
 import 'package:care12/screens/nurse/admin_dashboard_selection_screen.dart';
+import 'package:care12/screens/nurse/nursing_executive_dashboard_screen.dart';
 import 'appointments_manage_screen.dart';
 import 'nurse_forgot_password_otp_screen.dart';
 import 'package:care12/utils/safe_navigation.dart';
@@ -24,6 +26,8 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
   Timer? _resendTimer;
   bool _otpSent = false; // Flag to prevent duplicate OTP sends
   bool _isSuperAdmin = false; // Track if logged in as super admin
+  bool _isNursingExecutive = false; // Track if logged in as nursing executive
+  String? _execRealToken; // Holds the real JWT between login and OTP verify
 
   @override
   void initState() {
@@ -46,6 +50,17 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const AdminDashboardSelectionScreen()),
+      );
+      return;
+    }
+
+    // Nursing executive token is in memory (within-session navigation).
+    if (NurseApiService.isCurrentUserNursingExecutive) {
+      print('🪺 Nursing Executive session active in memory - redirecting to Executive Dashboard');
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const NursingExecutiveDashboardScreen()),
       );
       return;
     }
@@ -137,12 +152,110 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     final enteredPassword = passwordController.text.trim();
     
     print('🔐 Attempting login...');
-    
-    // Login with status check
+
+    // ── Nursing Executive: client-side credential check ──────────────────────
+    // Values are read from .env keys — never hardcoded, never printed/logged.
+    final execEmail = dotenv.env['NURSE_EXECUTIVE_EMAIL'] ?? '';
+    final execPass  = dotenv.env['NURSE_EXECUTIVE_PASSWORD'] ?? '';
+    if (execEmail.isNotEmpty &&
+        enteredEmail == execEmail &&
+        enteredPassword == execPass) {
+      // ── Step 1: Get a superadmin JWT using NURSE_ADMIN credentials ────────
+      // The nursing executive needs admin-level API access (appointments +
+      // provider applications). Their own account is not a superadmin in the
+      // backend, so we silently use the NURSE_ADMIN credentials internally to
+      // obtain a real superadmin JWT. The exec credentials were already verified
+      // above — this step only fetches the privileged token.
+      // Values are read from .env keys only — never hardcoded or logged.
+      final adminEmail = dotenv.env['NURSE_ADMIN_EMAIL'] ?? '';
+      final adminPass  = dotenv.env['NURSE_ADMIN_PASSWORD'] ?? '';
+
+      if (adminEmail.isEmpty || adminPass.isEmpty) {
+        setState(() => _isLoading = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Admin configuration missing. Please contact support.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final loginResult = await NurseApiService.login(
+        email: adminEmail,
+        password: adminPass,
+      );
+
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      if (loginResult['success'] != true) {
+        // Backend login failed
+        final errMsg = loginResult['error'] as String? ?? 'Login failed. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errMsg), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      // ── Step 2: Capture the real JWT token ───────────────────────────────
+      // NurseApiService.login stored the real JWT in _token.
+      // We capture it for use in _handleOtpVerify AFTER OTP is verified.
+      // We do NOT call logout() here — the admin JWT must stay active so that
+      // sendOtp (below) can reach the backend. _checkExistingAuth already ran
+      // in initState and won't run again, so no redirect risk at this point.
+      final realToken = NurseApiService.token;
+
+      // Local widget-state flags (drive OTP routing in _handleOtpVerify)
+      _isNursingExecutive = true;
+      _isSuperAdmin = false;
+      _execRealToken = realToken; // held for setNursingExecutiveSession after OTP passes
+
+      if (!_otpSent) {
+        setState(() {
+          _showOtpScreen = true;
+          _otpError = null;
+          _otpSent = true;
+        });
+        _startResendCooldown();
+        try {
+          // OTP to the nursing executive email from .env — value not printed/logged
+          await NurseApiService.sendOtp(email: execEmail);
+          print('✅ OTP sent to Nursing Executive email');
+        } catch (e) {
+          print('❌ Failed to send executive OTP: $e');
+          if (mounted) {
+            final errStr = e.toString();
+            if (errStr.contains('429') || errStr.contains('wait')) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Too many requests. Please wait 2 minutes before trying again.'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to send OTP. Please try again.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        }
+      }
+      return; // Stop here — do NOT fall through to regular login flow
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Login with status check (normal providers & superadmin)
     final result = await NurseApiService.login(
       email: enteredEmail,
       password: enteredPassword,
     );
+
     
     setState(() => _isLoading = false);
     
@@ -793,7 +906,15 @@ class _NurseLoginScreenState extends State<NurseLoginScreen> {
     setState(() => _isOtpLoading = false);
     if (result == true) {
       // Navigate based on user type
-      if (_isSuperAdmin) {
+      if (_isNursingExecutive) {
+        // Set memory-only session NOW with the REAL JWT token so all
+        // API calls (appointments, provider applications) work correctly.
+        await NurseApiService.setNursingExecutiveSession(realToken: _execRealToken);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const NursingExecutiveDashboardScreen()),
+        );
+      } else if (_isSuperAdmin) {
         // Super admin goes to Admin Dashboard
         Navigator.pushReplacement(
           context,

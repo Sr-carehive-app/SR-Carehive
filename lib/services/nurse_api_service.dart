@@ -19,7 +19,9 @@ class NurseApiService {
       throw Exception('429: $error');
     }
     
-    return resp.body.isNotEmpty ? jsonDecode(resp.body)['error'] ?? false : false;
+    // Any other error — throw so caller can catch and show message
+    final error = resp.body.isNotEmpty ? (jsonDecode(resp.body)['error'] ?? 'Failed to send OTP. Please try again.') : 'Failed to send OTP. Please try again.';
+    throw Exception(error);
   }
 
   // Verify OTP for healthcare provider login
@@ -55,6 +57,7 @@ class NurseApiService {
   static const String _tokenKey = 'nurse_auth_token';
   static const String _superAdminFlagKey = 'nurse_is_super_admin';
   static bool _isSuperAdmin = false; // in-memory only, mirrors token ownership
+  static bool _isNursingExecutive = false; // in-memory only, cleared on app close
 
   // Initialize and load token from storage
   // NOTE: If token is already in memory (e.g. super admin session), do NOT overwrite it.
@@ -103,6 +106,7 @@ class NurseApiService {
   static Future<void> logout() async {
     _token = null;
     _isSuperAdmin = false;
+    _isNursingExecutive = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_superAdminFlagKey);
@@ -114,6 +118,25 @@ class NurseApiService {
 
   // Check if the currently authenticated user is the super admin (in-memory only)
   static bool get isCurrentUserSuperAdmin => _isSuperAdmin;
+
+  // Check if the currently authenticated user is the nursing executive (in-memory only)
+  static bool get isCurrentUserNursingExecutive => _isNursingExecutive;
+
+  /// Sets a nursing executive session in memory only (no persistent storage).
+  /// Pass [realToken] (from the backend login response) so API calls work.
+  /// Sessions clear on app/browser close — same behaviour as superadmin.
+  static Future<void> setNursingExecutiveSession({String? realToken}) async {
+    // Use the real backend JWT if provided; synthetic string is a last-resort fallback
+    // that intentionally lacks API access (should never happen in normal flow).
+    _token = realToken ?? 'nursing_executive_session';
+    _isSuperAdmin = false;
+    _isNursingExecutive = true;
+    // Explicitly ensure nothing leaks to persistent storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_superAdminFlagKey);
+    print('🩺 Nursing Executive session stored in memory only (session NOT preserved)');
+  }
 
   // Expose token for admin API calls (e.g. fetching providers via backend)
   static String? get token => _token;

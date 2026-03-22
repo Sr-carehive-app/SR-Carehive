@@ -514,7 +514,7 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
     
     if (aadharLinkedPhoneController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your Aadhar linked phone number')),
+        const SnackBar(content: Text('Please enter your phone number')),
       );
       return;
     }
@@ -1417,11 +1417,11 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
               enabled: !_isGoogleUser,
             ),
             const SizedBox(height: 20),
-            // Aadhar Linked Phone Number with Country Code
+            // Primary Phone Number with Country Code
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Aadhar Linked Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                const Text('Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
                 Row(
                   children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:care12/services/provider_email_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'healthcare_provider_selection_screen.dart';
 
 class ProviderApplicationStatusScreen extends StatefulWidget {
@@ -102,8 +103,13 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
   Widget build(BuildContext context) {
     final status = widget.providerData['application_status'] ?? 'pending';
     final isRejected = status == 'rejected';
+    // Revoke = was approved (approved_at present) then set to rejected
+    final isRevoked = isRejected && (widget.providerData['approved_at'] != null);
+    final isDocumentsRequested =
+        (status == 'pending' || status == 'under_review' || status == 'on_hold') &&
+        (widget.providerData['documents_requested'] == true);
     final rejectionReason = widget.providerData['rejection_reason'] as String?;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -138,20 +144,44 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: (isRejected ? Colors.red : Colors.green).withOpacity(0.3),
+                    color: (isRevoked
+                            ? Colors.deepOrange
+                            : isRejected
+                                ? Colors.red
+                                : isDocumentsRequested
+                                    ? Colors.orange
+                                    : Colors.green)
+                        .withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Icon(
-                isRejected ? Icons.cancel_rounded : Icons.check_circle_rounded,
-                color: isRejected ? Colors.red[600] : Colors.green[600],
+                isRevoked
+                    ? Icons.block_rounded
+                    : isRejected
+                        ? Icons.cancel_rounded
+                        : isDocumentsRequested
+                            ? Icons.assignment_outlined
+                            : Icons.check_circle_rounded,
+                color: isRevoked
+                    ? Colors.deepOrange[700]
+                    : isRejected
+                        ? Colors.red[600]
+                        : isDocumentsRequested
+                            ? Colors.orange[700]
+                            : Colors.green[600],
                 size: 80,
               ),
             ),
             const SizedBox(height: 32),
-            if (isRejected) _buildRejectedCard(rejectionReason) else _buildPendingCard(),
+            if (isRejected)
+              _buildRejectedCard(rejectionReason, isRevoked: isRevoked)
+            else if (isDocumentsRequested)
+              _buildDocumentsRequestedCard()
+            else
+              _buildPendingCard(),
             const SizedBox(height: 40),
           ],
         ),
@@ -159,7 +189,184 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
     );
   }
 
-  Widget _buildRejectedCard(String? rejectionReason) {
+  Future<void> _launchGoogleForm() async {
+    final uri = Uri.parse(
+      'https://docs.google.com/forms/d/e/1FAIpQLScZ2B8aPX8MkkU9N2cc0nkLkB_C12QjXn5qmHffU3I7xUG6kg/viewform?usp=sharing',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the form. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildDocumentsRequestedCard() {
+    final String? adminComments =
+        widget.providerData['documents_request_comments']?.toString().trim().isNotEmpty == true
+            ? widget.providerData['documents_request_comments'].toString().trim()
+            : null;
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              const Text(
+                'Additional Documents Required',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Status banner
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[700],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.assignment_outlined, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'More Information Needed',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[800],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Our team needs a few more details from you',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Admin comments if any
+              if (adminComments != null) ...[  
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.message_outlined, size: 16, color: Colors.orange[800]),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Message from our team:',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        adminComments,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF555555),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              // Google Form button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _launchGoogleForm,
+                  icon: const Icon(Icons.open_in_new, color: Colors.white, size: 20),
+                  label: const Text(
+                    'Fill Additional Information Form',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Already filled note
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Text(
+                  'If you have already filled the form, please ignore the button above. Our team is currently reviewing your submission — this may take a little while. We will contact you on your registered phone number or email to confirm your onboarding at SR CareHive.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+Widget _buildRejectedCard(String? rejectionReason, {bool isRevoked = false}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
@@ -176,9 +383,9 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
       ),
       child: Column(
         children: [
-          const Text(
-            'Application Not Approved',
-            style: TextStyle(
+          Text(
+            isRevoked ? 'Healthcare Provider Access Revoked' : 'Application Not Approved',
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1A1A1A),
@@ -189,37 +396,43 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: (isRevoked ? Colors.deepOrange : Colors.red).withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.withOpacity(0.3)),
+              border: Border.all(color: (isRevoked ? Colors.deepOrange : Colors.red).withOpacity(0.3)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.red,
+                    color: isRevoked ? Colors.deepOrange : Colors.red,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.cancel, color: Colors.white, size: 24),
+                  child: Icon(
+                    isRevoked ? Icons.block_rounded : Icons.cancel,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Application Rejected',
+                        isRevoked ? 'Access Revoked' : 'Application Rejected',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red,
+                          color: isRevoked ? Colors.deepOrange : Colors.red,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Your application has been reviewed',
-                        style: TextStyle(
+                        isRevoked
+                            ? 'Your provider access has been revoked'
+                            : 'Your application has been reviewed',
+                        style: const TextStyle(
                           fontSize: 13,
                           color: Color(0xFF666666),
                         ),
@@ -230,7 +443,7 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
               ],
             ),
           ),
-          if (rejectionReason != null && rejectionReason.isNotEmpty) ...[
+          if (rejectionReason != null && rejectionReason.isNotEmpty) ...[  
             const SizedBox(height: 24),
             Container(
               width: double.infinity,
@@ -248,7 +461,7 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                       Icon(Icons.info_outline, size: 18, color: Colors.grey[700]),
                       const SizedBox(width: 8),
                       Text(
-                        'Reason for Rejection',
+                        isRevoked ? 'Reason for Revocation' : 'Reason for Rejection',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -271,11 +484,27 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
             ),
           ],
           const SizedBox(height: 24),
-          const Text(
-            'We appreciate your interest in SR CareHive.',
-            style: TextStyle(fontSize: 15, color: Color(0xFF666666)),
-            textAlign: TextAlign.center,
-          ),
+          if (isRevoked)
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 15, color: Color(0xFF666666)),
+                children: [
+                  const TextSpan(text: 'For any queries, please contact our support team: '),
+                  const TextSpan(
+                    text: 'contact@srcarehive.com',
+                    style: TextStyle(color: Color(0xFF2260FF), fontWeight: FontWeight.w500),
+                  ),
+                  const TextSpan(text: ' .'),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            )
+          else
+            const Text(
+              'We appreciate your interest in SR CareHive.',
+              style: TextStyle(fontSize: 15, color: Color(0xFF666666)),
+              textAlign: TextAlign.center,
+            ),
         ],
       ),
     );
@@ -423,7 +652,7 @@ class _ProviderApplicationStatusScreenState extends State<ProviderApplicationSta
                               ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Password: Use your registration password',
+                              'Password: Use your registration password or click forgot password to reset',
                               style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
                             ),
                             const SizedBox(height: 12),

@@ -418,7 +418,7 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
         'emergency_contact': emergencyContactController.text.trim(),
-        'aadhar_number': aadharController.text.replaceAll(RegExp(r'\s+'), '').trim(),
+        'aadhar_number': aadharController.text.trim().isEmpty ? null : aadharController.text.replaceAll(RegExp(r'\s+'), '').trim(),
         'primary_doctor_name': primaryDoctorNameController.text.trim().isNotEmpty 
             ? primaryDoctorNameController.text.trim() 
             : null,
@@ -832,13 +832,13 @@ class _ScheduleNurseScreenState extends State<ScheduleNurseScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          buildPhoneField('Phone Number', phoneController, selectedCountryCode, (value) {
+          buildPhoneField('Phone Number *', phoneController, selectedCountryCode, (value) {
             setState(() => selectedCountryCode = value!);
           }),
           const SizedBox(height: 16),
           buildTextField('Address', controller: addressController, keyboardType: TextInputType.multiline),
           const SizedBox(height: 16),
-          buildPhoneField('Emergency Contact', emergencyContactController, selectedEmergencyCountryCode, (value) {
+          buildPhoneField('Emergency Contact *', emergencyContactController, selectedEmergencyCountryCode, (value) {
             setState(() => selectedEmergencyCountryCode = value!);
           }),
           const SizedBox(height: 16),

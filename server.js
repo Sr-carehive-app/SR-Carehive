@@ -1529,7 +1529,7 @@ app.get('/api/admin/providers', async (req, res) => {
 // Send approval email to provider
 app.post('/api/provider/send-approval-email', async (req, res) => {
   try {
-    const { userEmail, userName, professionalRole, adminComments } = req.body || {};
+    const { userEmail, userName, professionalRole, adminComments, primaryPhone, rejectionReason } = req.body || {};
     if (!userEmail || !userName) {
       return res.status(400).json({ error: 'userEmail and userName required' });
     }
@@ -1540,6 +1540,16 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
            <p style="margin: 0; color: #333; line-height: 1.6;">${escapeHtml(adminComments)}</p>
          </div>`
       : '';
+
+    const rejectionReasonSection = rejectionReason
+      ? `<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+           <h3 style="margin-top: 0; color: #856404;">Previous Rejection Reason:</h3>
+           <p style="margin: 0; color: #856404; line-height: 1.6;">${escapeHtml(rejectionReason)}</p>
+         </div>`
+      : '';
+
+    const emailLine = userEmail ? `<p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(userEmail)}</p>` : '';
+    const phoneLine = primaryPhone ? `<p style="margin: 5px 0;"><strong>Primary Phone:</strong> ${escapeHtml(primaryPhone)}</p>` : '';
 
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -1555,10 +1565,13 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
           
           ${commentsSection}
           
+          ${rejectionReasonSection}
+
           <div style="background: #f0f8ff; border-left: 4px solid #2260FF; padding: 15px; margin: 20px 0;">
             <h3 style="margin-top: 0; color: #2260FF;">Your Login Credentials:</h3>
-            <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(userEmail)}</p>
-            <p style="margin: 5px 0;"><strong>Password:</strong> Use the password you set during registration</p>
+            ${emailLine}
+            ${phoneLine}
+            <p style="margin: 5px 0;"><strong>Password:</strong> Use the password you set during registration or click forgot password in the app to reset it</p>
           </div>
 
           <p style="font-size: 16px; color: #333; line-height: 1.6;">
@@ -1566,7 +1579,7 @@ app.post('/api/provider/send-approval-email', async (req, res) => {
           </p>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="https://srcarehive.com/provider-login" style="background: #2260FF; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Dashboard</a>
+            <a href="https://www.srcarehive.com" style="background: #2260FF; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Login to Dashboard</a>
           </div>
 
           <p style="font-size: 14px; color: #666; line-height: 1.6;">
@@ -1650,6 +1663,61 @@ app.post('/api/provider/send-rejection-email', async (req, res) => {
   }
 });
 
+// Send revoke access email to provider
+app.post('/api/provider/send-revoke-email', async (req, res) => {
+  try {
+    const { userEmail, userName, professionalRole, revokeReason } = req.body || {};
+    if (!userEmail || !userName) {
+      return res.status(400).json({ error: 'userEmail and userName required' });
+    }
+
+    const reasonSection = revokeReason
+      ? `<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+           <h3 style="margin-top: 0; color: #856404;">Reason:</h3>
+           <p style="margin: 0; color: #856404;">${escapeHtml(revokeReason)}</p>
+         </div>`
+      : '';
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #e64a19; padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🚫 Healthcare Provider Access Revoked</h1>
+        </div>
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${escapeHtml(userName)}</strong>,</p>
+
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            We are writing to inform you that your access as a <strong>${escapeHtml(professionalRole || 'Healthcare Provider')}</strong> on <strong>SR CareHive</strong> has been <span style="color: #e64a19; font-weight: bold;">revoked</span> effective immediately.
+          </p>
+
+          ${reasonSection}
+
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            As a result of this action, you will no longer be able to log in to the Healthcare Provider Dashboard. If you believe this was done in error or have any questions, please reach out to our support team.
+          </p>
+
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+          <p style="font-size: 13px; color: #999;">
+            For any questions or support, contact us at <a href="mailto:contact@srcarehive.com" style="color: #e64a19;">contact@srcarehive.com</a>
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail({
+      to: userEmail,
+      subject: '🚫 SR CareHive — Your Healthcare Provider Access Has Been Revoked',
+      html: emailHtml
+    });
+
+    res.json({ success: true, message: 'Revoke email sent' });
+  } catch (e) {
+    console.error('Error sending revoke email:', e);
+    res.status(500).json({ error: 'Failed to send revoke email' });
+  }
+});
+
 // Send document request email to provider with Google Form link
 app.post('/api/provider/send-document-request-email', async (req, res) => {
   try {
@@ -1694,7 +1762,7 @@ app.post('/api/provider/send-document-request-email', async (req, res) => {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="https://docs.google.com/forms/d/e/1FAIpQLScZ2B8aPX8MkkU9N2cc0nkLkB_C12QjXn5qmHffU3I7xUG6kg/viewform?usp=sharing&ouid=103854382276673108378" 
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLScZ2B8aPX8MkkU9N2cc0nkLkB_C12QjXn5qmHffU3I7xUG6kg/viewform?usp=sharing" 
                style="background: #ff9800; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">
               📋 Fill Additional Information Form
             </a>

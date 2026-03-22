@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/provider_email_service.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:care12/services/provider_export_service.dart';
 
 class HealthcareProviderDetailScreen extends StatefulWidget {
   final Map<String, dynamic> applicationData;
@@ -83,6 +84,8 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
             userName: userName,
             professionalRole: professionalRole,
             adminComments: comments,
+            primaryPhone: widget.applicationData['mobile_number']?.toString(),
+            rejectionReason: widget.applicationData['rejection_reason']?.toString(),
           ).catchError((e) {
             // Silent error - don't expose email details
             return false;
@@ -383,6 +386,19 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           .update(updateData)
           .eq('id', widget.applicationData['id']);
 
+      // Send revoke email (only if email is provided) — non-blocking
+      final userEmail = widget.applicationData['email']?.toString().trim() ?? '';
+      final userName = widget.applicationData['full_name'] ?? 'User';
+      final professionalRole = widget.applicationData['professional_role'] ?? 'Healthcare Provider';
+      if (userEmail.isNotEmpty) {
+        ProviderEmailService.sendRevokeEmail(
+          userEmail: userEmail,
+          userName: userName,
+          professionalRole: professionalRole,
+          revokeReason: reason,
+        ).catchError((e) => false);
+      }
+
       if (mounted) {
         setState(() => _isProcessing = false);
         Navigator.pop(context, true);
@@ -394,7 +410,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         );
       }
     } catch (e) {
-      print('Error revoking healthcare provider: \$e');
+      print('Error revoking healthcare provider: $e');
       setState(() => _isProcessing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -661,6 +677,8 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
           userName: userName,
           professionalRole: professionalRole,
           adminComments: comments,
+          primaryPhone: widget.applicationData['mobile_number']?.toString(),
+          rejectionReason: widget.applicationData['rejection_reason']?.toString(),
         ).catchError((e) => false);
       }
 
@@ -712,6 +730,26 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
         ),
         backgroundColor: const Color(0xFF2260FF),
         elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            child: OutlinedButton.icon(
+              onPressed: () => ProviderExportService.showExportDialog(context, widget.applicationData),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.white70, width: 1.5),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(40, 36),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white),
+              label: const Text(
+                'Export',
+                style: TextStyle(fontSize: 12, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -1172,7 +1210,7 @@ class _HealthcareProviderDetailScreenState extends State<HealthcareProviderDetai
                         child: OutlinedButton.icon(
                           onPressed: _showRevokeDialog,
                           icon: const Icon(Icons.block_rounded),
-                          label: const Text('Revoke Provider Access'),
+                          label: const Text('Revoke Healthcare Provider Access'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.deepOrange,
                             padding: const EdgeInsets.symmetric(vertical: 16),

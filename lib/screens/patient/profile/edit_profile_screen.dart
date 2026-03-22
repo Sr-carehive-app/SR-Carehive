@@ -1132,8 +1132,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             isReadOnly: isOAuthUser,
           ),
           
-          // Aadhar Linked Phone Number with Country Code
-          const Text('Aadhar Linked Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          // Primary Phone Number with Country Code
+          const Text('Phone Number *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
           const SizedBox(height: 8),
           Row(
             children: [

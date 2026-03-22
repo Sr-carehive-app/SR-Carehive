@@ -108,6 +108,8 @@ class ProviderEmailService {
     required String userName,
     required String professionalRole,
     String? adminComments,
+    String? primaryPhone,
+    String? rejectionReason,
   }) async {
     try {
       final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
@@ -120,6 +122,8 @@ class ProviderEmailService {
           'userName': userName,
           'professionalRole': professionalRole,
           'adminComments': adminComments,
+          'primaryPhone': primaryPhone,
+          'rejectionReason': rejectionReason,
         }),
       );
       
@@ -133,6 +137,41 @@ class ProviderEmailService {
       }
     } catch (e) {
       print('❌ Error sending approval email: $e');
+      return false;
+    }
+  }
+
+  /// Sends revoke access email to the provider
+  static Future<bool> sendRevokeEmail({
+    required String userEmail,
+    required String userName,
+    required String professionalRole,
+    String? revokeReason,
+  }) async {
+    try {
+      final apiBase = dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+
+      final response = await http.post(
+        Uri.parse('$apiBase/api/provider/send-revoke-email'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userEmail': userEmail,
+          'userName': userName,
+          'professionalRole': professionalRole,
+          'revokeReason': revokeReason,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Revoke email sent to provider successfully');
+        return true;
+      } else {
+        print('❌ Failed to send revoke email: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error sending revoke email: $e');
       return false;
     }
   }
