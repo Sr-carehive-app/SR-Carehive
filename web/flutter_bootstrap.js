@@ -1,7 +1,13 @@
 {{flutter_js}}
 {{flutter_build_config}}
 
-// Standard Flutter loader. Material Icons font is now bundled locally
-// in assets/fonts/MaterialIcons-Regular.otf via pubspec.yaml, so no
-// network font fetch is needed. Icons.* will render without any CDN dependency.
-_flutter.loader.load();
+// ROOT CAUSE FIX: The buildConfig above hardcodes renderer:"canvaskit".
+// CanvasKit fetches fonts from fonts.gstatic.com at runtime → ERR_CONNECTION_CLOSED → blank icons.
+// Passing config:{renderer:"html"} makes FlutterLoader.load() pick the {} build entry
+// (which has no renderer constraint), forcing HTML renderer.
+// HTML renderer uses browser CSS/DOM font stack → our bundled fonts work correctly.
+_flutter.loader.load({
+  config: {
+    renderer: "html",
+  },
+});
