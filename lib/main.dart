@@ -94,7 +94,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   // Play Store update check (Android only)
-  // Google Play API automatically shows update dialog - no custom UI needed
+  // Uses immediate update as primary to show full-screen Play Store dialog
   Future<void> _checkForUpdate() async {
     // Only works on Android, skip on Web and iOS
     if (kIsWeb) return;
@@ -105,24 +105,21 @@ class _MyAppState extends State<MyApp> {
       
       print('📦 Update availability: ${info.updateAvailability}');
       
-      // If update available, Google Play shows native update dialog automatically
       if (info.updateAvailability == UpdateAvailability.updateAvailable) {
-        // Always use flexible update - allows user to download later
-        // They can continue using app while update downloads in background
-        if (info.flexibleUpdateAllowed) {
-          print('📲 Optional update available - Showing notification...');
-          // Optional update - Google shows notification banner
-          // User can click "Download" or "Later"
-          await InAppUpdate.startFlexibleUpdate();
-          print('⬇️ Flexible update download started (user can use app meanwhile)');
-          // Note: completeFlexibleUpdate should be called AFTER download completes
-          // Google Play will handle the completion notification automatically
-          // Update will be prompted again next time app opens if not installed
-        } else if (info.immediateUpdateAllowed) {
-          // Fallback to immediate update only if flexible is not allowed
-          print('⚠️ UPDATE REQUIRED - Showing update dialog...');
-          // This shows update dialog, but user can still dismiss it
+        // PRIMARY: Immediate update shows full-screen Play Store dialog.
+        // User taps "Update" → Play Store opens → update installs correctly.
+        if (info.immediateUpdateAllowed) {
+          print('⚠️ Update available - Showing full-screen Play Store dialog...');
           await InAppUpdate.performImmediateUpdate();
+          print('✅ Immediate update completed');
+        } else if (info.flexibleUpdateAllowed) {
+          // FALLBACK: Flexible update downloads in background.
+          // Must call completeFlexibleUpdate() so the install actually triggers.
+          print('📲 Flexible update available - starting background download...');
+          await InAppUpdate.startFlexibleUpdate();
+          print('⬇️ Download started - triggering install...');
+          await InAppUpdate.completeFlexibleUpdate();
+          print('✅ Flexible update install triggered');
         }
       } else {
         print('✅ App is up to date');
