@@ -348,7 +348,36 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 8),
+                                  // ── Request ID chip ──────────────────────────
+                                  if (appointment['id'] != null)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF3FF),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: const Color(0xFF2260FF).withOpacity(0.25)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.tag, size: 12, color: Color(0xFF2260FF)),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              'Request ID: ${appointment['id'].toString().toUpperCase()}',
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                color: Color(0xFF2260FF),
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 0.2,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  const SizedBox(height: 10),
                                   Row(
                                     children: [
                                       Icon(Icons.calendar_today, size: 16, color: primaryColor),
@@ -1178,6 +1207,63 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   );
                 },
               ),
+
+              // ── Healthcare Provider Rating button ──────────────
+              const SizedBox(height: 8),
+              FutureBuilder<bool>(
+                future: _checkIfProviderFeedbackExists(appointment['id'].toString()),
+                builder: (context, snapshot) {
+                  final providerFbExists = snapshot.data ?? false;
+
+                  return SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: providerFbExists
+                          ? null
+                          : () => _showProviderFeedbackDialog(
+                                appointment['id'].toString(),
+                                appointment,
+                              ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: providerFbExists
+                            ? Colors.grey
+                            : const Color(0xFF2260FF),
+                        side: BorderSide(
+                          color: providerFbExists
+                              ? Colors.grey
+                              : const Color(0xFF2260FF),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        backgroundColor:
+                            providerFbExists ? Colors.grey.shade100 : null,
+                      ),
+                      icon: Icon(
+                        providerFbExists
+                            ? Icons.check_circle
+                            : Icons.local_hospital_outlined,
+                        color: providerFbExists
+                            ? Colors.grey
+                            : const Color(0xFF2260FF),
+                      ),
+                      label: Text(
+                        providerFbExists
+                            ? 'Provider Rating Submitted'
+                            : 'Rate Your Healthcare Provider',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: providerFbExists
+                              ? Colors.grey
+                              : const Color(0xFF2260FF),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ],
           ],
         ],
@@ -1843,6 +1929,467 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         }
       }
     }
+  }
+
+  // ── Check if provider feedback already submitted ──────────────────────────
+  Future<bool> _checkIfProviderFeedbackExists(String appointmentId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final existing = await supabase
+          .from('provider_feedback')
+          .select('id')
+          .eq('appointment_id', appointmentId)
+          .maybeSingle();
+      return existing != null;
+    } catch (e) {
+      print('[ERROR] Failed to check provider feedback: $e');
+      return false;
+    }
+  }
+
+  // ── Show healthcare provider rating dialog ───────────────────────────────
+  Future<void> _showProviderFeedbackDialog(
+      String appointmentId, Map<String, dynamic> appointment) async {
+    // Block duplicate submissions
+    try {
+      final supabase = Supabase.instance.client;
+      final existing = await supabase
+          .from('provider_feedback')
+          .select('id')
+          .eq('appointment_id', appointmentId)
+          .maybeSingle();
+      if (existing != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('You have already rated this healthcare provider'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+        return;
+      }
+    } catch (_) {}
+
+    // Mutable state inside StatefulBuilder
+    int overallRating = 0;
+    int behaviorRating = 0;
+    int skillRating = 0;
+    int punctualityRating = 0;
+    int hygieneRating = 0;
+    int communicationRating = 0;
+    bool facedProblem = false;
+    bool wouldRecommend = true;
+    bool wasProfessional = true;
+    final problemCtrl = TextEditingController();
+    final additionalCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2260FF).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.local_hospital_outlined,
+                      color: Color(0xFF2260FF), size: 24),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Rate Your Healthcare Provider',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nurse name header
+                  if ((appointment['nurse_name'] ?? '').toString().isNotEmpty) ...
+                    [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF3FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '👩\u200d⚕️  ${appointment['nurse_name']}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2260FF),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                  // ── Star Ratings ─────────────────────────────────
+                  const Text(
+                    'Star Ratings',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF2260FF)),
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildRatingRow('Overall Rating *', overallRating,
+                      (v) => setDlgState(() => overallRating = v)),
+                  const SizedBox(height: 12),
+                  _buildRatingRow('Behavior & Attitude', behaviorRating,
+                      (v) => setDlgState(() => behaviorRating = v)),
+                  const SizedBox(height: 12),
+                  _buildRatingRow('Technical / Medical Skill', skillRating,
+                      (v) => setDlgState(() => skillRating = v)),
+                  const SizedBox(height: 12),
+                  _buildRatingRow('Punctuality', punctualityRating,
+                      (v) => setDlgState(() => punctualityRating = v)),
+                  const SizedBox(height: 12),
+                  _buildRatingRow('Hygiene & Cleanliness', hygieneRating,
+                      (v) => setDlgState(() => hygieneRating = v)),
+                  const SizedBox(height: 12),
+                  _buildRatingRow('Communication', communicationRating,
+                      (v) => setDlgState(() => communicationRating = v)),
+
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 12),
+
+                  // ── Yes / No Questions ───────────────────────────
+                  const Text(
+                    'Quick Questions',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF2260FF)),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Q1: Problem during visit
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Did you face any problem during the home visit?',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ToggleButtons(
+                        borderRadius: BorderRadius.circular(8),
+                        constraints:
+                            const BoxConstraints(minWidth: 44, minHeight: 32),
+                        isSelected: [facedProblem, !facedProblem],
+                        onPressed: (i) =>
+                            setDlgState(() => facedProblem = i == 0),
+                        selectedColor: Colors.white,
+                        selectedBorderColor:
+                            facedProblem ? Colors.red : Colors.green,
+                        fillColor:
+                            facedProblem ? Colors.red : Colors.green,
+                        children: const [
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('Yes',
+                                  style: TextStyle(fontSize: 12))),
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('No',
+                                  style: TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Conditional: problem description field
+                  if (facedProblem) ...
+                    [
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: problemCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Describe the problem',
+                          hintText: 'Please describe what went wrong...',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        maxLines: 3,
+                      ),
+                    ],
+
+                  const SizedBox(height: 12),
+
+                  // Q2: Would recommend
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Would you recommend this healthcare provider?',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ToggleButtons(
+                        borderRadius: BorderRadius.circular(8),
+                        constraints:
+                            const BoxConstraints(minWidth: 44, minHeight: 32),
+                        isSelected: [wouldRecommend, !wouldRecommend],
+                        onPressed: (i) =>
+                            setDlgState(() => wouldRecommend = i == 0),
+                        selectedColor: Colors.white,
+                        selectedBorderColor:
+                            wouldRecommend ? Colors.green : Colors.red,
+                        fillColor:
+                            wouldRecommend ? Colors.green : Colors.red,
+                        children: const [
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('Yes',
+                                  style: TextStyle(fontSize: 12))),
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('No',
+                                  style: TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Q3: Was professional
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Was the healthcare provider professional?',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ToggleButtons(
+                        borderRadius: BorderRadius.circular(8),
+                        constraints:
+                            const BoxConstraints(minWidth: 44, minHeight: 32),
+                        isSelected: [wasProfessional, !wasProfessional],
+                        onPressed: (i) =>
+                            setDlgState(() => wasProfessional = i == 0),
+                        selectedColor: Colors.white,
+                        selectedBorderColor:
+                            wasProfessional ? Colors.green : Colors.red,
+                        fillColor:
+                            wasProfessional ? Colors.green : Colors.red,
+                        children: const [
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('Yes',
+                                  style: TextStyle(fontSize: 12))),
+                          Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text('No',
+                                  style: TextStyle(fontSize: 12))),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 12),
+
+                  // ── Additional Feedback text box ─────────────────
+                  const Text(
+                    'Additional Feedback (Optional)',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: additionalCtrl,
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Write your feedback to help us improve...',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+
+                  if (overallRating == 0) ...
+                    [
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Colors.orange, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please give an overall star rating to submit',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.orange),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Skip'),
+              ),
+              ElevatedButton(
+                onPressed: overallRating == 0
+                    ? null
+                    : () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2260FF),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Submit Rating',
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result == true && overallRating > 0) {
+      try {
+        final supabase = Supabase.instance.client;
+        final user = supabase.auth.currentUser;
+
+        // Get patient UUID for linking
+        String? patientId;
+        if (user != null) {
+          try {
+            final p = await supabase
+                .from('patients')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            patientId = p?['id']?.toString();
+          } catch (_) {}
+        }
+
+        // Insert into provider_feedback table
+        await supabase.from('provider_feedback').insert({
+          'appointment_id': appointmentId,
+          'patient_id': patientId,
+          'overall_rating': overallRating,
+          'service_behavior_rating': behaviorRating == 0 ? null : behaviorRating,
+          'technical_skill_rating': skillRating == 0 ? null : skillRating,
+          'punctuality_rating': punctualityRating == 0 ? null : punctualityRating,
+          'hygiene_cleanliness_rating': hygieneRating == 0 ? null : hygieneRating,
+          'communication_rating': communicationRating == 0 ? null : communicationRating,
+          'faced_any_problem': facedProblem,
+          'would_recommend_provider': wouldRecommend,
+          'provider_was_professional': wasProfessional,
+          'problem_description':
+              (facedProblem && problemCtrl.text.trim().isNotEmpty)
+                  ? problemCtrl.text.trim()
+                  : null,
+          'additional_feedback': additionalCtrl.text.trim().isEmpty
+              ? null
+              : additionalCtrl.text.trim(),
+          'nurse_name': appointment['nurse_name'],
+          'patient_name': appointment['full_name'],
+        });
+
+        // Send email notifications (non-blocking)
+        try {
+          final apiBase =
+              dotenv.env['API_BASE_URL'] ?? 'https://api.srcarehive.com';
+          await http.post(
+            Uri.parse('$apiBase/api/notify-provider-feedback-submitted'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'appointmentId': appointmentId,
+              'patientEmail': appointment['patient_email'],
+              'patientName': appointment['full_name'],
+              'nurseName': appointment['nurse_name'],
+              'overallRating': overallRating,
+              'serviceBehaviorRating':
+                  behaviorRating == 0 ? null : behaviorRating,
+              'technicalSkillRating': skillRating == 0 ? null : skillRating,
+              'punctualityRating':
+                  punctualityRating == 0 ? null : punctualityRating,
+              'hygieneCleanlinessRating':
+                  hygieneRating == 0 ? null : hygieneRating,
+              'communicationRating':
+                  communicationRating == 0 ? null : communicationRating,
+              'facedAnyProblem': facedProblem,
+              'wouldRecommendProvider': wouldRecommend,
+              'providerWasProfessional': wasProfessional,
+              'problemDescription':
+                  (facedProblem && problemCtrl.text.trim().isNotEmpty)
+                      ? problemCtrl.text.trim()
+                      : null,
+              'additionalFeedback': additionalCtrl.text.trim().isEmpty
+                  ? null
+                  : additionalCtrl.text.trim(),
+            }),
+          );
+        } catch (notifyErr) {
+          print('[WARN] Could not send provider feedback notification: $notifyErr');
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  '✅ Thank you for rating your healthcare provider!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Refresh appointment list so button updates to "Submitted"
+          _loadAppointments();
+        }
+      } catch (e) {
+        print('Error submitting provider feedback: $e');
+        if (mounted) {
+          String msg = 'Failed to submit rating. Please try again.';
+          final s = e.toString().toLowerCase();
+          if (s.contains('network') || s.contains('connection')) {
+            msg = 'Network error. Please check your connection.';
+          } else if (s.contains('timeout')) {
+            msg = 'Request timed out. Please try again.';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+    problemCtrl.dispose();
+    additionalCtrl.dispose();
   }
 
   Widget _buildRatingRow(String label, int rating, Function(int) onRatingChange) {

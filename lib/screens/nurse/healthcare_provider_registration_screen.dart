@@ -646,12 +646,13 @@ class _HealthcareProviderRegistrationScreenState extends State<HealthcareProvide
               
               _buildTextField(
                 controller: emailController,
-                label: 'Email ID (Optional)',
+                label: 'Email ID *',
                 hint: 'your.email@example.com',
                 keyboardType: TextInputType.emailAddress,
                 validator: (val) {
-                  if (val != null && val.isNotEmpty && !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val)) {
-                    return 'Enter valid email address';
+                  if (val == null || val.trim().isEmpty) return 'Email is required';
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(val.trim())) {
+                    return 'Enter a valid email address';
                   }
                   return null;
                 },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'healthcare_provider_selection_screen.dart';
 import 'provider_profile_view_screen.dart';
 import 'package:care12/utils/safe_navigation.dart';
+import 'package:care12/services/patient_export_service.dart';
+import 'appointment_detail_screen.dart';
 
 class NurseAppointmentsManageScreen extends StatefulWidget {
   final bool isSuperAdmin;
@@ -26,10 +29,30 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   String _statusFilter = 'All';
   Set<String> _selectedIds = {}; // Track selected appointment IDs
   bool _isSelectionMode = false; // Track if in selection mode
+
+  // ── Real-time search state ──
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchActive = false;   // true when query is non-empty
+  bool _searchLoading = false;  // true while awaiting API response
+  String? _searchError;
+
+  // ── Date range filter state (set via date picker, applied in _getDisplayList) ──
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+
   @override
   void initState() { 
     super.initState(); 
     _initAndLoad();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _initAndLoad() async {
@@ -85,6 +108,89 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
       }
     }
     if (mounted) setState(() { _loading = false; });
+    // If a search was active when refresh was triggered, re-fetch search results
+    // so the user sees fresh DB data, not stale cached search results.
+    if (mounted && _searchActive && _searchCtrl.text.trim().isNotEmpty) {
+      _runSearch(_searchCtrl.text.trim());
+    }
+  }
+
+  // ── Live client-side search on already-loaded _items ──────────────────────
+  void _onSearchChanged(String val) {
+    _searchDebounce?.cancel();
+    final q = val.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _searchActive = false;
+        _searchResults = [];
+        _searchLoading = false;
+        _searchError = null;
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      });
+      return;
+    }
+    // Client-side is instant — no async spinner needed
+    setState(() { _searchActive = true; _searchLoading = false; _searchError = null; });
+    // Short debounce to avoid excessive rebuilds while typing rapidly
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 200),
+      () => _runSearch(q),
+    );
+  }
+
+  // Synchronous client-side filter across all fields in _items.
+  // Covers: name, email, phone, partial appointment ID, partial HS-ID (patient_id).
+  void _runSearch(String q) {
+    if (!mounted) return;
+    try {
+      final lower = q.toLowerCase();
+
+      final matched = _items.where((row) {
+        // Helper: true if field contains the query (case-insensitive)
+        bool has(String? val) => val != null && val.toLowerCase().contains(lower);
+
+        return has(row['full_name']?.toString())
+            || has(row['patient_email']?.toString())  // ← email search (was missing)
+            || has(row['phone']?.toString())
+            || has(row['id']?.toString())             // ← partial Appointment ID (was broken)
+            || has(row['patient_id']?.toString());    // ← partial HS-ID (was broken)
+      })
+      // Honour nurse_visible guard (same as listAppointments backend)
+      .where((row) => row['nurse_visible'] != false)
+      .toList();
+
+      // Keep created_at descending order
+      matched.sort((a, b) {
+        final ad = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(0);
+        final bd = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(0);
+        return bd.compareTo(ad);
+      });
+
+      if (!mounted) return;
+      setState(() { _searchResults = matched; _searchLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _searchLoading = false; _searchError = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  // Country codes list for provider phone validation (same pattern as patient registration)
+  static final List<Map<String, dynamic>> _providerCountryCodes = [
+    {'code': '+91', 'country': 'India', 'length': 10},
+    {'code': '+1', 'country': 'USA', 'length': 10},
+    {'code': '+44', 'country': 'UK', 'length': 10},
+    {'code': '+971', 'country': 'UAE', 'length': 9},
+    {'code': '+61', 'country': 'Australia', 'length': 9},
+    {'code': '+65', 'country': 'Singapore', 'length': 8},
+  ];
+
+  int _providerPhoneLength(String code) {
+    final entry = _providerCountryCodes.firstWhere(
+      (c) => c['code'] == code,
+      orElse: () => {'code': '+91', 'country': 'India', 'length': 10},
+    );
+    return entry['length'] as int;
   }
 
   Future<void> _approveDialog(Map<String, dynamic> appt) async {
@@ -92,45 +198,291 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     final phoneCtrl = TextEditingController();
     final branchCtrl = TextEditingController();
     final commentsCtrl = TextEditingController();
+
+    // Word count helper — splits on any whitespace, ignores empties
+    int countWords(String t) =>
+        t.trim().isEmpty ? 0 : t.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+    // Local state managed inside StatefulBuilder
+    String selectedCountryCode = '+91';
     bool available = true;
+    int wordCount = 0;           // live word count for comments
+    const int maxWords = 500;    // 500 WORDS limit
+
+    // Inline validation errors
+    String? nameError;
+    String? phoneError;
+    String? branchError;
+    String? commentsError;
+
+    // Always dispose controllers — whether user cancels, submits, or an error occurs
+    try {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Approve & Assign Healthcare Provider'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Healthcare provider name')),
-              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Healthcare provider phone')),
-              TextField(controller: branchCtrl, decoration: const InputDecoration(labelText: 'Branch/Office')),
-              TextField(controller: commentsCtrl, decoration: const InputDecoration(labelText: 'Comments'), maxLines: 3),
-              const SizedBox(height: 8),
-              StatefulBuilder(builder: (ctx, setS) => CheckboxListTile(
-                    title: const Text('Available for selected time/duration'),
-                    value: available,
-                    onChanged: (v) => setS(() => available = v ?? true),
-                  )),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
-        ],
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final requiredLength = _providerPhoneLength(selectedCountryCode);
+
+          // ── Responsive sizing via MediaQuery ──
+          final screenW = MediaQuery.of(ctx).size.width;
+          final screenH = MediaQuery.of(ctx).size.height;
+          // Mobile < 600: 92% width | Tablet 600-960: 68% width | Desktop > 960: fixed 520px
+          final dialogW = screenW < 600
+              ? screenW * 0.92
+              : screenW < 960
+                  ? screenW * 0.68
+                  : 520.0;
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            // Let Dialog sit centred; we size it ourselves via ConstrainedBox
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: screenW < 600 ? 12.0 : 40.0,
+              vertical: 24,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: dialogW,
+                maxHeight: screenH * 0.85, // never taller than 85% screen height
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── Title ──
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                    child: Text(
+                      'Approve & Assign Healthcare Provider',
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // ── Scrollable form body ──
+                  // Flexible: shrink when content is small, scroll when tall
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Name
+                          TextField(
+                            controller: nameCtrl,
+                            maxLines: 1,
+                            onChanged: (_) => setDialogState(() => nameError = null),
+                            decoration: InputDecoration(
+                              labelText: 'Healthcare provider name *',
+                              errorText: nameError,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Phone label + row
+                          const Text(
+                            'Healthcare provider phone *',
+                            style: TextStyle(fontSize: 13, color: Colors.black87),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Country code dropdown
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: phoneError != null ? Colors.red : Colors.grey.shade400,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: const Color(0xFFF5F7FF),
+                                ),
+                                child: DropdownButton<String>(
+                                  value: selectedCountryCode,
+                                  underline: const SizedBox(),
+                                  isDense: true,
+                                  items: _providerCountryCodes.map((c) {
+                                    return DropdownMenuItem<String>(
+                                      value: c['code'] as String,
+                                      child: Text(
+                                        '${c['code']} ${c['country']}',
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (val) {
+                                    if (val == null) return;
+                                    setDialogState(() {
+                                      selectedCountryCode = val;
+                                      phoneCtrl.clear();
+                                      phoneError = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Phone digits — Expanded takes remaining width
+                              Expanded(
+                                child: TextField(
+                                  key: ValueKey(selectedCountryCode),
+                                  controller: phoneCtrl,
+                                  keyboardType: TextInputType.phone,
+                                  maxLines: 1,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(requiredLength),
+                                  ],
+                                  onChanged: (_) => setDialogState(() => phoneError = null),
+                                  decoration: InputDecoration(
+                                    hintText: 'X' * requiredLength,
+                                    errorText: phoneError,
+                                    border: const OutlineInputBorder(),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                    helperText: '$requiredLength digits required',
+                                    helperStyle: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Branch
+                          TextField(
+                            controller: branchCtrl,
+                            maxLines: 1,
+                            onChanged: (_) => setDialogState(() => branchError = null),
+                            decoration: InputDecoration(
+                              labelText: 'Branch/Office *',
+                              errorText: branchError,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Comments — WORD count (not character count)
+                          TextField(
+                            controller: commentsCtrl,
+                            maxLines: 3,
+                            minLines: 3,
+                            // No maxLength here — that counts chars; we count words ourselves
+                            onChanged: (val) => setDialogState(() {
+                              wordCount = countWords(val);
+                              commentsError = null;
+                            }),
+                            decoration: InputDecoration(
+                              labelText: 'Comments *',
+                              errorText: commentsError,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              // Custom word counter shown at bottom-right of field
+                              counterText: '$wordCount / $maxWords words',
+                              counterStyle: TextStyle(
+                                fontSize: 12,
+                                color: wordCount > maxWords ? Colors.red : Colors.grey.shade600,
+                                fontWeight: wordCount > maxWords ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+
+                          // Availability checkbox
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Available for selected time/duration'),
+                            value: available,
+                            onChanged: (v) => setDialogState(() => available = v ?? true),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // ── Actions ──
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            bool valid = true;
+
+                            if (nameCtrl.text.trim().isEmpty) {
+                              setDialogState(() => nameError = 'Provider name is required');
+                              valid = false;
+                            }
+
+                            final phone = phoneCtrl.text.trim();
+                            if (phone.isEmpty) {
+                              setDialogState(() => phoneError = 'Phone number is required');
+                              valid = false;
+                            } else if (phone.length != requiredLength || int.tryParse(phone) == null) {
+                              setDialogState(() => phoneError = 'Must be exactly $requiredLength digits for $selectedCountryCode');
+                              valid = false;
+                            } else if (selectedCountryCode == '+91' && !RegExp(r'^[6-9]').hasMatch(phone)) {
+                              setDialogState(() => phoneError = 'Indian number must start with 6-9');
+                              valid = false;
+                            }
+
+                            if (branchCtrl.text.trim().isEmpty) {
+                              setDialogState(() => branchError = 'Branch/Office is required');
+                              valid = false;
+                            }
+
+                            if (commentsCtrl.text.trim().isEmpty) {
+                              setDialogState(() => commentsError = 'Comments are required');
+                              valid = false;
+                            } else if (countWords(commentsCtrl.text) > maxWords) {
+                              setDialogState(() => commentsError =
+                                  'Too long — please keep comments under $maxWords words');
+                              valid = false;
+                            }
+
+                            if (valid) Navigator.pop(ctx, true);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2260FF),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('Send', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
+
     if (ok == true) {
       try {
         await NurseApiService.approveAppointment(
           id: (appt['id'] ?? '').toString(),
           nurseName: nameCtrl.text.trim(),
-          nursePhone: phoneCtrl.text.trim(),
+          nursePhone: '${selectedCountryCode}${phoneCtrl.text.trim()}',
           branch: branchCtrl.text.trim().isEmpty ? null : branchCtrl.text.trim(),
           comments: commentsCtrl.text.trim().isEmpty ? null : commentsCtrl.text.trim(),
           available: available,
         );
-        if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approved'))); _load();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approved')));
+        _load();
       } catch (e) {
         if (!mounted) return;
         String userMessage = 'Failed to approve appointment. Please try again.';
@@ -138,37 +490,51 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         if (errorStr.contains('network') || errorStr.contains('connection')) {
           userMessage = 'Network error. Please check your internet connection.';
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userMessage), backgroundColor: Colors.red),
+        );
       }
+    }
+    } finally {
+      // Dispose controllers to free resources, regardless of dialog outcome
+      nameCtrl.dispose();
+      phoneCtrl.dispose();
+      branchCtrl.dispose();
+      commentsCtrl.dispose();
     }
   }
 
   Future<void> _rejectDialog(Map<String, dynamic> appt) async {
     final reasonCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reject Appointment'),
-        content: TextField(controller: reasonCtrl, decoration: const InputDecoration(labelText: 'Reason'), maxLines: 3),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reject')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      if (reasonCtrl.text.trim().isEmpty) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a reason to reject.'))); return; }
-      try { await NurseApiService.rejectAppointment(id: (appt['id'] ?? '').toString(), reason: reasonCtrl.text.trim()); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected'))); _load(); } catch (e) {
-        if (!mounted) return;
-        String userMessage = 'Failed to reject appointment. Please try again.';
-        final errorStr = e.toString().toLowerCase();
-        if (errorStr.contains('network') || errorStr.contains('connection')) {
-          userMessage = 'Network error. Please check your internet connection.';
+    try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reject Appointment'),
+          content: TextField(controller: reasonCtrl, decoration: const InputDecoration(labelText: 'Reason'), maxLines: 3),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reject')),
+          ],
+        ),
+      );
+      if (ok == true) {
+        if (reasonCtrl.text.trim().isEmpty) { if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a reason to reject.'))); return; }
+        try { await NurseApiService.rejectAppointment(id: (appt['id'] ?? '').toString(), reason: reasonCtrl.text.trim()); if (!mounted) return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rejected'))); _load(); } catch (e) {
+          if (!mounted) return;
+          String userMessage = 'Failed to reject appointment. Please try again.';
+          final errorStr = e.toString().toLowerCase();
+          if (errorStr.contains('network') || errorStr.contains('connection')) {
+            userMessage = 'Network error. Please check your internet connection.';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userMessage), backgroundColor: Colors.red));
       }
+    } finally {
+      reasonCtrl.dispose();
     }
   }
+
 
   Future<void> _setAmountDialog(Map<String, dynamic> appt) async {
     final amountCtrl = TextEditingController();
@@ -895,7 +1261,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   // Select all filtered items
   void _selectAll() {
     setState(() {
-      final filtered = _filtered();
+      final filtered = _getDisplayList();
       _selectedIds = filtered.map((a) => (a['id'] ?? '').toString()).toSet();
     });
   }
@@ -908,141 +1274,10 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   }
 
   Future<void> _viewDetails(Map<String, dynamic> a) async {
-    String fmtDate() { final d = DateTime.tryParse(a['date'] ?? ''); return d != null ? DateFormat('MMM dd, yyyy').format(d) : 'N/A'; }
-    String fmtVal(dynamic v) => (v == null || (v is String && v.trim().isEmpty)) ? '-' : v.toString();
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(a['full_name'] ?? 'Appointment Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Basic Appointment Info
-              const Text('Appointment', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              _kv('Date', fmtDate()),
-              _kv('Time', fmtVal(a['time'])),
-              
-              // Patient Information
-              const Divider(height: 24),
-              const Text('Healthcare seeker Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              _kv('Full Name', fmtVal(a['full_name'])),
-              _kv('Age', fmtVal(a['age'])),
-              _kv('Gender', fmtVal(a['gender'])),
-              _kv('Patient Type', fmtVal(a['patient_type'])),
-              
-              // Contact Details
-              const Divider(height: 24),
-              const Text('Contact Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              _kv('Email', fmtVal(a['patient_email'])),
-              _kv('Phone', fmtVal(a['phone'])),
-              _kv('Address', fmtVal(a['address'])),
-              _kv('Emergency Contact', fmtVal(a['emergency_contact'])),
-              
-              // Medical Information
-              const Divider(height: 24),
-              const Text('Medical Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              if (a['problem'] != null && (a['problem'] as String).isNotEmpty) 
-                _kv('Problem', a['problem']),
-              if (a['aadhar_number'] != null && (a['aadhar_number'] as String).isNotEmpty)
-                _kv('Aadhar Number', fmtVal(a['aadhar_number'])),
-              
-              // Primary Doctor Details
-              if (a['primary_doctor_name'] != null || a['primary_doctor_phone'] != null || a['primary_doctor_location'] != null) ...[
-                const Divider(height: 24),
-                const Text('Primary Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
-                if (a['primary_doctor_name'] != null && (a['primary_doctor_name'] as String).isNotEmpty)
-                  _kv('Doctor Name', fmtVal(a['primary_doctor_name'])),
-                if (a['primary_doctor_phone'] != null && (a['primary_doctor_phone'] as String).isNotEmpty)
-                  _kv('Doctor Phone', fmtVal(a['primary_doctor_phone'])),
-                if (a['primary_doctor_location'] != null && (a['primary_doctor_location'] as String).isNotEmpty)
-                  _kv('Doctor Location', fmtVal(a['primary_doctor_location'])),
-              ],
-              
-              // Payment Status (if applicable)
-              if (a['total_amount'] != null || a['registration_paid'] == true) ...[
-                const Divider(height: 24),
-                const Text('Payment Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
-                if (a['registration_paid'] == true)
-                  _kv('Registration', '✅ Paid (₹10)'),
-                if (a['total_amount'] != null)
-                  _kv('Total Amount', '₹${a['total_amount']}'),
-                if (a['pre_paid'] == true)
-                  _kv('Pre-Payment', '✅ Paid (50%)'),
-                if (a['final_paid'] == true)
-                  _kv('Final Payment', '✅ Paid (50%)'),
-              ],
-              
-              // Assigned healthcare provider Info
-              if (a['status']?.toString().toLowerCase() == 'approved') ...[
-                const Divider(height: 24),
-                const Text('Assigned Healthcare Provider', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 8),
-                _kv('Name', fmtVal(a['nurse_name'])),
-                _kv('Phone', fmtVal(a['nurse_phone'])),
-                _kv('Branch', fmtVal(a['nurse_branch'])),
-                _kv('Comments', fmtVal(a['nurse_comments'])),
-                _kv('Available', a['nurse_available'] == true ? 'Yes' : (a['nurse_available'] == false ? 'No' : '-')),
-              ],
-              
-              // Rejection Info
-              if (a['status']?.toString().toLowerCase() == 'rejected') ...[
-                const Divider(height: 24),
-                const Text('Rejection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
-                const SizedBox(height: 8),
-                _kv('Reason', fmtVal(a['rejection_reason'])),
-              ],
-              
-              // Post-Visit Consultation Details (NEW)
-              if (a['post_visit_remarks'] != null || a['consulted_doctor_name'] != null) ...[
-                const Divider(height: 24),
-                const Text('Post-Visit Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
-                const SizedBox(height: 8),
-                if (a['post_visit_remarks'] != null && (a['post_visit_remarks'] as String).isNotEmpty)
-                  _kv('Healthcare provider Remarks', fmtVal(a['post_visit_remarks'])),
-                if (a['visit_completed_at'] != null) ...[
-                  (() {
-                    try {
-                      final dt = DateTime.parse(a['visit_completed_at'].toString());
-                      final formatted = DateFormat('MMM dd, yyyy hh:mm a').format(dt);
-                      return _kv('Visit Completed', formatted);
-                    } catch (_) {
-                      return _kv('Visit Completed', fmtVal(a['visit_completed_at']));
-                    }
-                  })(),
-                ],
-              ],
-              
-              // Recommended Doctor Details (NEW)
-              if (a['consulted_doctor_name'] != null || a['consulted_doctor_phone'] != null || 
-                  a['consulted_doctor_specialization'] != null || a['consulted_doctor_clinic_address'] != null) ...[
-                const Divider(height: 24),
-                const Text('🩺 Recommended Doctor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)),
-                const SizedBox(height: 8),
-                if (a['consulted_doctor_name'] != null && (a['consulted_doctor_name'] as String).isNotEmpty)
-                  _kv('Doctor Name', fmtVal(a['consulted_doctor_name'])),
-                if (a['consulted_doctor_phone'] != null && (a['consulted_doctor_phone'] as String).isNotEmpty)
-                  _kv('Phone', fmtVal(a['consulted_doctor_phone'])),
-                if (a['consulted_doctor_specialization'] != null && (a['consulted_doctor_specialization'] as String).isNotEmpty)
-                  _kv('Specialization', fmtVal(a['consulted_doctor_specialization'])),
-                if (a['consulted_doctor_clinic_address'] != null && (a['consulted_doctor_clinic_address'] as String).isNotEmpty)
-                  _kv('Clinic Address', fmtVal(a['consulted_doctor_clinic_address'])),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppointmentDetailScreen(appointment: a),
       ),
     );
   }
@@ -1252,7 +1487,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
 
   @override
   Widget build(BuildContext context) {
-    final listFiltered = _filtered();
+    final listFiltered = _getDisplayList();
     final hasSelection = _selectedIds.isNotEmpty;
     
     return Scaffold(
@@ -1306,6 +1541,18 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               ),
             ),
             const SizedBox(width: 4),
+            // Export Selected (only when items are selected)
+            if (hasSelection)
+              IconButton(
+                onPressed: () {
+                  final toExport = listFiltered
+                      .where((a) => _selectedIds.contains((a['id'] ?? '').toString()))
+                      .toList();
+                  PatientExportService.showBulkExportDialog(context, toExport);
+                },
+                icon: const Icon(Icons.file_download_outlined, size: 24),
+                tooltip: 'Export ${_selectedIds.length} Selected',
+              ),
             // Delete Selected
             if (hasSelection)
               IconButton(
@@ -1317,6 +1564,23 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                 tooltip: 'Remove Selected',
               ),
           ] else ...[
+            // Export button (bulk = all visible; or selected if any)
+            IconButton(
+              onPressed: listFiltered.isNotEmpty
+                  ? () {
+                      final toExport = _selectedIds.isNotEmpty
+                          ? listFiltered
+                              .where((a) => _selectedIds.contains((a['id'] ?? '').toString()))
+                              .toList()
+                          : listFiltered;
+                      PatientExportService.showBulkExportDialog(context, toExport);
+                    }
+                  : null,
+              icon: const Icon(Icons.file_download_outlined),
+              tooltip: _selectedIds.isNotEmpty
+                  ? 'Export ${_selectedIds.length} Selected'
+                  : 'Export All',
+            ),
             // Selection Mode Toggle
             IconButton(
               onPressed: listFiltered.isNotEmpty ? _toggleSelectionMode : null,
@@ -1330,7 +1594,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
             ),
           ],
         ],
-        backgroundColor: _isSelectionMode ? Colors.deepOrange : const Color(0xFF2260FF),
+        backgroundColor: const Color(0xFF2260FF),
         centerTitle: true,
       ),
       body: _loading
@@ -1344,13 +1608,38 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                   itemCount: 1 + listFiltered.length,
                   itemBuilder: (ctx,i){
                     if(i==0){
+                      final anyFilterActive = _searchActive || _statusFilter != 'All' || _dateFrom != null;
                       return Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+                        _buildSearchBar(),
                         _filtersBar(),
-                        const SizedBox(height:12),
-                        if(listFiltered.isEmpty) Padding(
-                          padding: const EdgeInsets.symmetric(vertical:24),
-                          child: Center(child: Text('No appointments to show')),
-                        ),
+                        if (anyFilterActive) ...[
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            const Icon(Icons.bolt_rounded, color: Color(0xFF2260FF), size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              _searchLoading
+                                  ? 'Searching…'
+                                  : '${listFiltered.length} result${listFiltered.length == 1 ? '' : 's'} found',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF2260FF), fontWeight: FontWeight.w500),
+                            ),
+                          ]),
+                        ],
+                        const SizedBox(height: 12),
+                        if (_searchError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(_searchError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                          ),
+                        if (listFiltered.isEmpty && !_searchLoading)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(child: Text(
+                              _searchActive
+                                  ? 'No results for "${_searchCtrl.text.trim()}"'
+                                  : 'No appointments match the current filters',
+                            )),
+                          ),
                       ]);
                     }
                     final a = listFiltered[i-1];
@@ -1431,6 +1720,60 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                       Row(children:[ const Icon(Icons.calendar_today, size:14, color: Color(0xFF2260FF)), const SizedBox(width:6), Text(date!=null? DateFormat('MMM dd, yyyy').format(date):'N/A'), const SizedBox(width:12), const Icon(Icons.access_time, size:14, color: Color(0xFF2260FF)), const SizedBox(width:6), Text(time) ]),
                       const SizedBox(height:4),
                       Text('Phone: ${a['phone'] ?? '-'}'),
+                      const SizedBox(height:6),
+                      // ─── Unique IDs (stacked, full UUID, no truncation) ────
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Appointment ID — always shown
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF3FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF2260FF).withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.confirmation_number_outlined, size: 11, color: Color(0xFF2260FF)),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    'Appt ID: ${appointmentId.toUpperCase()}',
+                                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF2260FF), fontWeight: FontWeight.w600, letterSpacing: 0.2),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // HS-ID — only shown when patient_id is present
+                          if (a['patient_id'] != null && a['patient_id'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.green.withOpacity(0.35)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person_pin_outlined, size: 11, color: Colors.green),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Text(
+                                      'HS-ID: ${a['patient_id'].toString().toUpperCase()}',
+                                      style: const TextStyle(fontSize: 10.5, color: Colors.green, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                       if(a['problem']!=null && (a['problem'] as String).isNotEmpty)...[ const SizedBox(height:8), Text('Problem: ${a['problem']}', style: const TextStyle(color: Colors.black54)) ],
                       
                       // Show registration payment status if booked
@@ -1552,6 +1895,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             onPressed: () => _setAmountDialog(a),
                           )),
                           const SizedBox(width:8),
+                          IconButton(tooltip:'Export', onPressed: () => PatientExportService.showExportDialog(context, a), icon: const Icon(Icons.file_download_outlined, color: Color(0xFF2260FF))),
                           IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
                       ] else if(status.toLowerCase()=='pre_paid' && (a['visit_completion_enabled'] != true))...[
@@ -1567,6 +1911,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             onPressed: () => _submitPostVisitConsultation(a),
                           )),
                           const SizedBox(width:8),
+                          IconButton(tooltip:'Export', onPressed: () => PatientExportService.showExportDialog(context, a), icon: const Icon(Icons.file_download_outlined, color: Color(0xFF2260FF))),
                           IconButton(tooltip:'View details', onPressed: () => _viewDetails(a), icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)))
                         ]),
                       ] else ...[                        // Approve/Reject buttons disabled for amount_set, cancelled, expired status
@@ -1589,6 +1934,11 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                           ),
                           const SizedBox(width:8),
                           IconButton(
+                            tooltip:'Export',
+                            onPressed: () => PatientExportService.showExportDialog(context, a),
+                            icon: const Icon(Icons.file_download_outlined, color: Color(0xFF2260FF)),
+                          ),
+                          IconButton(
                             tooltip:'View details',
                             onPressed: () => _viewDetails(a),
                             icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)),
@@ -1609,42 +1959,213 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     );
   }
 
-  List<Map<String, dynamic>> _filtered(){
-  if(_statusFilter=='All') return _items;
-  // Map display tab to status value in DB
-  final statusMap = {
-  'Pending': 'pending',
-  'Approved': 'approved',
-  'Rejected': 'rejected',
-  'Completed': 'completed',
-  'Booked': 'booked',
-  'Amount Set': 'amount_set',
-  'Pre Paid': 'pre_paid',
-  'Cancelled': 'cancelled',
-  };
-  final want = statusMap[_statusFilter] ?? _statusFilter.toLowerCase();
-  return _items.where((e)=>(e['status']??'').toString().toLowerCase()==want).toList();
+  // Unified list: start from search results or full items, then apply
+  // status filter + date range filter simultaneously.
+  List<Map<String, dynamic>> _getDisplayList() {
+    List<Map<String, dynamic>> base = _searchActive ? _searchResults : _items;
+
+    // Status filter
+    if (_statusFilter != 'All') {
+      const statusMap = {
+        'Pending': 'pending', 'Approved': 'approved', 'Rejected': 'rejected',
+        'Completed': 'completed', 'Booked': 'booked', 'Amount Set': 'amount_set',
+        'Pre Paid': 'pre_paid', 'Cancelled': 'cancelled',
+      };
+      final want = statusMap[_statusFilter] ?? _statusFilter.toLowerCase();
+      base = base.where((e) => (e['status'] ?? '').toString().toLowerCase() == want).toList();
+    }
+
+    // Date range filter (by created_at) — compare date parts in local time
+    // created_at from DB is UTC; date picker gives local dates → must convert to local first
+    if (_dateFrom != null || _dateTo != null) {
+      base = base.where((e) {
+        final raw = e['created_at']?.toString();
+        if (raw == null || raw.isEmpty) return false;
+        final d = DateTime.tryParse(raw)?.toLocal();
+        if (d == null) return false;
+        final dDate = DateTime(d.year, d.month, d.day); // strip time
+        if (_dateFrom != null) {
+          final from = DateTime(_dateFrom!.year, _dateFrom!.month, _dateFrom!.day);
+          if (dDate.isBefore(from)) return false;
+        }
+        if (_dateTo != null) {
+          final to = DateTime(_dateTo!.year, _dateTo!.month, _dateTo!.day);
+          if (dDate.isAfter(to)) return false;
+        }
+        return true;
+      }).toList();
+    }
+
+    return base;
   }
 
-  Widget _filtersBar(){
-  final options=['All','Pending','Approved','Rejected','Completed','Booked','Amount Set','Pre Paid','Cancelled']; // 'Expired' removed
-  return Wrap(
-    spacing:8,
-    runSpacing:8,
-    children: options.map((o) => ChoiceChip(
-      label: Text(o),
-      selected: _statusFilter==o,
-      onSelected: (selected) {
-        if(selected) setState(() { _statusFilter = o; });
-      },
-    )).toList(),
-  );
+  Widget _filtersBar() {
+    final options = ['All','Pending','Approved','Rejected','Completed','Booked','Amount Set','Pre Paid','Cancelled'];
+    final hasDate   = _dateFrom != null && _dateTo != null;
+    final hasFilter = _statusFilter != 'All' || hasDate || _searchActive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            ...options.map((o) => ChoiceChip(
+              label: Text(o, style: const TextStyle(fontSize: 12)),
+              selected: _statusFilter == o,
+              onSelected: (s) { if (s) setState(() { _statusFilter = o; }); },
+            )),
+            // Date range filter chip
+            FilterChip(
+              avatar: Icon(Icons.calendar_month_outlined, size: 14,
+                  color: hasDate ? const Color(0xFF2260FF) : Colors.grey.shade600),
+              label: Text(
+                hasDate
+                    ? '${DateFormat('dd MMM').format(_dateFrom!)} – ${DateFormat('dd MMM yy').format(_dateTo!)}'
+                    : 'Date',
+                style: TextStyle(fontSize: 12,
+                    color: hasDate ? const Color(0xFF2260FF) : Colors.black87),
+              ),
+              selected: hasDate,
+              selectedColor: const Color(0xFF2260FF).withOpacity(0.12),
+              checkmarkColor: const Color(0xFF2260FF),
+              onSelected: (_) => _showDateFilterDialog(),
+            ),
+            // Reset All — only visible when any filter is active
+            if (hasFilter)
+              ActionChip(
+                avatar: Icon(Icons.refresh_rounded, size: 14, color: Colors.red.shade700),
+                label: Text('Reset', style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+                backgroundColor: Colors.red.withOpacity(0.08),
+                side: BorderSide(color: Colors.red.withOpacity(0.3)),
+                onPressed: () {
+                  _searchDebounce?.cancel();
+                  _searchCtrl.clear();
+                  setState(() {
+                    _statusFilter = 'All';
+                    _dateFrom = null;
+                    _dateTo = null;
+                    _searchActive = false;
+                    _searchResults = [];
+                    _searchLoading = false;
+                    _searchError = null;
+                    _selectedIds.clear();
+                    _isSelectionMode = false;
+                  });
+                },
+              ),
+          ],
+        ),
+        if (hasDate) ...[
+          const SizedBox(height: 4),
+          Row(children: [
+            Icon(Icons.info_outline, size: 12, color: Colors.grey.shade500),
+            const SizedBox(width: 4),
+            Flexible(child: Text(
+              'Date: ${DateFormat('dd MMM yyyy').format(_dateFrom!)} → ${DateFormat('dd MMM yyyy').format(_dateTo!)}',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            )),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => setState(() { _dateFrom = null; _dateTo = null; }),
+              child: Icon(Icons.close, size: 13, color: Colors.grey.shade500),
+            ),
+          ]),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _showDateFilterDialog() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: (_dateFrom != null && _dateTo != null)
+          ? DateTimeRange(start: _dateFrom!, end: _dateTo!)
+          : null,
+      helpText: 'Filter by application date',
+      saveText: 'Apply',
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF2260FF), onPrimary: Colors.white, surface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (range != null && mounted) {
+      setState(() { _dateFrom = range.start; _dateTo = range.end; });
+    }
+  }
+
+  // ── Professional responsive search bar ──
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: _onSearchChanged,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Search by name, email, phone, Appt ID or HS-ID…',
+          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          prefixIcon: _searchLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF2260FF),
+                    ),
+                  ),
+                )
+              : const Icon(Icons.search_rounded, color: Color(0xFF2260FF), size: 22),
+          suffixIcon: _searchActive
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  color: Colors.grey.shade600,
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchDebounce?.cancel();
+                    _searchCtrl.clear();
+                    // Explicitly reset state immediately — don't rely solely on
+                    // onChanged firing (unreliable on Flutter Web for .clear())
+                    setState(() {
+                      _searchActive = false;
+                      _searchResults = [];
+                      _searchLoading = false;
+                      _searchError = null;
+                      _selectedIds.clear();
+                      _isSelectionMode = false;
+                    });
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade300, width: 1.2),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        ),
+      ),
+    );
   }
 
 
-  Widget _kv(String k, String v){
-    return Padding(padding: const EdgeInsets.only(bottom:6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children:[ SizedBox(width:140, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w600))), Expanded(child: Text(v)) ]));
-  }
 
   // Helper function to safely truncate payment ID
   String _truncatePaymentId(dynamic paymentId) {

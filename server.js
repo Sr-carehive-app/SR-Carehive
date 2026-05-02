@@ -314,6 +314,10 @@ const SENDER_NAME = (process.env.SENDER_NAME || '').trim();
 // Admin/healthcare provider emails that receive all notifications
 const ADMIN_EMAILS = ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'];
 
+// Nurse-specific admin emails for provider feedback notifications
+const NURSE_ADMIN_EMAIL = (process.env.NURSE_ADMIN_EMAIL || '').trim();
+const NURSE_EXECUTIVE_EMAIL = (process.env.NURSE_EXECUTIVE_EMAIL || '').trim();
+
 // Frontend URL for email links (used when users don't have app installed)
 const FRONTEND_URL = (process.env.FRONTEND_URL || '${FRONTEND_URL}').trim();
 
@@ -814,6 +818,7 @@ async function sendPaymentEmails({ appointment, orderId, paymentId, amount }) {
         <p>Hi ${appointment?.full_name || 'Healthcare seeker'},</p>
         <p>We received your payment and scheduled request. Your appointment is now pending assignment.</p>
         <ul>
+          <li><b>Appointment ID:</b> #${appointment?.id || '-'}</li>
           <li><b>Order ID:</b> ${orderId}</li>
           <li><b>Payment ID:</b> ${paymentId}</li>
           <li><b>Amount:</b> ₹${amountRupees ?? '-'}</li>
@@ -865,6 +870,10 @@ async function sendApprovalEmail(appointment) {
           <li><b>Available:</b> ${appointment.nurse_available ? 'Yes' : 'No'}</li>
         </ul>
         <p><b>Appointment</b>: ${appointment.date || '-'} ${appointment.time || ''} •</p>
+        <div style="background: #f0f4ff; padding: 12px 15px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #2260FF;">
+          <p style="margin: 4px 0;"><strong>Appointment ID:</strong> #${appointment.id}</p>
+          ${appointment.patient_id ? `<p style="margin: 4px 0;"><strong>Healthcare Seeker ID:</strong> ${appointment.patient_id}</p>` : ''}
+        </div>
         <hr>
         <p style="color: #2260FF; font-weight: bold;">Next Step: Please pay your registration fee of ₹10 to confirm your booking.</p>
         <p>You can pay and view your appointment in the app by clicking the button below:</p>
@@ -900,6 +909,10 @@ async function sendRejectionEmail(appointment) {
         <p>Hi ${appointment.full_name || 'Healthcare seeker'},</p>
         <p>We’re sorry to inform you that your healthcare provider request was <b>rejected</b> at this time.</p>
         <p><b>Reason:</b> ${appointment.rejection_reason || '-'}</p>
+        <div style="background: #f5f5f5; padding: 12px 15px; border-radius: 8px; margin: 12px 0;">
+          <p style="margin: 4px 0;"><strong>Appointment ID:</strong> #${appointment.id}</p>
+          ${appointment.patient_id ? `<p style="margin: 4px 0;"><strong>Healthcare Seeker ID:</strong> ${appointment.patient_id}</p>` : ''}
+        </div>
         <p>— Serechi</p>
       </div>`;
     await sendEmail({ to, subject: 'Your healthcare provider appointment was rejected', html, attachments });
@@ -969,6 +982,10 @@ async function sendAdminNotification({ appointment, type, paymentDetails = null 
               <tr>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Aadhar Number:</strong></td>
                 <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.aadhar_number || '-'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;"><strong>Healthcare Seeker ID:</strong></td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #ddd;">${appointment?.patient_id || '-'}</td>
               </tr>
             </table>
           </div>
@@ -2134,6 +2151,104 @@ app.get('/api/nurse/appointments', async (req, res) => {
     
     res.json({ items: data });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Search appointments by name / phone / HS-ID / appointment-id. Protected.
+// MUST be defined BEFORE /:id/approve so Express does not treat "search" as an :id param.
+// ?q=<query> — searches full_name, phone, patient_id (parallel ilike) + exact UUID eq on id.
+// NOTE: Supabase JS .or() uses PostgREST raw syntax (wildcard = *), but .ilike() uses %
+//       correctly internally. We use parallel .ilike() calls to avoid this mismatch.
+app.get('/api/nurse/appointments/search', async (req, res) => {
+  try {
+    if (!(await isAuthed(req))) return res.status(401).json({ error: 'Unauthorized' });
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+
+    const q = (req.query.q || '').toString().trim();
+    if (!q || q.length < 1) return res.json({ items: [] });
+
+    // Sanitize: remove commas (PostgREST filter-breaking chars); keep % _ as literals
+    const safeQ = q.replace(/,/g, '');
+    const pattern = `%${safeQ}%`; // standard LIKE/ILIKE wildcard for .ilike() method
+
+    // ── Run 3 text-field searches in parallel ──────────────────────────────
+    // Each uses .ilike() which correctly handles % wildcards internally.
+    // (Do NOT use .or() for ilike — Supabase JS .or() needs PostgREST `*` wildcard,
+    //  but .ilike() handles the % ↔ * conversion automatically and reliably.)
+    const [nameRes, phoneRes, hsidRes] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('*')
+        .ilike('full_name', pattern)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      supabase
+        .from('appointments')
+        .select('*')
+        .ilike('phone', pattern)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      supabase
+        .from('appointments')
+        .select('*')
+        .ilike('patient_id', pattern)
+        .order('created_at', { ascending: false })
+        .limit(500),
+    ]);
+
+    // Check for errors in any parallel query
+    const firstError = nameRes.error || phoneRes.error || hsidRes.error;
+    if (firstError) {
+      const isNetworkErr = firstError.message && (
+        firstError.message.includes('fetch failed') ||
+        firstError.message.includes('ECONNREFUSED') ||
+        firstError.message.includes('ENOTFOUND')
+      );
+      if (isNetworkErr) {
+        return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again later.' });
+      }
+      return res.status(500).json({ error: firstError.message });
+    }
+
+    // ── Pass 2: appointment UUID exact-match ───────────────────────────────
+    // id is UUID type — cannot use ilike. Only attempt when query is a full UUID.
+    let uuidData = [];
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(q)) {
+      const { data } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('id', q.toLowerCase())
+        .limit(1);
+      uuidData = data || [];
+    }
+
+    // ── Merge all results, deduplicate by id ───────────────────────────────
+    const seen = new Set();
+    const merged = [];
+    const allRows = [
+      ...(nameRes.data || []),
+      ...(phoneRes.data || []),
+      ...(hsidRes.data || []),
+      ...uuidData,
+    ];
+    for (const row of allRows) {
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        merged.push(row);
+      }
+    }
+
+    // Sort merged by created_at desc (parallel queries may interleave order)
+    merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // ── Apply nurse_visible filter (same rule as list endpoint) ────────────
+    const data = merged.filter(item => item.nurse_visible !== false);
+
+    res.json({ items: data });
+  } catch (e) {
+    console.error('[SEARCH] Unexpected error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -4425,9 +4540,11 @@ app.post('/api/notify-pre-payment', async (req, res) => {
             <h4 style="margin-top: 0; color: #155724;">You're All Set!</h4>
             <p style="color: #155724; margin: 10px 0;">Your appointment is confirmed. Our healthcare provider will visit you as scheduled.</p>
             <div style="background: white; padding: 15px; border-radius: 6px; margin-top: 15px;">
+              <p style="margin: 5px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
               <p style="margin: 5px 0;"><strong>Date:</strong> ${date || 'To be confirmed'}</p>
               <p style="margin: 5px 0;"><strong>Time:</strong> ${time || 'To be confirmed'}</p>
               ${nurseName ? `<p style="margin: 5px 0;"><strong>Healthcare Provider:</strong> ${nurseName}</p>` : ''}
+              ${fullAppointment?.patient_id ? `<p style="margin: 5px 0;"><strong>Healthcare Seeker ID:</strong> ${fullAppointment.patient_id}</p>` : ''}
             </div>
           </div>
 
@@ -4643,6 +4760,7 @@ app.post('/api/notify-final-payment', async (req, res) => {
         <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Appointment ID:</strong> #${appointmentId}</p>
           <p><strong>Healthcare seeker:</strong> ${patientName || 'N/A'}</p>
+          ${fullAppointment?.patient_id ? `<p><strong>Healthcare Seeker ID:</strong> ${fullAppointment.patient_id}</p>` : ''}
           <p><strong>Final Payment:</strong> ₹${amount}</p>
           <p><strong>Total Paid:</strong> ₹${totalPaid || (10 + amount * 2)}</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
@@ -4782,6 +4900,10 @@ app.post('/api/notify-visit-completed', async (req, res) => {
             ` : ''}
           </div>
 
+          <div style="background: #f5f5f5; padding: 12px 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 4px 0;"><strong>Appointment ID:</strong> #${appointmentId}</p>
+            ${fullAppointment?.patient_id ? `<p style="margin: 4px 0;"><strong>Healthcare Seeker ID:</strong> ${fullAppointment.patient_id}</p>` : ''}
+          </div>
           <div style="background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ff9800;">
             <h4 style="margin-top: 0; color: #e65100;">Final Payment Now Available</h4>
             <p style="color: #e65100; margin: 10px 0;">
@@ -4964,6 +5086,224 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
   } catch (e) {
     console.error('[ERROR] notify-feedback-submitted:', e);
     res.status(500).json({ error: 'Failed to send notifications', details: e.message });
+  }
+});
+
+// ============================================================================
+// HEALTHCARE PROVIDER (NURSE) FEEDBACK EMAIL NOTIFICATION
+// ============================================================================
+// Called after patient submits "Rate Your Healthcare Provider" feedback.
+// Sends emails to:
+//   1. Patient — thank-you confirmation
+//   2. NURSE_ADMIN_EMAIL  — full feedback details
+//   3. NURSE_EXECUTIVE_EMAIL — full feedback details
+
+app.post('/api/notify-provider-feedback-submitted', async (req, res) => {
+  try {
+    const {
+      appointmentId,
+      patientEmail,
+      patientName,
+      nurseName,
+      // Star ratings
+      overallRating,
+      serviceBehaviorRating,
+      technicalSkillRating,
+      punctualityRating,
+      hygieneCleanlinessRating,
+      communicationRating,
+      // Yes/No
+      facedAnyProblem,
+      wouldRecommendProvider,
+      providerWasProfessional,
+      // Text
+      problemDescription,
+      additionalFeedback,
+    } = req.body;
+
+    if (!appointmentId || !patientEmail) {
+      return res.status(400).json({ error: 'Missing required fields: appointmentId and patientEmail' });
+    }
+
+    console.log(`[INFO] Sending provider-feedback emails for appointment #${appointmentId}`);
+
+    // ── Helper: render star string ─────────────────────────────
+    const stars = (n) => n ? '⭐'.repeat(Math.min(5, Math.max(1, n))) + ` (${n}/5)` : 'Not rated';
+    const yesNo = (v) => (v === true ? '✅ Yes' : v === false ? '❌ No' : 'Not answered');
+
+    // ── 1. Patient thank-you email ────────────────────────────
+    const patientHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1A4FCC 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <div style="font-size: 48px; margin-bottom: 10px;">👩‍⚕️</div>
+          <h1 style="color: white; margin: 0; font-size: 26px;">Thank You for Rating Your Healthcare Provider!</h1>
+        </div>
+        <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333;">Dear <strong>${escapeHtml(patientName) || 'Valued Patient'}</strong>,</p>
+          <p style="color: #555; line-height: 1.6;">
+            Thank you for taking the time to rate your healthcare provider <strong>${escapeHtml(nurseName) || 'your nurse'}</strong>. 
+            Your feedback helps us maintain the highest quality of care.
+          </p>
+
+          <div style="background: #EFF3FF; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2260FF;">
+            <h3 style="margin-top: 0; color: #2260FF;">Your Ratings Summary</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr style="background: #f8f9ff;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Overall Rating</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(overallRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Behavior &amp; Attitude</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(serviceBehaviorRating)}</td>
+              </tr>
+              <tr style="background: #f8f9ff;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Technical Skill</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(technicalSkillRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Punctuality</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(punctualityRating)}</td>
+              </tr>
+              <tr style="background: #f8f9ff;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Hygiene &amp; Cleanliness</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(hygieneCleanlinessRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Communication</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(communicationRating)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+            <p style="margin: 4px 0;"><strong>Faced any problem during visit?</strong> ${yesNo(facedAnyProblem)}</p>
+            <p style="margin: 4px 0;"><strong>Would recommend this provider?</strong> ${yesNo(wouldRecommendProvider)}</p>
+            <p style="margin: 4px 0;"><strong>Provider was professional?</strong> ${yesNo(providerWasProfessional)}</p>
+            ${problemDescription ? `<p style="margin: 8px 0;"><strong>Problem described:</strong> ${escapeHtml(problemDescription)}</p>` : ''}
+            ${additionalFeedback ? `<p style="margin: 8px 0;"><strong>Additional feedback:</strong> ${escapeHtml(additionalFeedback)}</p>` : ''}
+          </div>
+
+          <div style="background: #e8f5e9; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4caf50;">
+            <p style="color: #2e7d32; margin: 0; line-height: 1.6;">
+              Your honest feedback ensures that SR CareHive continues to deliver exceptional healthcare services. 
+              We are committed to acting on your feedback and improving continuously.
+            </p>
+          </div>
+
+          <p style="font-size: 13px; color: #999; margin-top: 20px; border-top: 1px solid #eee; padding-top: 16px; text-align: center;">
+            Appointment ID: ${escapeHtml(appointmentId)}<br/>
+            Serechi | srcarehive@gmail.com | Thank you for choosing us!
+          </p>
+        </div>
+      </div>
+    `;
+
+    // ── 2. Admin / Executive full details email ───────────────
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #2260FF 0%, #1A4FCC 100%); padding: 24px; border-radius: 10px 10px 0 0; text-align: center;">
+          <div style="font-size: 40px; margin-bottom: 8px;">👩‍⚕️⭐</div>
+          <h2 style="color: white; margin: 0; font-size: 22px;">New Healthcare Provider Feedback Received</h2>
+        </div>
+        <div style="background: white; padding: 28px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+          <!-- Overview -->
+          <div style="background: #EFF3FF; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2260FF;">
+            <h3 style="margin-top: 0; color: #2260FF; font-size: 16px;">📋 Appointment Overview</h3>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Appointment ID:</strong> ${escapeHtml(appointmentId)}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Patient Name:</strong> ${escapeHtml(patientName) || '—'}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Patient Email:</strong> ${escapeHtml(patientEmail) || '—'}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Healthcare Provider (Nurse):</strong> ${escapeHtml(nurseName) || '—'}</p>
+          </div>
+
+          <!-- Star Ratings -->
+          <div style="background: #fff8e1; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffa726;">
+            <h3 style="margin-top: 0; color: #e65100; font-size: 16px;">⭐ Star Ratings</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr style="background: #fff3cd;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333; width: 55%;">Overall Rating</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(overallRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Behavior &amp; Attitude</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(serviceBehaviorRating)}</td>
+              </tr>
+              <tr style="background: #fff3cd;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Technical / Medical Skill</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(technicalSkillRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Punctuality</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(punctualityRating)}</td>
+              </tr>
+              <tr style="background: #fff3cd;">
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Hygiene &amp; Cleanliness</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(hygieneCleanlinessRating)}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 10px; font-weight: bold; color: #333;">Communication</td>
+                <td style="padding: 8px 10px; color: #555;">${stars(communicationRating)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Yes/No Questions -->
+          <div style="background: #f1f8e9; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #66bb6a;">
+            <h3 style="margin-top: 0; color: #2e7d32; font-size: 16px;">✅ Yes / No Questions</h3>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Did patient face any problem during home visit?</strong><br/>&nbsp;&nbsp;→ ${yesNo(facedAnyProblem)}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Would patient recommend this provider to others?</strong><br/>&nbsp;&nbsp;→ ${yesNo(wouldRecommendProvider)}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Was the provider professional?</strong><br/>&nbsp;&nbsp;→ ${yesNo(providerWasProfessional)}</p>
+          </div>
+
+          <!-- Text Feedback -->
+          <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #9e9e9e;">
+            <h3 style="margin-top: 0; color: #424242; font-size: 16px;">📝 Written Feedback</h3>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Problem Description:</strong><br/>&nbsp;&nbsp;${problemDescription ? escapeHtml(problemDescription) : '<em style="color:#aaa">Not provided</em>'}</p>
+            <p style="margin: 6px 0; font-size: 14px;"><strong>Additional Feedback:</strong><br/>&nbsp;&nbsp;${additionalFeedback ? escapeHtml(additionalFeedback) : '<em style="color:#aaa">Not provided</em>'}</p>
+          </div>
+
+          <p style="font-size: 12px; color: #bbb; margin-top: 20px; border-top: 1px solid #eee; padding-top: 14px; text-align: center;">
+            This is an automated notification from SR CareHive | Serechi<br/>
+            Please do not reply to this email.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // ── Send all three emails ─────────────────────────────────
+    // 1. Patient thank-you
+    await sendEmail({
+      to: patientEmail,
+      subject: `Thank You for Rating Your Healthcare Provider — Appointment #${appointmentId}`,
+      html: patientHtml,
+    });
+
+    // 2. Nurse Admin (only if env var is configured)
+    if (NURSE_ADMIN_EMAIL) {
+      await sendEmail({
+        to: NURSE_ADMIN_EMAIL,
+        subject: `[Provider Feedback] New Rating Received — Appointment #${appointmentId}`,
+        html: adminHtml,
+      });
+    } else {
+      console.warn('[WARN] NURSE_ADMIN_EMAIL not configured — skipping admin notification');
+    }
+
+    // 3. Nurse Executive (only if different from admin and configured)
+    if (NURSE_EXECUTIVE_EMAIL && NURSE_EXECUTIVE_EMAIL !== NURSE_ADMIN_EMAIL) {
+      await sendEmail({
+        to: NURSE_EXECUTIVE_EMAIL,
+        subject: `[Provider Feedback] New Rating Received — Appointment #${appointmentId}`,
+        html: adminHtml,
+      });
+    }
+
+    console.log(`[SUCCESS] Provider feedback emails sent for appointment #${appointmentId}`);
+    res.json({ success: true, message: 'Provider feedback notifications sent successfully' });
+
+  } catch (e) {
+    console.error('[ERROR] notify-provider-feedback-submitted:', e);
+    res.status(500).json({ error: 'Failed to send provider feedback notifications', details: e.message });
   }
 });
 

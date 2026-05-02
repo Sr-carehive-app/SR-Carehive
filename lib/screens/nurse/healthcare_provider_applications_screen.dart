@@ -1,7 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'package:care12/screens/nurse/healthcare_provider_detail_screen.dart';
 import 'package:care12/services/nurse_api_service.dart';
 import 'package:care12/config/api_config.dart';
@@ -24,10 +26,29 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
   final Set<String> _selectedIds = {};
   bool _isSelectionMode = false;
 
+  // ── Real-time search state ──
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchActive = false;
+  bool _searchLoading = false;
+  String? _searchError;
+
+  // ── Date range filter ──
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+
   @override
   void initState() {
     super.initState();
     _loadApplications();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadApplications() async {
@@ -43,9 +64,9 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
         return;
       }
 
-      final uri = Uri.parse('${ApiConfig.baseUrl}/api/admin/providers').replace(
-        queryParameters: _selectedFilter != 'all' ? {'status': _selectedFilter} : null,
-      );
+      // Always fetch ALL records — status/date filtering is done client-side
+      // so search + status + date can all work simultaneously on the full dataset.
+      final uri = Uri.parse('${ApiConfig.baseUrl}/api/admin/providers');
 
       final response = await http.get(
         uri,
@@ -64,11 +85,15 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
           setState(() {
             _applications = List<Map<String, dynamic>>.from(providers);
             _isLoading = false;
-            // Clear selection whenever data is replaced — selected IDs from the
-            // previous data set are no longer guaranteed to exist in the new set.
+            // Clear selection whenever data is replaced.
             _selectedIds.clear();
             _isSelectionMode = false;
           });
+          // If a search was active, re-run it on the freshly loaded data
+          // so _searchResults never holds stale results.
+          if (_searchActive && _searchCtrl.text.trim().isNotEmpty) {
+            _runSearch(_searchCtrl.text.trim());
+          }
         }
       } else {
         final serverMsg = (data['error'] ?? 'Failed to load applications. Please try again.').toString();
@@ -107,6 +132,144 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
     }
   }
 
+  // ── Live search: client-side on already-loaded data (debounced 300ms) ──
+  void _onSearchChanged(String val) {
+    _searchDebounce?.cancel();
+    final q = val.trim();
+    if (q.isEmpty) {
+      setState(() {
+        _searchActive = false;
+        _searchResults = [];
+        _searchLoading = false;
+        _searchError = null;
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      });
+      return;
+    }
+    setState(() { _searchActive = true; _searchLoading = true; _searchError = null; });
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _runSearch(q));
+  }
+
+  // Client-side search across all loaded records — avoids UUID cast errors
+  // from Supabase direct queries and works instantly with existing data.
+  void _runSearch(String q) {
+    if (!mounted) return;
+    try {
+      final lower = q.toLowerCase();
+
+      // Search across: name, email, phone, city, role, full provider ID, status
+      final matched = _applications.where((row) {
+        bool contains(String? val) =>
+            val != null && val.toLowerCase().contains(lower);
+        return contains(row['full_name']?.toString())
+            || contains(row['email']?.toString())
+            || contains(row['mobile_number']?.toString())
+            || contains(row['city']?.toString())
+            || contains(row['professional_role']?.toString())
+            || contains(row['id']?.toString())       // UUID partial/full match
+            || contains(row['application_status']?.toString());
+      }).toList();
+
+      // Maintain created_at desc order
+      matched.sort((a, b) {
+        final ad = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(0);
+        final bd = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(0);
+        return bd.compareTo(ad);
+      });
+
+      if (!mounted) return;
+      setState(() { _searchResults = matched; _searchLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _searchLoading = false; _searchError = e.toString().replaceFirst('Exception: ', ''); });
+    }
+  }
+
+  // Unified list: search/full base → status filter → date filter
+  List<Map<String, dynamic>> _getDisplayList() {
+    List<Map<String, dynamic>> base = _searchActive ? _searchResults : _applications;
+    if (_selectedFilter != 'all') {
+      base = base.where((e) => (e['application_status'] ?? '').toString().toLowerCase() == _selectedFilter).toList();
+    }
+    if (_dateFrom != null || _dateTo != null) {
+      base = base.where((e) {
+        final raw = e['created_at']?.toString();
+        if (raw == null || raw.isEmpty) return false;
+        final d = DateTime.tryParse(raw)?.toLocal();
+        if (d == null) return false;
+        final dDate = DateTime(d.year, d.month, d.day);
+        if (_dateFrom != null && dDate.isBefore(DateTime(_dateFrom!.year, _dateFrom!.month, _dateFrom!.day))) return false;
+        if (_dateTo != null && dDate.isAfter(DateTime(_dateTo!.year, _dateTo!.month, _dateTo!.day))) return false;
+        return true;
+      }).toList();
+    }
+    return base;
+  }
+
+  Future<void> _showDateFilterDialog() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: (_dateFrom != null && _dateTo != null) ? DateTimeRange(start: _dateFrom!, end: _dateTo!) : null,
+      helpText: 'Filter by application date',
+      saveText: 'Apply',
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFF2260FF), onPrimary: Colors.white, surface: Colors.white),
+        ),
+        child: child!,
+      ),
+    );
+    if (range != null && mounted) setState(() { _dateFrom = range.start; _dateTo = range.end; });
+  }
+
+  // ── Search bar widget ──
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: _onSearchChanged,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Search by name, phone, email or provider ID…',
+          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+          prefixIcon: _searchLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2260FF))),
+                )
+              : const Icon(Icons.search_rounded, color: Color(0xFF2260FF), size: 22),
+          suffixIcon: _searchActive
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  color: Colors.grey.shade600,
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchDebounce?.cancel();
+                    _searchCtrl.clear();
+                    setState(() {
+                      _searchActive = false; _searchResults = [];
+                      _searchLoading = false; _searchError = null;
+                      _selectedIds.clear(); _isSelectionMode = false;
+                    });
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300, width: 1.2)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF2260FF), width: 2)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        ),
+      ),
+    );
+  }
+
   void _toggleSelection(String id) {
     setState(() {
       if (_selectedIds.contains(id)) {
@@ -121,7 +284,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
   void _selectAll() {
     setState(() {
       _selectedIds.clear();
-      for (final app in _applications) {
+      for (final app in _getDisplayList()) {
         final id = app['id']?.toString();
         if (id != null) _selectedIds.add(id);
       }
@@ -137,7 +300,7 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
   }
 
   List<Map<String, dynamic>> get _selectedApplications {
-    return _applications.where((a) => _selectedIds.contains(a['id']?.toString())).toList();
+    return _getDisplayList().where((a) => _selectedIds.contains(a['id']?.toString())).toList();
   }
 
   Color _getStatusColor(String status) {
@@ -228,7 +391,8 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
               padding: const EdgeInsets.only(left: 6, top: 8, bottom: 8),
               child: OutlinedButton.icon(
                 onPressed: () {
-                  final toExport = _isSelectionMode ? _selectedApplications : _applications;
+                  final displayList = _getDisplayList();
+                  final toExport = _isSelectionMode ? _selectedApplications : displayList;
                   if (toExport.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('No applications selected to export')),
@@ -285,126 +449,207 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
           ),
         ),
       ),
-      body: Column(
-        children: [
-          // Filter Section
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('All', 'all'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Pending', 'pending'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Approved', 'approved'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Rejected', 'rejected'),
-                ],
-              ),
-            ),
-          ),
-
-          // Selection info bar
-          if (_isSelectionMode)
-            Container(
-              color: const Color(0xFF2260FF).withOpacity(0.08),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Checkbox(
-                    tristate: true,
-                    value: _selectedIds.length == _applications.length
-                        ? true
-                        : _selectedIds.isEmpty
-                            ? false
-                            : null,
-                    onChanged: (_) {
-                      if (_selectedIds.length == _applications.length) {
-                        _deselectAll();
-                      } else {
-                        _selectAll();
-                      }
-                    },
-                    activeColor: const Color(0xFF2260FF),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      '${_selectedIds.length} of ${_applications.length} selected',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2260FF),
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _selectedIds.length == _applications.length
-                        ? _deselectAll
-                        : _selectAll,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    ),
-                    child: Text(
-                      _selectedIds.length == _applications.length
-                          ? 'Deselect All'
-                          : 'Select All',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF2260FF),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Applications List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _applications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+      body: Builder(builder: (context) {
+          final displayList = _getDisplayList();
+          final anyFilterActive = _searchActive || _selectedFilter != 'all' || _dateFrom != null;
+          final hasDate = _dateFrom != null && _dateTo != null;
+          final hasFilter = _selectedFilter != 'all' || hasDate || _searchActive;
+          return Column(
+            children: [
+              // ── White header: search bar + filter chips ──
+              Container(
+                color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Search bar
+                    _buildSearchBar(),
+                    const SizedBox(height: 8),
+                    // Filter chips row
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
                           children: [
-                            FaIcon(
-                              FontAwesomeIcons.inbox,
-                              size: 72,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No applications found',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                            _buildFilterChip('All', 'all'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Pending', 'pending'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Approved', 'approved'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Rejected', 'rejected'),
+                            const SizedBox(width: 8),
+                            // Date range filter chip (right of Rejected)
+                            FilterChip(
+                              avatar: Icon(Icons.calendar_month_outlined, size: 14,
+                                  color: hasDate ? const Color(0xFF2260FF) : Colors.grey.shade600),
+                              label: Text(
+                                hasDate
+                                    ? '${DateFormat('dd MMM').format(_dateFrom!)} – ${DateFormat('dd MMM yy').format(_dateTo!)}'
+                                    : 'Date',
+                                style: TextStyle(fontSize: 12,
+                                    color: hasDate ? const Color(0xFF2260FF) : Colors.black87),
                               ),
+                              selected: hasDate,
+                              selectedColor: const Color(0xFF2260FF).withOpacity(0.12),
+                              checkmarkColor: const Color(0xFF2260FF),
+                              onSelected: (_) => _showDateFilterDialog(),
                             ),
+                            // Reset chip
+                            if (hasFilter) ...[
+                              const SizedBox(width: 8),
+                              ActionChip(
+                                avatar: Icon(Icons.refresh_rounded, size: 14, color: Colors.red.shade700),
+                                label: Text('Reset', style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+                                backgroundColor: Colors.red.withOpacity(0.08),
+                                side: BorderSide(color: Colors.red.withOpacity(0.3)),
+                                onPressed: () {
+                                  _searchDebounce?.cancel();
+                                  _searchCtrl.clear();
+                                  setState(() {
+                                    _selectedFilter = 'all';
+                                    _dateFrom = null;
+                                    _dateTo = null;
+                                    _searchActive = false;
+                                    _searchResults = [];
+                                    _searchLoading = false;
+                                    _searchError = null;
+                                    _selectedIds.clear();
+                                    _isSelectionMode = false;
+                                  });
+                                  // Re-fetch all from backend — _applications may only
+                                  // hold a status-filtered subset before reset.
+                                  _loadApplications();
+                                },
+                              ),
+                            ],
                           ],
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadApplications,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _applications.length,
-                          itemBuilder: (context, index) {
-                            final application = _applications[index];
-                            return _buildApplicationCard(application);
-                          },
+                      ),
+                    ),
+                    // Active date range label
+                    if (hasDate)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Row(children: [
+                          Icon(Icons.info_outline, size: 12, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Flexible(child: Text(
+                            'Date: ${DateFormat('dd MMM yyyy').format(_dateFrom!)} → ${DateFormat('dd MMM yyyy').format(_dateTo!)}',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          )),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => setState(() { _dateFrom = null; _dateTo = null; }),
+                            child: Icon(Icons.close, size: 13, color: Colors.grey.shade500),
+                          ),
+                        ]),
+                      ),
+                    // Results count
+                    if (anyFilterActive)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                        child: Row(children: [
+                          const Icon(Icons.bolt_rounded, color: Color(0xFF2260FF), size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            _searchLoading ? 'Searching…' : '${displayList.length} result${displayList.length == 1 ? '' : 's'} found',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF2260FF), fontWeight: FontWeight.w500),
+                          ),
+                        ]),
+                      ),
+                    if (_searchError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                        child: Text(_searchError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                      ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+
+              // Selection info bar
+              if (_isSelectionMode)
+                Container(
+                  color: const Color(0xFF2260FF).withOpacity(0.08),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        tristate: true,
+                        value: _selectedIds.length == displayList.length
+                            ? true
+                            : _selectedIds.isEmpty ? false : null,
+                        onChanged: (_) {
+                          if (_selectedIds.length == displayList.length) { _deselectAll(); } else { _selectAll(); }
+                        },
+                        activeColor: const Color(0xFF2260FF),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${_selectedIds.length} of ${displayList.length} selected',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF2260FF)),
                         ),
                       ),
-          ),
-        ],
-      ),
+                      TextButton(
+                        onPressed: _selectedIds.length == displayList.length ? _deselectAll : _selectAll,
+                        style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                        child: Text(
+                          _selectedIds.length == displayList.length ? 'Deselect All' : 'Select All',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF2260FF), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Applications List
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _searchLoading
+                        ? const Center(child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(color: Color(0xFF2260FF)),
+                              SizedBox(height: 12),
+                              Text('Searching…', style: TextStyle(color: Color(0xFF2260FF))),
+                            ],
+                          ))
+                        : displayList.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    FaIcon(FontAwesomeIcons.inbox, size: 72, color: Colors.grey[400]),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _searchActive
+                                          ? 'No results for "${_searchCtrl.text.trim()}"'
+                                          : 'No applications found',
+                                      style: TextStyle(fontSize: 16, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _loadApplications,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: displayList.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildApplicationCard(displayList[index]);
+                                  },
+                                ),
+                              ),
+              ),
+            ],
+          );
+        }),
     );
   }
 
@@ -414,14 +659,13 @@ class _HealthcareProviderApplicationsScreenState extends State<HealthcareProvide
       label: Text(label),
       selected: isSelected,
       onSelected: (selected) {
+        // Status filter is applied client-side in _getDisplayList — no need
+        // to reload from backend. This keeps search results in sync.
         setState(() {
           _selectedFilter = value;
-          // Clear selection when filter changes — stale IDs from the previous
-          // filter must not bleed into the new result set.
           _selectedIds.clear();
           _isSelectionMode = false;
         });
-        _loadApplications();
       },
       selectedColor: const Color(0xFF2260FF),
       labelStyle: TextStyle(

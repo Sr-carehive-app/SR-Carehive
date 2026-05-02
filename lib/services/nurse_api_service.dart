@@ -287,6 +287,37 @@ class NurseApiService {
     throw Exception('Failed to load appointments: ${resp.statusCode} ${resp.body}');
   }
 
+  // Search appointments from DB by name, phone, appointment-id or HS-ID.
+  // Returns same shape as listAppointments(). Query is 1+ chars; empty returns [].
+  static Future<List<Map<String, dynamic>>> searchAppointments(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return [];
+    final uri = Uri.parse('$_base/api/nurse/appointments/search')
+        .replace(queryParameters: {'q': q});
+    final resp = await http.get(uri, headers: _authHeaders());
+    if (resp.statusCode == 200) {
+      final json = jsonDecode(resp.body) as Map<String, dynamic>;
+      return (json['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    }
+    if (resp.statusCode == 401 || resp.statusCode == 403) {
+      throw Exception('401: Unauthorized');
+    }
+    if (resp.statusCode == 503) {
+      throw Exception('Database is temporarily unavailable. Please try again later.');
+    }
+    if (resp.statusCode == 500) {
+      final body = resp.body.isNotEmpty
+          ? (jsonDecode(resp.body) as Map<String, dynamic>)
+          : <String, dynamic>{};
+      final errMsg = (body['error'] ?? '').toString();
+      if (errMsg.contains('fetch failed') || errMsg.contains('unavailable')) {
+        throw Exception('Database is temporarily unavailable. Please try again later.');
+      }
+      throw Exception('Server error. Please try again later.');
+    }
+    throw Exception('Search failed: ${resp.statusCode} ${resp.body}');
+  }
+
   // Fetch archived (past) appointments from history table.
   // Optional status filter: 'pending' | 'approved' | 'rejected'
   static Future<List<Map<String, dynamic>>> listHistory({String? status}) async {
