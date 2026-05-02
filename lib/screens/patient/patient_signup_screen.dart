@@ -750,6 +750,36 @@ class _PatientSignUpScreenState extends State<PatientSignUpScreen> with SingleTi
             return;
           }
           
+          // ✅ FIX: Check if phone number is already registered in patients table
+          // (OAuth users bypass normal OTP flow so we must validate phone uniqueness manually)
+          final phoneToCheck = aadharLinkedPhoneController.text.trim();
+          try {
+            final existingPhoneRecord = await supabase
+                .from('patients')
+                .select('id')
+                .eq('aadhar_linked_phone', phoneToCheck)
+                .maybeSingle();
+            
+            if (existingPhoneRecord != null) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'This phone number is already registered with another account. Please use a different phone number.',
+                    ),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+              }
+              return;
+            }
+          } catch (phoneCheckErr) {
+            // If the check itself fails, log and continue — insert will catch the conflict
+            print('⚠️ Phone duplicate check failed (continuing): $phoneCheckErr');
+          }
+
           // Get Google avatar URL from prefill data and download/upload to our storage
           final googleAvatarUrl = widget.prefillData?['google_avatar_url'] ?? '';
           String? uploadedAvatarUrl;
