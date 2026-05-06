@@ -1293,7 +1293,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 label,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
-              if (isPaid && paymentId != null)
+              if (isPaid && paymentId != null && paymentId.isNotEmpty)
                 Text(
                   'ID: ${paymentId.length > 20 ? paymentId.substring(0, 20) + '...' : paymentId}',
                   style: const TextStyle(fontSize: 11, color: Colors.grey),

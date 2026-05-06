@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:care12/services/patient_export_service.dart';
@@ -22,6 +25,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   /// or via email fallback for legacy appointments where patient_id is NULL.
   String? _resolvedPatientId;
 
+  /// Tracks whether nurse feedback has been submitted for this appointment.
+  bool _nurseFeedbackSubmitted = false;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +37,24 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     } else {
       // Legacy appointment: patient_id was not stored — look up by email
       _lookupPatientByEmail();
+    }
+    // Check nurse feedback status (non-blocking)
+    _loadNurseFeedbackStatus();
+  }
+
+  /// Checks Supabase for existing nurse feedback for this appointment.
+  Future<void> _loadNurseFeedbackStatus() async {
+    final apptId = widget.appointment['id']?.toString();
+    if (apptId == null || apptId.isEmpty) return;
+    try {
+      final result = await Supabase.instance.client
+          .from('nurse_appointment_feedback')
+          .select('id')
+          .eq('appointment_id', apptId)
+          .maybeSingle();
+      if (mounted) setState(() => _nurseFeedbackSubmitted = result != null);
+    } catch (e) {
+      print('[WARN] Could not check nurse feedback: $e');
     }
   }
 
@@ -66,7 +90,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     }
   }
 
-  /// Fetches patient service-experience feedback (appointment_feedback table).
+  /// Fetches healthcare seeker service-experience feedback (appointment_feedback table).
   /// Returns null when no feedback has been submitted yet.
   Future<Map<String, dynamic>?> _fetchAppointmentFeedback(String? appointmentId) async {
     if (appointmentId == null || appointmentId.isEmpty) return null;
@@ -299,10 +323,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 if (a['registration_paid_at'] != null)
                   _kvRow('Registration Paid At',
                       _fmtDateTime(a['registration_paid_at'])),
-                if (a['registration_payment_id'] != null)
+                if (a['registration_payment_id'] != null && a['registration_payment_id'].toString().isNotEmpty)
                   _kvRow('Registration Payment ID',
                       _fmtVal(a['registration_payment_id'])),
-                if (a['registration_receipt_id'] != null)
+                if (a['registration_receipt_id'] != null && a['registration_receipt_id'].toString().isNotEmpty)
                   _kvRow('Registration Receipt ID',
                       _fmtVal(a['registration_receipt_id'])),
 
@@ -325,9 +349,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 ),
                 if (a['pre_paid_at'] != null)
                   _kvRow('Pre-Payment Paid At', _fmtDateTime(a['pre_paid_at'])),
-                if (a['pre_payment_id'] != null)
+                if (a['pre_payment_id'] != null && a['pre_payment_id'].toString().isNotEmpty)
                   _kvRow('Pre-Payment ID', _fmtVal(a['pre_payment_id'])),
-                if (a['pre_receipt_id'] != null)
+                if (a['pre_receipt_id'] != null && a['pre_receipt_id'].toString().isNotEmpty)
                   _kvRow('Pre-Payment Receipt ID',
                       _fmtVal(a['pre_receipt_id'])),
 
@@ -341,9 +365,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 if (a['final_paid_at'] != null)
                   _kvRow('Final Payment Paid At',
                       _fmtDateTime(a['final_paid_at'])),
-                if (a['final_payment_id'] != null)
+                if (a['final_payment_id'] != null && a['final_payment_id'].toString().isNotEmpty)
                   _kvRow('Final Payment ID', _fmtVal(a['final_payment_id'])),
-                if (a['final_receipt_id'] != null)
+                if (a['final_receipt_id'] != null && a['final_receipt_id'].toString().isNotEmpty)
                   _kvRow('Final Payment Receipt ID',
                       _fmtVal(a['final_receipt_id'])),
               ],
@@ -428,7 +452,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               const SizedBox(height: 16),
             ],
 
-            // ── Patient Service Experience Feedback ───────────────────────────
+            // ── Healthcare seeker Experience Feedback ───────────────────────────
             FutureBuilder<Map<String, dynamic>?>(
               future: _fetchAppointmentFeedback(a['id']?.toString()),
               builder: (context, snapshot) {
@@ -447,7 +471,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     _section(
                       icon: Icons.star_rate_outlined,
                       iconColor: const Color(0xFFF59E0B),
-                      title: '⭐ Patient Service Experience Feedback',
+                      title: '⭐ Healthcare Seeker Service Experience Feedback',
                       children: [
                         _kvRow('Submitted On',
                             _fmtDateTime(fb['created_at'])),
@@ -455,7 +479,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         _kvRow('Overall Rating',
                             stars((fb['overall_rating'] as num?)?.toInt()),
                             bold: true, valueColor: Colors.amber[700]),
-                        _kvRow('Nurse Professionalism',
+                        _kvRow('Healthcare Provider Professionalism',
                             stars((fb['nurse_professionalism_rating'] as num?)?.toInt())),
                         _kvRow('Service Quality',
                             stars((fb['service_quality_rating'] as num?)?.toInt())),
@@ -477,7 +501,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         if (fb['positive_feedback'] != null &&
                             (fb['positive_feedback'] as String).isNotEmpty) ...[
                           _divider(),
-                          _kvRow('What Patient Liked',
+                          _kvRow('What Healthcare Seeker Liked',
                               _fmtVal(fb['positive_feedback'])),
                         ],
                         if (fb['improvement_suggestions'] != null &&
@@ -570,12 +594,279 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               },
             ),
 
+            // ── Nurse Service Feedback button (completed appointments only) ──
+            if ((widget.appointment['status']?.toString() ?? '').toLowerCase() == 'completed') ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: _nurseFeedbackSubmitted
+                    ? OutlinedButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.check_circle, color: Colors.grey, size: 16),
+                        label: const Text('Service Feedback Submitted', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () => _showNurseFeedbackDialogDetail(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1a237e),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        icon: const Icon(Icons.rate_review, color: Colors.white, size: 16),
+                        label: const Text('Submit Service Feedback', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+              ),
+            ],
+
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
 
+  }
+
+  // ── Country codes for nurse feedback phone field ─────────────────────────
+  static const List<Map<String, dynamic>> _detailNurseFbCCs = [
+    {'code': '+91', 'country': 'India 🇮🇳',    'length': 10},
+    {'code': '+1',  'country': 'USA 🇺🇸',       'length': 10},
+    {'code': '+44', 'country': 'UK 🇬🇧',        'length': 10},
+    {'code': '+971','country': 'UAE 🇦🇪',        'length': 9},
+    {'code': '+61', 'country': 'Australia 🇦🇺', 'length': 9},
+    {'code': '+65', 'country': 'Singapore 🇸🇬', 'length': 8},
+  ];
+
+  Future<void> _showNurseFeedbackDialogDetail() async {
+    final a            = widget.appointment;
+    final appointmentId = (a['id'] ?? '').toString();
+    final apiBase      = dotenv.env['API_BASE_URL'] ?? '';
+
+    final nameCtrl  = TextEditingController(text: a['nurse_name']  ?? '');
+    final emailCtrl = TextEditingController(text: a['nurse_email'] ?? '');
+    final desgCtrl  = TextEditingController(text: '');
+    final phoneCtrl = TextEditingController();
+    final suggCtrl  = TextEditingController();
+    final probCtrl  = TextEditingController();
+
+    String selectedCc = '+91';
+    String rawPhone   = (a['nurse_phone'] ?? '').toString();
+    for (final cc in _detailNurseFbCCs) {
+      if (rawPhone.startsWith(cc['code']!)) {
+        selectedCc = cc['code']!;
+        rawPhone   = rawPhone.substring(cc['code']!.length);
+        break;
+      }
+    }
+    phoneCtrl.text = rawPhone;
+
+    int overallRating = 0, patientRating = 0, appRating = 0,
+        paymentRating = 0, adminRating = 0;
+    bool facedProblem = false, wouldContinue = true;
+    bool submitting   = false;
+    String? errorMsg;
+    int wordCount = 0;
+
+    void countWords(String text) {
+      wordCount = text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          Widget starRow(String label, int current, void Function(int) onTap) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: List.generate(5, (i) => GestureDetector(
+                      onTap: () => setDlg(() => onTap(i + 1)),
+                      child: Icon(i < current ? Icons.star : Icons.star_border, color: Colors.amber, size: 28),
+                    )),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            insetPadding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.88),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(colors: [Color(0xFF1a237e), Color(0xFF283593)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: Column(children: [
+                      Image.asset('assets/images/logo.png', height: 52, width: 52),
+                      const SizedBox(height: 6),
+                      const Text('Service Feedback', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text('Share your appointment experience', style: TextStyle(color: Color(0xFFc5cae9), fontSize: 12)),
+                    ]),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Your Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                        const SizedBox(height: 10),
+                        TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'Full Name *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.person)), textCapitalization: TextCapitalization.words),
+                        const SizedBox(height: 10),
+                        TextField(controller: emailCtrl, decoration: InputDecoration(labelText: 'Email *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.email)), keyboardType: TextInputType.emailAddress),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          SizedBox(
+                            width: 140,
+                            child: DropdownButtonFormField<String>(
+                              value: selectedCc,
+                              decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14)),
+                              items: _detailNurseFbCCs.map((cc) => DropdownMenuItem(value: cc['code'] as String, child: Text('${cc['code']} ${cc['country']}', style: const TextStyle(fontSize: 12)))).toList(),
+                              onChanged: (v) => setDlg(() => selectedCc = v!),
+                              isExpanded: true,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: TextField(
+                            controller: phoneCtrl,
+                            decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+                          )),
+                        ]),
+                        const SizedBox(height: 10),
+                        TextField(controller: desgCtrl, decoration: InputDecoration(labelText: 'Designation (e.g. RN, Caregiver)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.badge)), textCapitalization: TextCapitalization.words),
+                        const Divider(height: 28),
+                        const Text('Rate Your Experience', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                        const SizedBox(height: 8),
+                        starRow('1. How was your overall experience?', overallRating, (v) => overallRating = v),
+                        starRow('2. Patient cooperation & behavior',   patientRating, (v) => patientRating = v),
+                        starRow('3. App / platform experience',        appRating,     (v) => appRating = v),
+                        starRow('4. Payment process smoothness',       paymentRating, (v) => paymentRating = v),
+                        starRow('5. Admin & office support',           adminRating,   (v) => adminRating = v),
+                        const Divider(height: 28),
+                        const Text('Service Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                        const SizedBox(height: 8),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          const Expanded(child: Text('Did you face any problem during the service?', style: TextStyle(fontSize: 13))),
+                          Row(children: [
+                            TextButton(onPressed: () => setDlg(() => facedProblem = true),  child: Text('Yes', style: TextStyle(color: facedProblem  ? Colors.red   : Colors.grey, fontWeight: FontWeight.bold))),
+                            TextButton(onPressed: () => setDlg(() { facedProblem = false; probCtrl.clear(); }), child: Text('No', style: TextStyle(color: !facedProblem ? Colors.green : Colors.grey, fontWeight: FontWeight.bold))),
+                          ]),
+                        ]),
+                        if (facedProblem) ...[
+                          const SizedBox(height: 6),
+                          TextField(controller: probCtrl, decoration: InputDecoration(labelText: 'Describe the problem', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: 'Briefly describe the issue...'), maxLines: 3),
+                          const SizedBox(height: 8),
+                        ],
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          const Expanded(child: Text('Would you continue providing services through SR CareHive?', style: TextStyle(fontSize: 13))),
+                          Row(children: [
+                            TextButton(onPressed: () => setDlg(() => wouldContinue = true),  child: Text('Yes', style: TextStyle(color: wouldContinue  ? Colors.green : Colors.grey, fontWeight: FontWeight.bold))),
+                            TextButton(onPressed: () => setDlg(() => wouldContinue = false), child: Text('No',  style: TextStyle(color: !wouldContinue ? Colors.red   : Colors.grey, fontWeight: FontWeight.bold))),
+                          ]),
+                        ]),
+                        const Divider(height: 28),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          const Text('Improvement Suggestions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                          Text('$wordCount / 500 words', style: TextStyle(fontSize: 11, color: wordCount > 500 ? Colors.red : Colors.grey)),
+                        ]),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: suggCtrl,
+                          decoration: InputDecoration(hintText: 'Optional — suggestions, feedback about service, admin processes, app features, etc.', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), alignLabelWithHint: true),
+                          maxLines: 5,
+                          onChanged: (v) => setDlg(() => countWords(v)),
+                        ),
+                        if (wordCount > 500) const Padding(padding: EdgeInsets.only(top: 4), child: Text('⚠️ Exceeded 500-word limit.', style: TextStyle(color: Colors.red, fontSize: 12))),
+                        if (errorMsg != null) ...[const SizedBox(height: 8), Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12))],
+                        const SizedBox(height: 16),
+                      ]),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    child: Row(children: [
+                      Expanded(child: OutlinedButton(onPressed: submitting ? null : () => Navigator.pop(ctx), child: const Text('Cancel'))),
+                      const SizedBox(width: 12),
+                      Expanded(child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1a237e), padding: const EdgeInsets.symmetric(vertical: 14)),
+                        onPressed: submitting ? null : () async {
+                          if (nameCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) { setDlg(() => errorMsg = 'Name and email are required.'); return; }
+                          if (overallRating == 0) { setDlg(() => errorMsg = 'Please rate your overall experience.'); return; }
+                          if (wordCount > 500)    { setDlg(() => errorMsg = 'Suggestions exceed 500-word limit.'); return; }
+                          setDlg(() { submitting = true; errorMsg = null; });
+                          final phone = phoneCtrl.text.trim().isNotEmpty ? '$selectedCc${phoneCtrl.text.trim()}' : null;
+                          try {
+                            final supabase = Supabase.instance.client;
+                            await supabase.from('nurse_appointment_feedback').insert({
+                              'appointment_id':             appointmentId,
+                              'nurse_name':                 nameCtrl.text.trim(),
+                              'nurse_email':                emailCtrl.text.trim(),
+                              'nurse_phone':                phone,
+                              'nurse_designation':          desgCtrl.text.trim().isNotEmpty ? desgCtrl.text.trim() : null,
+                              'overall_experience_rating':  overallRating,
+                              'patient_cooperation_rating': patientRating > 0 ? patientRating : null,
+                              'app_platform_rating':        appRating     > 0 ? appRating     : null,
+                              'payment_process_rating':     paymentRating > 0 ? paymentRating : null,
+                              'admin_support_rating':       adminRating   > 0 ? adminRating   : null,
+                              'faced_any_problem':          facedProblem,
+                              'problem_description':        facedProblem && probCtrl.text.trim().isNotEmpty ? probCtrl.text.trim() : null,
+                              'would_continue_service':     wouldContinue,
+                              'improvement_suggestions':    suggCtrl.text.trim().isNotEmpty ? suggCtrl.text.trim() : null,
+                            });
+                            try {
+                              await http.post(Uri.parse('$apiBase/api/notify-nurse-feedback-submitted'),
+                                headers: {'Content-Type': 'application/json'},
+                                body: jsonEncode({
+                                  'appointmentId':            appointmentId,
+                                  'nurseName':                nameCtrl.text.trim(),
+                                  'nurseEmail':               emailCtrl.text.trim(),
+                                  'nursePhone':               phone,
+                                  'nurseDesignation':         desgCtrl.text.trim().isNotEmpty ? desgCtrl.text.trim() : null,
+                                  'overallExperienceRating':  overallRating,
+                                  'patientCooperationRating': patientRating > 0 ? patientRating : null,
+                                  'appPlatformRating':        appRating     > 0 ? appRating     : null,
+                                  'paymentProcessRating':     paymentRating > 0 ? paymentRating : null,
+                                  'adminSupportRating':       adminRating   > 0 ? adminRating   : null,
+                                  'facedAnyProblem':          facedProblem,
+                                  'problemDescription':       facedProblem && probCtrl.text.trim().isNotEmpty ? probCtrl.text.trim() : null,
+                                  'wouldContinueService':     wouldContinue,
+                                  'improvementSuggestions':   suggCtrl.text.trim().isNotEmpty ? suggCtrl.text.trim() : null,
+                                }),
+                              );
+                            } catch (ne) { print('[WARN] Nurse feedback notify (detail): $ne'); }
+                            if (!mounted) return;
+                            setState(() => _nurseFeedbackSubmitted = true);
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Feedback submitted successfully!'), backgroundColor: Colors.green));
+                          } catch (e) {
+                            setDlg(() { submitting = false; errorMsg = 'Failed to submit: ${e.toString().replaceFirst('Exception: ', '')}'; });
+                          }
+                        },
+                        child: submitting
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('Submit Feedback', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      )),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   // ─── Hero banner ────────────────────────────────────────────────────────────

@@ -5073,12 +5073,22 @@ app.post('/api/notify-feedback-submitted', async (req, res) => {
       html: patientHtml
     });
 
-    // Send to admin emails
-    await sendEmail({
-      to: ['srcarehive@gmail.com', 'ns.srcarehive@gmail.com'],
-      subject: `New Feedback - Appointment #${appointmentId}`,
-      html: adminHtml
-    });
+    // Send to admin emails — use separate calls (array breaks sendEmail's string .replace() log line)
+    // Matches the same pattern used by notify-provider-feedback-submitted (which works correctly)
+    if (NURSE_ADMIN_EMAIL) {
+      await sendEmail({
+        to: NURSE_ADMIN_EMAIL,
+        subject: `[Feedback] New Service Rating - Appointment #${appointmentId}`,
+        html: adminHtml
+      });
+    }
+    if (NURSE_EXECUTIVE_EMAIL && NURSE_EXECUTIVE_EMAIL !== NURSE_ADMIN_EMAIL) {
+      await sendEmail({
+        to: NURSE_EXECUTIVE_EMAIL,
+        subject: `[Feedback] New Service Rating - Appointment #${appointmentId}`,
+        html: adminHtml
+      });
+    }
 
     console.log(`[SUCCESS] Feedback thank you emails sent for appointment #${appointmentId}`);
 
@@ -5304,6 +5314,78 @@ app.post('/api/notify-provider-feedback-submitted', async (req, res) => {
   } catch (e) {
     console.error('[ERROR] notify-provider-feedback-submitted:', e);
     res.status(500).json({ error: 'Failed to send provider feedback notifications', details: e.message });
+  }
+});
+
+// ============================================================================
+// NURSE (HEALTHCARE PROVIDER) SERVICE FEEDBACK EMAIL NOTIFICATION
+// Called after nurse submits service feedback for a completed appointment.
+// Sends email to NURSE_ADMIN_EMAIL and NURSE_EXECUTIVE_EMAIL.
+// ============================================================================
+app.post('/api/notify-nurse-feedback-submitted', async (req, res) => {
+  try {
+    const {
+      appointmentId, nurseName, nurseEmail, nursePhone, nurseDesignation,
+      overallExperienceRating, patientCooperationRating, appPlatformRating,
+      paymentProcessRating, adminSupportRating,
+      facedAnyProblem, problemDescription,
+      wouldContinueService, improvementSuggestions,
+    } = req.body;
+
+    if (!appointmentId || !nurseName || !nurseEmail) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    console.log(`[INFO] Sending healthcare provider feedback emails for appointment #${appointmentId}`);
+
+    const stars = (n) => n ? '⭐'.repeat(Math.max(1, Math.min(5, Number(n)))) : '—';
+    const yn    = (v) => v === true ? 'Yes' : v === false ? 'No' : '—';
+
+    const adminHtml = `
+      <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#f5f7fa;padding:24px;border-radius:12px;">
+        <div style="background:linear-gradient(135deg,#1a237e 0%,#283593 100%);padding:28px 30px;border-radius:10px 10px 0 0;text-align:center;">
+          <div style="font-size:36px;margin-bottom:8px;">📋</div>
+          <h1 style="color:white;margin:0;font-size:22px;">New Healthcare Provider Feedback</h1>
+          <p style="color:#c5cae9;margin:6px 0 0;font-size:14px;">Service Experience Report</p>
+        </div>
+        <div style="background:white;padding:20px 24px;border-left:4px solid #3949ab;margin:16px 0;border-radius:6px;">
+          <h3 style="margin:0 0 12px;color:#1a237e;font-size:15px;">📋 Appointment & Provider Overview</h3>
+          <p style="margin:4px 0;font-size:14px;"><strong>Appointment ID:</strong> ${appointmentId}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Provider Name:</strong> ${nurseName}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Provider Email:</strong> ${nurseEmail}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Provider Phone:</strong> ${nursePhone || '—'}</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Designation:</strong> ${nurseDesignation || '—'}</p>
+        </div>
+        <div style="background:white;padding:20px 24px;border-radius:6px;margin:12px 0;">
+          <h3 style="margin:0 0 16px;color:#1a237e;font-size:15px;">⭐ Ratings (1–5)</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr style="background:#e8eaf6;"><td style="padding:10px 12px;"><strong>Overall Experience</strong></td><td style="padding:10px 12px;text-align:right;">${stars(overallExperienceRating)} (${overallExperienceRating || '—'}/5)</td></tr>
+            <tr><td style="padding:10px 12px;"><strong>Patient Cooperation</strong></td><td style="padding:10px 12px;text-align:right;">${stars(patientCooperationRating)} (${patientCooperationRating || '—'}/5)</td></tr>
+            <tr style="background:#e8eaf6;"><td style="padding:10px 12px;"><strong>App / Platform Experience</strong></td><td style="padding:10px 12px;text-align:right;">${stars(appPlatformRating)} (${appPlatformRating || '—'}/5)</td></tr>
+            <tr><td style="padding:10px 12px;"><strong>Payment Process</strong></td><td style="padding:10px 12px;text-align:right;">${stars(paymentProcessRating)} (${paymentProcessRating || '—'}/5)</td></tr>
+            <tr style="background:#e8eaf6;"><td style="padding:10px 12px;"><strong>Admin / Office Support</strong></td><td style="padding:10px 12px;text-align:right;">${stars(adminSupportRating)} (${adminSupportRating || '—'}/5)</td></tr>
+          </table>
+        </div>
+        <div style="background:white;padding:20px 24px;border-radius:6px;margin:12px 0;">
+          <h3 style="margin:0 0 12px;color:#1a237e;font-size:15px;">❓ Service Questions</h3>
+          <p style="margin:6px 0;font-size:14px;"><strong>Faced any problem during service?</strong> <span style="color:${facedAnyProblem?'#c62828':'#2e7d32'};font-weight:bold;">${yn(facedAnyProblem)}</span></p>
+          ${facedAnyProblem && problemDescription ? `<div style="background:#ffebee;padding:12px;border-radius:6px;margin:8px 0;border-left:3px solid #c62828;"><strong style="font-size:13px;">Problem Details:</strong><p style="margin:6px 0 0;font-size:13px;color:#333;">${problemDescription}</p></div>` : ''}
+          <p style="margin:6px 0;font-size:14px;"><strong>Would continue with SR CareHive?</strong> <span style="color:${wouldContinueService?'#2e7d32':'#c62828'};font-weight:bold;">${yn(wouldContinueService)}</span></p>
+        </div>
+        ${improvementSuggestions ? `<div style="background:white;padding:20px 24px;border-radius:6px;margin:12px 0;border-left:3px solid #ffa726;"><h3 style="margin:0 0 10px;color:#1a237e;font-size:15px;">💡 Improvement Suggestions</h3><p style="font-size:14px;color:#333;line-height:1.6;white-space:pre-wrap;">${improvementSuggestions}</p></div>` : ''}
+        <p style="text-align:center;color:#9e9e9e;font-size:11px;margin-top:20px;">SR CareHive · contact@srcarehive.com · Healthcare Provider Feedback System</p>
+      </div>`;
+
+    if (NURSE_ADMIN_EMAIL) {
+      await sendEmail({ to: NURSE_ADMIN_EMAIL, subject: `[Nurse Feedback] Service Rating — Appointment #${appointmentId}`, html: adminHtml });
+    }
+    if (NURSE_EXECUTIVE_EMAIL && NURSE_EXECUTIVE_EMAIL !== NURSE_ADMIN_EMAIL) {
+      await sendEmail({ to: NURSE_EXECUTIVE_EMAIL, subject: `[Nurse Feedback] Service Rating — Appointment #${appointmentId}`, html: adminHtml });
+    }
+    console.log(`[SUCCESS] Nurse feedback emails sent for appointment #${appointmentId}`);
+    res.json({ success: true, message: 'Nurse feedback notifications sent successfully' });
+  } catch (e) {
+    console.error('[ERROR] notify-nurse-feedback-submitted:', e);
+    res.status(500).json({ error: 'Failed to send nurse feedback notifications', details: e.message });
   }
 });
 

@@ -29,6 +29,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
   String _statusFilter = 'All';
   Set<String> _selectedIds = {}; // Track selected appointment IDs
   bool _isSelectionMode = false; // Track if in selection mode
+  Set<String> _nurseFeedbackSubmitted = {}; // Track appointments where nurse feedback already submitted
 
   // ── Real-time search state ──
   final TextEditingController _searchCtrl = TextEditingController();
@@ -70,6 +71,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     }
     
     _load();
+    _loadNurseFeedbackStatus(); // Load nurse feedback status independently (non-blocking)
   }
 
   Future<void> _load() async {
@@ -113,6 +115,362 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     if (mounted && _searchActive && _searchCtrl.text.trim().isNotEmpty) {
       _runSearch(_searchCtrl.text.trim());
     }
+  }
+
+  // ── Nurse feedback status loader ─────────────────────────────────────────
+  // Queries nurse_appointment_feedback for all appointment_ids that have
+  // submitted feedback. Runs independently of _load() (non-blocking).
+  Future<void> _loadNurseFeedbackStatus() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final data = await supabase
+          .from('nurse_appointment_feedback')
+          .select('appointment_id');
+      if (!mounted) return;
+      setState(() {
+        _nurseFeedbackSubmitted = (data as List)
+            .map((row) => row['appointment_id'].toString())
+            .toSet();
+      });
+    } catch (e) {
+      print('[WARN] Could not load nurse feedback status: $e');
+    }
+  }
+
+  // ── Nurse feedback dialog ─────────────────────────────────────────────────
+  // Country codes for phone field (same pattern as rest of app)
+  static const List<Map<String, dynamic>> _nurseFbCountryCodes = [
+    {'code': '+91', 'country': 'India 🇮🇳',     'length': 10},
+    {'code': '+1',  'country': 'USA 🇺🇸',        'length': 10},
+    {'code': '+44', 'country': 'UK 🇬🇧',         'length': 10},
+    {'code': '+971','country': 'UAE 🇦🇪',         'length': 9},
+    {'code': '+61', 'country': 'Australia 🇦🇺',  'length': 9},
+    {'code': '+65', 'country': 'Singapore 🇸🇬',  'length': 8},
+  ];
+
+  Future<void> _showNurseFeedbackDialog(Map<String, dynamic> appt) async {
+    final appointmentId = (appt['id'] ?? '').toString();
+    final apiBase = dotenv.env['API_BASE_URL'] ?? '';
+
+    // ── Pre-fill nurse details from appointment data ──
+    final nameCtrl  = TextEditingController(text: appt['nurse_name']  ?? '');
+    final emailCtrl = TextEditingController(text: appt['nurse_email'] ?? '');
+    final desgCtrl  = TextEditingController(text: '');
+    final phoneCtrl = TextEditingController();
+    final suggCtrl  = TextEditingController();
+    final probCtrl  = TextEditingController();
+
+    // Parse stored phone into country code + number
+    String selectedCc = '+91';
+    String rawPhone = (appt['nurse_phone'] ?? '').toString();
+    for (final cc in _nurseFbCountryCodes) {
+      if (rawPhone.startsWith(cc['code']!)) {
+        selectedCc = cc['code']!;
+        rawPhone   = rawPhone.substring(cc['code']!.length);
+        break;
+      }
+    }
+    phoneCtrl.text = rawPhone;
+
+    // ── Rating state ──
+    int overallRating = 0, patientRating = 0, appRating = 0,
+        paymentRating = 0, adminRating = 0;
+    bool facedProblem = false, wouldContinue = true;
+    bool submitting   = false;
+    String? errorMsg;
+    int wordCount = 0;
+
+    void countWords(String text) {
+      wordCount = text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) {
+          Widget starRow(String label, int current, void Function(int) onTap) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: List.generate(5, (i) => GestureDetector(
+                      onTap: () => setDlg(() => onTap(i + 1)),
+                      child: Icon(
+                        i < current ? Icons.star : Icons.star_border,
+                        color: Colors.amber, size: 28,
+                      ),
+                    )),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            insetPadding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.88),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1a237e), Color(0xFF283593)],
+                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: Column(
+                      children: [
+                        Image.asset('assets/images/logo.png', height: 52, width: 52),
+                        const SizedBox(height: 6),
+                        const Text('Service Feedback', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text('Share your appointment experience', style: TextStyle(color: Color(0xFFc5cae9), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  // Scrollable body
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Identity fields ──
+                          const Text('Your Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: nameCtrl,
+                            decoration: InputDecoration(labelText: 'Full Name *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.person)),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: emailCtrl,
+                            decoration: InputDecoration(labelText: 'Email *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.email)),
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: 10),
+                          // Phone with country code
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 140,
+                                child: DropdownButtonFormField<String>(
+                                  value: selectedCc,
+                                  decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14)),
+                                  items: _nurseFbCountryCodes.map((cc) => DropdownMenuItem(value: cc['code'] as String, child: Text('${cc['code']} ${cc['country']}', style: const TextStyle(fontSize: 12)))).toList(),
+                                  onChanged: (v) => setDlg(() => selectedCc = v!),
+                                  isExpanded: true,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: phoneCtrl,
+                                  decoration: InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: desgCtrl,
+                            decoration: InputDecoration(labelText: 'Designation (e.g. RN, Caregiver)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.badge)),
+                            textCapitalization: TextCapitalization.words,
+                          ),
+                          const Divider(height: 28),
+
+                          // ── Star ratings ──
+                          const Text('Rate Your Experience', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                          const SizedBox(height: 8),
+                          starRow('1. How was your overall experience?', overallRating, (v) => overallRating = v),
+                          starRow('2. Patient cooperation & behavior', patientRating, (v) => patientRating = v),
+                          starRow('3. App / platform experience', appRating, (v) => appRating = v),
+                          starRow('4. Payment process smoothness', paymentRating, (v) => paymentRating = v),
+                          starRow('5. Admin & office support', adminRating, (v) => adminRating = v),
+                          const Divider(height: 28),
+
+                          // ── Yes/No questions ──
+                          const Text('Service Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Expanded(child: Text('Did you face any problem during the service?', style: TextStyle(fontSize: 13))),
+                              Row(children: [
+                                TextButton(onPressed: () => setDlg(() => facedProblem = true),  child: Text('Yes', style: TextStyle(color: facedProblem ? Colors.red : Colors.grey, fontWeight: FontWeight.bold))),
+                                TextButton(onPressed: () => setDlg(() { facedProblem = false; probCtrl.clear(); }), child: Text('No', style: TextStyle(color: !facedProblem ? Colors.green : Colors.grey, fontWeight: FontWeight.bold))),
+                              ]),
+                            ],
+                          ),
+                          if (facedProblem) ...[
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: probCtrl,
+                              decoration: InputDecoration(labelText: 'Describe the problem', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: 'Briefly describe the issue...'),
+                              maxLines: 3,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Expanded(child: Text('Would you continue providing services through SR CareHive?', style: TextStyle(fontSize: 13))),
+                              Row(children: [
+                                TextButton(onPressed: () => setDlg(() => wouldContinue = true),  child: Text('Yes', style: TextStyle(color: wouldContinue ? Colors.green : Colors.grey, fontWeight: FontWeight.bold))),
+                                TextButton(onPressed: () => setDlg(() => wouldContinue = false), child: Text('No',  style: TextStyle(color: !wouldContinue ? Colors.red : Colors.grey, fontWeight: FontWeight.bold))),
+                              ]),
+                            ],
+                          ),
+                          const Divider(height: 28),
+
+                          // ── Suggestions (500-word limit) ──
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Improvement Suggestions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1a237e))),
+                              Text('$wordCount / 500 words', style: TextStyle(fontSize: 11, color: wordCount > 500 ? Colors.red : Colors.grey)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: suggCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'Optional — any suggestions for improvement, feedback about the service, admin processes, app features, etc.',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              alignLabelWithHint: true,
+                            ),
+                            maxLines: 5,
+                            onChanged: (v) => setDlg(() => countWords(v)),
+                          ),
+                          if (wordCount > 500)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text('⚠️ Exceeded 500-word limit. Please shorten your text.', style: TextStyle(color: Colors.red, fontSize: 12)),
+                            ),
+                          if (errorMsg != null) ...[
+                            const SizedBox(height: 8),
+                            Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                          ],
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Footer buttons
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    child: Row(children: [
+                      Expanded(child: OutlinedButton(onPressed: submitting ? null : () => Navigator.pop(ctx), child: const Text('Cancel'))),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1a237e), padding: const EdgeInsets.symmetric(vertical: 14)),
+                          onPressed: submitting ? null : () async {
+                            // Validate required fields
+                            if (nameCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) {
+                              setDlg(() => errorMsg = 'Name and email are required.');
+                              return;
+                            }
+                            if (overallRating == 0) {
+                              setDlg(() => errorMsg = 'Please rate your overall experience.');
+                              return;
+                            }
+                            if (wordCount > 500) {
+                              setDlg(() => errorMsg = 'Suggestions exceed 500-word limit.');
+                              return;
+                            }
+                            setDlg(() { submitting = true; errorMsg = null; });
+
+                            final phone = phoneCtrl.text.trim().isNotEmpty
+                                ? '$selectedCc${phoneCtrl.text.trim()}'
+                                : null;
+
+                            try {
+                              // 1. Save to Supabase
+                              final supabase = Supabase.instance.client;
+                              await supabase.from('nurse_appointment_feedback').insert({
+                                'appointment_id':             appointmentId,
+                                'nurse_name':                 nameCtrl.text.trim(),
+                                'nurse_email':                emailCtrl.text.trim(),
+                                'nurse_phone':                phone,
+                                'nurse_designation':          desgCtrl.text.trim().isNotEmpty ? desgCtrl.text.trim() : null,
+                                'overall_experience_rating':  overallRating,
+                                'patient_cooperation_rating': patientRating > 0 ? patientRating : null,
+                                'app_platform_rating':        appRating    > 0 ? appRating    : null,
+                                'payment_process_rating':     paymentRating > 0 ? paymentRating : null,
+                                'admin_support_rating':       adminRating   > 0 ? adminRating   : null,
+                                'faced_any_problem':          facedProblem,
+                                'problem_description':        facedProblem && probCtrl.text.trim().isNotEmpty ? probCtrl.text.trim() : null,
+                                'would_continue_service':     wouldContinue,
+                                'improvement_suggestions':    suggCtrl.text.trim().isNotEmpty ? suggCtrl.text.trim() : null,
+                              });
+
+                              // 2. Notify admin via email (non-blocking)
+                              try {
+                                final uri = Uri.parse('$apiBase/api/notify-nurse-feedback-submitted');
+                                await http.post(uri,
+                                  headers: {'Content-Type': 'application/json'},
+                                  body: jsonEncode({
+                                    'appointmentId':             appointmentId,
+                                    'nurseName':                 nameCtrl.text.trim(),
+                                    'nurseEmail':                emailCtrl.text.trim(),
+                                    'nursePhone':                phone,
+                                    'nurseDesignation':          desgCtrl.text.trim().isNotEmpty ? desgCtrl.text.trim() : null,
+                                    'overallExperienceRating':   overallRating,
+                                    'patientCooperationRating':  patientRating > 0 ? patientRating : null,
+                                    'appPlatformRating':         appRating    > 0 ? appRating    : null,
+                                    'paymentProcessRating':      paymentRating > 0 ? paymentRating : null,
+                                    'adminSupportRating':        adminRating   > 0 ? adminRating   : null,
+                                    'facedAnyProblem':           facedProblem,
+                                    'problemDescription':        facedProblem && probCtrl.text.trim().isNotEmpty ? probCtrl.text.trim() : null,
+                                    'wouldContinueService':      wouldContinue,
+                                    'improvementSuggestions':    suggCtrl.text.trim().isNotEmpty ? suggCtrl.text.trim() : null,
+                                  }),
+                                );
+                                print('[SUCCESS] Nurse feedback email notification sent');
+                              } catch (notifyErr) {
+                                print('[WARN] Nurse feedback notify failed (non-critical): $notifyErr');
+                              }
+
+                              // 3. Update local state and close dialog
+                              if (!mounted) return;
+                              setState(() => _nurseFeedbackSubmitted.add(appointmentId));
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ Feedback submitted successfully! Thank you.'), backgroundColor: Colors.green),
+                              );
+                            } catch (e) {
+                              setDlg(() { submitting = false; errorMsg = 'Failed to submit: ${e.toString().replaceFirst('Exception: ', '')}'; });
+                            }
+                          },
+                          child: submitting
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Submit Feedback', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   // ── Live client-side search on already-loaded _items ──────────────────────
@@ -806,9 +1164,22 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
     final doctorSpecializationCtrl = TextEditingController();
     final doctorClinicAddressCtrl = TextEditingController();
 
+    // Country codes for doctor phone (same set as booking form)
+    final List<Map<String, dynamic>> doctorCCs = [
+      {'code': '+91',  'country': 'India',     'length': 10},
+      {'code': '+1',   'country': 'USA',       'length': 10},
+      {'code': '+44',  'country': 'UK',        'length': 10},
+      {'code': '+971', 'country': 'UAE',       'length': 9},
+      {'code': '+61',  'country': 'Australia', 'length': 9},
+      {'code': '+65',  'country': 'Singapore', 'length': 8},
+    ];
+    String doctorPhoneCode = '+91';
+    String? doctorPhoneError;
+
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -865,13 +1236,77 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: doctorPhoneCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Doctor Phone',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
+              // Doctor Phone — country code selector + validated digit field
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Country code dropdown
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDEFFF),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: DropdownButton<String>(
+                          value: doctorPhoneCode,
+                          underline: const SizedBox(),
+                          isDense: true,
+                          items: doctorCCs.map((c) => DropdownMenuItem<String>(
+                            value: c['code'] as String,
+                            child: Text(
+                              '${c['code']} ${c['country']}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          )).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDlgState(() {
+                                doctorPhoneCode = val;
+                                doctorPhoneError = null;
+                                doctorPhoneCtrl.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Digit-only phone field
+                      Expanded(
+                        child: TextField(
+                          key: ValueKey(doctorPhoneCode),
+                          controller: doctorPhoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(
+                              (doctorCCs.firstWhere(
+                                (c) => c['code'] == doctorPhoneCode,
+                                orElse: () => {'length': 10},
+                              )['length'] as int),
+                            ),
+                          ],
+                          onChanged: (_) =>
+                              setDlgState(() => doctorPhoneError = null),
+                          decoration: InputDecoration(
+                            labelText: 'Doctor Phone',
+                            hintText: 'X' *
+                                (doctorCCs.firstWhere(
+                                  (c) => c['code'] == doctorPhoneCode,
+                                  orElse: () => {'length': 10},
+                                )['length'] as int),
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            errorText: doctorPhoneError,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextField(
@@ -921,7 +1356,29 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              // Validate doctor phone if provided (optional field)
+              final phone = doctorPhoneCtrl.text.trim();
+              if (phone.isNotEmpty) {
+                final entry = doctorCCs.firstWhere(
+                  (c) => c['code'] == doctorPhoneCode,
+                  orElse: () => {'length': 10},
+                );
+                final req = entry['length'] as int;
+                if (phone.length != req || int.tryParse(phone) == null) {
+                  setDlgState(() => doctorPhoneError =
+                      'Must be $req digits for $doctorPhoneCode');
+                  return;
+                }
+                if (doctorPhoneCode == '+91' &&
+                    !RegExp(r'^[6-9]').hasMatch(phone)) {
+                  setDlgState(() => doctorPhoneError =
+                      'Indian number must start with 6, 7, 8 or 9');
+                  return;
+                }
+              }
+              Navigator.pop(ctx, true);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -929,7 +1386,8 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
             child: const Text('Submit & Enable Final Payment', style: TextStyle(color: Colors.white)),
           ),
         ],
-      ),
+        ),    // closes AlertDialog
+      ),      // closes StatefulBuilder
     );
 
     if (ok == true) {
@@ -976,7 +1434,9 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
         await supabase.from('appointments').update({
           'post_visit_remarks': postVisitRemarks,
           'consulted_doctor_name': doctorNameCtrl.text.trim().isEmpty ? null : doctorNameCtrl.text.trim(),
-          'consulted_doctor_phone': doctorPhoneCtrl.text.trim().isEmpty ? null : doctorPhoneCtrl.text.trim(),
+          'consulted_doctor_phone': doctorPhoneCtrl.text.trim().isEmpty
+              ? null
+              : '$doctorPhoneCode${doctorPhoneCtrl.text.trim()}',
           'consulted_doctor_specialization': doctorSpecializationCtrl.text.trim().isEmpty ? null : doctorSpecializationCtrl.text.trim(),
           'consulted_doctor_clinic_address': doctorClinicAddressCtrl.text.trim().isEmpty ? null : doctorClinicAddressCtrl.text.trim(),
           'visit_completed_at': DateTime.now().toIso8601String(),
@@ -999,7 +1459,9 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
               'nurseName': appt['nurse_name'],
               'postVisitRemarks': postVisitRemarks,
               'doctorName': doctorNameCtrl.text.trim().isEmpty ? null : doctorNameCtrl.text.trim(),
-              'doctorPhone': doctorPhoneCtrl.text.trim().isEmpty ? null : doctorPhoneCtrl.text.trim(),
+              'doctorPhone': doctorPhoneCtrl.text.trim().isEmpty
+                  ? null
+                  : '$doctorPhoneCode${doctorPhoneCtrl.text.trim()}',
               'doctorSpecialization': doctorSpecializationCtrl.text.trim().isEmpty ? null : doctorSpecializationCtrl.text.trim(),
               'doctorClinicAddress': doctorClinicAddressCtrl.text.trim().isEmpty ? null : doctorClinicAddressCtrl.text.trim(),
             }),
@@ -1798,7 +2260,7 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             ],
                           ),
                         ),
-                        if(a['registration_payment_id']!=null)...[
+                        if(a['registration_payment_id']!=null && a['registration_payment_id'].toString().isNotEmpty)...[
                           const SizedBox(height:4),
                           Text(
                             'Payment ID: ${_truncatePaymentId(a['registration_payment_id'])}', 
@@ -1819,12 +2281,35 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Registration fee (shown when paid)
+                              if (a['registration_paid'] == true) ...[
+                                Row(
+                                  children: [
+                                    const Icon(Icons.receipt_long, color: Colors.green, size: 16),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      'Registration Fee: ₹10',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('PAID', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                              ],
                               Row(
                                 children: [
                                   const Icon(Icons.attach_money, color: Colors.purple, size: 18),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Total Amount: ₹${(a['total_amount'] as num).toStringAsFixed(0)}',
+                                    'Total Service Amount: ₹${(a['total_amount'] as num).toStringAsFixed(0)}',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                 ],
@@ -1944,8 +2429,30 @@ class _NurseAppointmentsManageScreenState extends State<NurseAppointmentsManageS
                             icon: const Icon(Icons.visibility, color: Color(0xFF2260FF)),
                           ),
                         ]),
-                      ]
-                    ]),
+                       ],
+                       // ── Nurse Service Feedback button (completed only) ──
+                       if (status.toLowerCase() == 'completed') ...[
+                         const SizedBox(height: 8),
+                         SizedBox(
+                           width: double.infinity,
+                           child: _nurseFeedbackSubmitted.contains(appointmentId)
+                               ? OutlinedButton.icon(
+                                   onPressed: null,
+                                   icon: const Icon(Icons.check_circle, color: Colors.grey, size: 16),
+                                   label: const Text('Service Feedback Submitted', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                                 )
+                               : ElevatedButton.icon(
+                                   onPressed: () => _showNurseFeedbackDialog(a),
+                                   style: ElevatedButton.styleFrom(
+                                     backgroundColor: const Color(0xFF1a237e),
+                                     padding: const EdgeInsets.symmetric(vertical: 12),
+                                   ),
+                                   icon: const Icon(Icons.rate_review, color: Colors.white, size: 16),
+                                   label: const Text('Submit Service Feedback', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                 ),
+                         ),
+                       ],
+                     ]),
                               ),
                             ],
                           ),
