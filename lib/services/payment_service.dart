@@ -18,8 +18,8 @@ class PaymentService {
   static const String PRE_VISIT = 'pre_visit';
   static const String FINAL_PAYMENT = 'final_payment';
   
-  // Fixed registration amount - TESTING: set to 1.0, change back to 10.0 for production
-  static const double REGISTRATION_AMOUNT = 1.0;  
+ 
+  static const double REGISTRATION_AMOUNT = 10.0;  
 
   // High-level API: create Razorpay order, open checkout, verify signature.
   // Returns the checkout response (contains razorpay_payment_id, razorpay_order_id).
